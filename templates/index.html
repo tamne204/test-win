@@ -1,0 +1,1263 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Slideshow Builder &amp; Timeline Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800;900&family=Noto+Sans+KR:wght@500;700;900&family=Roboto:wght@500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css?v=32" />
+</head>
+<body>
+
+<!-- =============================== HEADER ================================ -->
+<header class="header">
+  <div class="header-inner">
+    <div class="logo">
+      <span class="logo-icon">🎬</span>
+      <span class="logo-text">Slideshow Builder Studio <small style="font-size:10px;color:#818cf8;font-weight:700;margin-left:4px">v{{ app_version }}</small></span>
+    </div>
+
+    <!-- Main Navigation Tabs -->
+    <div class="studio-nav">
+      <button type="button" class="nav-tab active" data-view="setup">
+        📁 1. Setup &amp; Kịch bản
+      </button>
+      <button type="button" class="nav-tab" data-view="timeline" id="nav-tab-timeline">
+        🎞️ 2. Timeline Editor &amp; Preview
+      </button>
+    </div>
+
+    <!-- Project Studio Toolbar -->
+    <div class="project-toolbar" style="display:flex;align-items:center;gap:8px;background:rgba(15,23,42,.8);padding:4px 10px;border-radius:8px;border:1px solid #334155">
+      <span style="font-size:12px;font-weight:700;color:#94a3b8">📂 Dự Án:</span>
+      <select id="sel-project-list" class="proj-select" style="background:#0f172a;color:#38bdf8;border:1px solid #475569;border-radius:4px;padding:3px 8px;font-size:12px;font-weight:600;max-width:220px">
+        <option value="">(Chưa chọn dự án)</option>
+      </select>
+      <button type="button" id="btn-proj-new" class="btn-proj-action" style="background:#4f46e5;color:#fff;border:none;border-radius:4px;padding:4px 9px;font-size:11px;font-weight:700;cursor:pointer" title="Tạo dự án mới">➕ Mới</button>
+      <button type="button" id="btn-proj-save" class="btn-proj-action" style="background:#059669;color:#fff;border:none;border-radius:4px;padding:4px 9px;font-size:11px;font-weight:700;cursor:pointer" title="Lưu toàn bộ dữ liệu dự án">💾 Lưu</button>
+      <span id="autosave-status" style="font-size:10.5px;color:#10b981;font-weight:600;white-space:nowrap">🟢 Đã lưu</span>
+    </div>
+
+    <div class="header-badges">
+      <div id="update-badge" class="badge" style="display:none;cursor:pointer;background:linear-gradient(135deg,rgba(99,102,241,0.25),rgba(244,63,94,0.25));border:1px solid #818cf8;color:#f43f5e;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:800;align-items:center;gap:5px" title="Có phiên bản mới (Bấm để xem và cập nhật)">
+        <span>🚀</span>
+        <span id="update-badge-text">Có bản mới!</span>
+      </div>
+      <div id="license-badge" class="badge" style="cursor:pointer;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#818cf8;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:5px" title="Bản quyền phần mềm (Bấm để xem/kích hoạt)">
+        <span id="lic-badge-icon">💎</span>
+        <span id="lic-badge-text">Đang kiểm tra...</span>
+      </div>
+      <div id="server-health-badge" class="badge badge-ok" style="display:inline-flex;align-items:center;gap:6px;font-weight:700">
+        <span class="health-dot health-dot-online"></span>
+        <span id="server-health-text">Server: Online (8080)</span>
+      </div>
+      {% if not ffmpeg_available %}
+      <div class="badge badge-warn">⚠️ FFmpeg missing</div>
+      {% endif %}
+      <div class="badge badge-ok">🎤 Edge-TTS Cloud</div>
+      <div class="badge badge-sub">☁️ Gemini 3.6 Flash / 2.5 Flash / 2.5 Flash Lite</div>
+    </div>
+  </div>
+</header>
+
+<!-- ================================ MAIN ================================= -->
+<main class="main">
+  <form id="render-form">
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         VIEW 1: SETUP & KỊCH BẢN (GIAO DIỆN NẠP FILE & SETTINGS)
+         ════════════════════════════════════════════════════════════════════ -->
+    <div id="view-setup" class="studio-view active">
+      <div class="setup-grid">
+
+        <!-- ── LEFT PANEL ── -->
+        <!-- ════════ COLUMN 1: MEDIA & SCRIPT ════════ -->
+        <section class="dash-card">
+          <div class="dash-card-header">
+            <span class="dash-card-icon">📁</span>
+            <span class="dash-card-title">1. Tài Nguyên &amp; Kịch Bản</span>
+          </div>
+          <div class="dash-card-body">
+            
+            <!-- Image drop zone -->
+            <div class="dash-field-group">
+              <div class="dash-sec-header">
+                <span class="dash-sec-title">🖼️ Dãy Hình Ảnh</span>
+                <span id="img-count" class="dash-badge">0 ảnh</span>
+                <button type="button" id="clear-images" class="btn-clear" style="display:none">Xóa hết</button>
+              </div>
+              <div class="drop-zone drop-zone-sm" id="img-drop">
+                <div class="dz-inner" style="padding:14px">
+                  <div class="dz-icon" style="font-size:22px">🖼️</div>
+                  <div class="dz-text" style="font-size:12px">Kéo thả hoặc chọn 40–200 ảnh</div>
+                  <div class="dz-fmt">JPG · PNG · WEBP (Tự sắp xếp)</div>
+                </div>
+                <input type="file" id="img-input" name="images" multiple
+                       accept=".jpg,.jpeg,.png,.webp,.bmp,.tiff,.tif,.gif"
+                       class="hidden-file-input" />
+              </div>
+              <div id="img-list" class="img-list" style="max-height:120px;overflow-y:auto;margin-top:4px"></div>
+            </div>
+
+            <!-- Unified Script Box -->
+            <div class="dash-field-group">
+              <div class="dash-sec-header">
+                <span class="dash-sec-title">📜 Kịch Bản / Lời Thoại JSON</span>
+                <label class="btn-sub-action btn-sub-upload" style="padding:2px 8px;font-size:10.5px;cursor:pointer" title="Nạp file JSON, .srt, .txt">
+                  📁 Nạp file
+                  <input type="file" id="sub-file-input" accept=".json,.srt,.txt" class="hidden-file-input" />
+                </label>
+              </div>
+              <textarea id="sub-script-input" class="insp-textarea" style="height:100px;font-size:11.5px"
+                        placeholder="Dán kịch bản thoại hoặc JSON kịch bản tại đây..."></textarea>
+            </div>
+
+            <!-- Voice / Audio Source -->
+            <div class="dash-field-group">
+              <div class="dash-sec-header">
+                <span class="dash-sec-title">🎙️ Giọng Đọc (Voice / Audio)</span>
+                <div class="tab-toggle" id="audio-tab-toggle" style="display:inline-flex;gap:3px">
+                  <button type="button" class="tab-btn active" data-tab="tts" style="padding:2px 8px;font-size:10.5px">AI TTS</button>
+                  <button type="button" class="tab-btn" data-tab="upload" style="padding:2px 8px;font-size:10.5px">Upload File</button>
+                </div>
+              </div>
+
+              <!-- TAB: TTS Generate -->
+              <div id="tab-tts" class="audio-tab">
+                <textarea id="tts-text" style="display:none"></textarea>
+                
+                <div class="setting-row" style="margin-bottom:4px">
+                  <label class="setting-label" style="font-size:11px;font-weight:600">🎙️ Giọng Đọc Neural:</label>
+                  <select id="sel-tts-voice" class="sel-input" style="font-size:11px;padding:4px 6px;background:#090d16;color:#38bdf8;border:1px solid #334155;font-weight:600">
+                    <option value="ko-KR-InJoonNeural" selected>🇰🇷 In-Joon (Nam - Kể chuyện / Truyền cảm ⭐)</option>
+                    <option value="ko-KR-SunHiNeural">🇰🇷 Sun-Hi (Nữ - Tự nhiên, ấm áp)</option>
+                    <option value="ko-KR-HyunsuMultilingualNeural">🇰🇷 Hyun-su (Nam - Trẻ trung, thời sự)</option>
+                    <option value="vi-VN-HoaiMyNeural">🇻🇳 Hoài My (Nữ - Truyền cảm)</option>
+                    <option value="vi-VN-NamMinhNeural">🇻🇳 Nam Minh (Nam - Rõ ràng)</option>
+                    <option value="en-US-JennyNeural">🇺🇸 Jenny (Female - Natural)</option>
+                    <option value="en-US-GuyNeural">🇺🇸 Guy (Male - Natural)</option>
+                  </select>
+                </div>
+
+                <div class="setting-row" style="margin-bottom:6px">
+                  <div class="row-inline">
+                    <label class="setting-label" style="font-size:10.5px">⚡ Tốc độ (Speed):</label>
+                    <span id="tts-speed-val" class="hint" style="color:#38bdf8;font-weight:700">1.0x (+0%)</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <input type="range" id="tts-rate-range" min="-30" max="50" step="5" value="0" style="flex:1;accent-color:#38bdf8;height:4px" />
+                    <div style="display:flex;gap:2px">
+                      <button type="button" class="btn-preset btn-tts-speed" data-rate="-15" style="padding:1px 4px;font-size:9px">0.85x</button>
+                      <button type="button" class="btn-preset btn-tts-speed active" data-rate="0" style="padding:1px 4px;font-size:9px">1.0x</button>
+                      <button type="button" class="btn-preset btn-tts-speed" data-rate="15" style="padding:1px 4px;font-size:9px">1.15x</button>
+                      <button type="button" class="btn-preset btn-tts-speed" data-rate="25" style="padding:1px 4px;font-size:9px">1.25x</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <button type="button" id="tts-gen-btn" class="btn-primary-action" style="width:100%;background:linear-gradient(135deg,#6366f1,#38bdf8);color:#fff;font-weight:700;padding:6px;font-size:12px;box-shadow:0 2px 8px rgba(99,102,241,.3)">
+                    🎤 TẠO GIỌNG ĐỌC AI (Edge-TTS 2s)
+                  </button>
+                </div>
+
+                <div id="tts-prog-wrap" class="prog-wrap" style="display:none;margin-top:4px">
+                  <div class="prog-track"><div id="tts-prog-fill" class="prog-fill"></div></div>
+                  <span id="tts-prog-pct" class="prog-pct">0%</span>
+                </div>
+                <div id="tts-msg" class="tts-msg" style="display:none"></div>
+
+                <div id="tts-preview" style="display:none;margin-top:4px">
+                  <audio id="tts-audio-player" controls class="tts-player" style="width:100%;height:32px"></audio>
+                </div>
+              </div>
+
+              <!-- TAB: Upload Audio -->
+              <div id="tab-upload" class="audio-tab" style="display:none">
+                <div class="drop-zone drop-zone-sm" id="audio-drop">
+                  <div class="dz-inner" style="padding:10px">
+                    <div class="dz-icon" style="font-size:18px">🎵</div>
+                    <div class="dz-text" style="font-size:11px">Chọn file âm thanh</div>
+                  </div>
+                  <input type="file" id="audio-input" name="audio" accept=".mp3,.wav,.aac,.m4a,.ogg,.flac" class="hidden-file-input" />
+                </div>
+                <div id="audio-info" class="audio-info" style="display:none">
+                  <span class="audio-info-icon">🎵</span>
+                  <span id="audio-name" class="audio-info-name"></span>
+                  <button type="button" id="audio-remove" class="btn-icon-sm">✕</button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Hidden fields -->
+          <input type="hidden" id="tts-job-id" name="tts_job_id" value="" />
+          <input type="hidden" id="image-durations-json" name="image_durations" value="" />
+          <input type="hidden" id="image-effects-json" name="image_effects" value="" />
+          <input type="hidden" id="current-project-id" name="project_id" value="" />
+        </section>
+
+        <!-- ════════ COLUMN 2: PHỤ ĐỀ & SO KHỚP THOẠI ════════ -->
+        <section class="dash-card">
+          <div class="dash-card-header">
+            <span class="dash-card-icon">⚡</span>
+            <span class="dash-card-title">2. Phụ Đề &amp; So Khớp Thoại</span>
+          </div>
+          <div class="dash-card-body">
+
+            <!-- 🔀 Card 2 Mode Switcher (2 Distinct Workflows) -->
+            <div class="card-mode-toggle" id="card2-mode-toggle" style="display:flex;gap:4px;background:#090d16;padding:3px;border-radius:6px;border:1px solid #334155;margin-bottom:8px">
+              <button type="button" class="c2-tab-btn active" data-mode="forced-align" id="c2-tab-fa" style="flex:1;padding:6px 4px;font-size:11px;font-weight:700;border:none;border-radius:4px;cursor:pointer;background:#0284c7;color:#fff;transition:all .2s ease">
+                🎯 1. So Khớp Kịch Bản (FA)
+              </button>
+              <button type="button" class="c2-tab-btn" data-mode="autosub" id="c2-tab-stt" style="flex:1;padding:6px 4px;font-size:11px;font-weight:700;border:none;border-radius:4px;cursor:pointer;background:transparent;color:#94a3b8;transition:all .2s ease">
+                🎙️ 2. Tự Động Tạo Sub (STT)
+              </button>
+            </div>
+
+            <!-- ─── BLOCK 1: FORCED ALIGNMENT WORKFLOW (When user has script text) ─── -->
+            <div id="c2-block-forced-align" class="c2-mode-block">
+              <div class="setting-row">
+                <div class="dash-sec-header" style="margin-bottom:3px">
+                  <label class="setting-label" style="font-weight:700;color:#38bdf8">📜 Kịch Bản Gốc (.txt):</label>
+                  <div style="display:flex;gap:5px">
+                    <button type="button" id="btn-sync-script-card1" class="btn-clear" style="color:#a78bfa;font-size:10.5px;font-weight:600" title="Trích xuất nhanh văn bản từ Card 1 (TTS)">⚡ Lấy từ Card 1</button>
+                    <label class="btn-clear" style="color:#38bdf8;font-size:10.5px;font-weight:600;cursor:pointer" title="Tải file .txt kịch bản">
+                      📁 Nạp File .txt
+                      <input type="file" id="file-ground-truth-script" accept=".txt,.md,.json" style="display:none" />
+                    </label>
+                  </div>
+                </div>
+                <textarea id="inp-ground-truth-voice" class="insp-textarea" style="height:76px;font-size:11px;background:#090d16" placeholder="Nhập hoặc dán nội dung kịch bản gốc vào đây (mỗi dòng = 1 câu phụ đề chuẩn xác 100%)..."></textarea>
+              </div>
+
+              <div class="setting-row" style="margin-top:4px">
+                <label class="setting-label" style="font-size:11px">⚙️ Chọn Động Cơ So Khớp:</label>
+                <div class="btn-group" id="forced-align-engine-group" style="display:flex;gap:5px">
+                  <button type="button" class="btn-option active" data-engine="gemini" style="flex:1;font-size:11px;padding:5px 6px" title="Sử dụng Gemini Flash Cloud siêu nhanh (2-3s), 0% RAM">
+                    ☁️ Gemini Cloud (2-3s)
+                  </button>
+                  <button type="button" class="btn-option" data-engine="stable-whisper" style="flex:1;font-size:11px;padding:5px 6px" title="Chạy Offline trực tiếp trên máy Mac (Không cần API Key)">
+                    💻 Stable-Whisper (Offline)
+                  </button>
+                </div>
+              </div>
+
+              <div style="margin-top:6px">
+                <button type="button" id="btn-forced-alignment" class="btn-primary-action" style="width:100%;background:linear-gradient(135deg,#0284c7,#38bdf8);color:#fff;font-weight:700;padding:10px;font-size:12.5px;box-shadow:0 3px 12px rgba(2,132,199,.35);border-radius:6px" title="So khớp âm học từng từ từ file kịch bản .txt với file audio">
+                  🎯 BẮT ĐẦU SO KHỚP KỊCH BẢN (Forced Alignment)
+                </button>
+              </div>
+            </div>
+
+            <!-- ─── BLOCK 2: AUTOSUB STT WORKFLOW (When user has only audio) ─── -->
+            <div id="c2-block-autosub-stt" class="c2-mode-block" style="display:none">
+              <div class="setting-row">
+                <label class="setting-label">🌐 Ngôn Ngữ Giọng Đọc (Speech Language):</label>
+                <select name="subtitle_language" id="sel-sub-lang" class="sel-input">
+                  {% for code, name in subtitle_languages.items() %}
+                  <option value="{{ code }}" {% if code == 'ko' %}selected{% endif %}>{{ name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="setting-row">
+                <label class="setting-label">🌟 Động Cơ AutoSub:</label>
+                <select id="sel-autosub-engine" class="sel-input" style="background:#0f172a;border:1px solid #38bdf8;color:#38bdf8;font-weight:700">
+                  <option value="gemini-cloud-multimodal" selected>☁️ Gemini Cloud (3.6 Flash / 2.5 Flash Auto-Fallback)</option>
+                </select>
+              </div>
+
+              <div class="setting-row" id="row-gemini-key">
+                <div class="row-inline">
+                  <label class="setting-label">🔑 Gemini API Key:</label>
+                  <span class="hint" style="font-size:10px;color:#38bdf8">Free Tier</span>
+                </div>
+                <input type="password" id="inp-gemini-key" class="insp-input" placeholder="Dán Gemini API Key (hoặc để trống nếu đã set ENV)..." style="font-size:11px;background:#090d16" />
+              </div>
+
+              <div class="setting-row">
+                <label class="setting-label">📝 Initial Prompt (Mồi ngữ cảnh):</label>
+                <textarea id="inp-initial-prompt" class="insp-textarea" style="height:38px;font-size:11px">안녕하세요. 노후의 진실, 인생 이야기입니다. 오늘 들려드릴 사연은 다음과 같습니다.</textarea>
+              </div>
+
+              <div style="margin-top:6px">
+                <button type="button" id="btn-auto-write-srt" class="btn-primary-action" style="width:100%;background:linear-gradient(135deg,#7c3aed,#6366f1);color:#fff;font-weight:700;padding:10px;font-size:12.5px;box-shadow:0 3px 12px rgba(124,58,237,.35);border-radius:6px" title="Tự động nghe audio và viết phụ đề">
+                  🎙️ TỰ ĐỘNG TẠO PHỤ ĐỀ (Speech-to-Text)
+                </button>
+              </div>
+            </div>
+
+            <!-- ─── REAL-TIME PROGRESS & LOADING BAR ─── -->
+            <div id="card-autosub-prog-wrap" class="prog-wrap" style="display:none;flex-direction:column;gap:5px;padding:9px 12px;background:rgba(15,23,42,.95);border:1.5px solid #0284c7;border-radius:6px;margin-top:8px;box-shadow:0 0 14px rgba(2,132,199,.25)">
+              <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span class="spinner-inline">⏳</span>
+                  <span id="card-autosub-prog-msg" style="color:#38bdf8;font-weight:700">Đang xử lý...</span>
+                </div>
+                <span id="card-autosub-prog-pct" style="color:#38bdf8;font-weight:800;font-family:monospace">0%</span>
+              </div>
+              <div class="prog-track" style="height:7px;background:#090d16;border-radius:4px;overflow:hidden">
+                <div id="card-autosub-prog-fill" class="prog-fill" style="background:linear-gradient(90deg,#0284c7,#38bdf8,#a855f7);width:0%;height:100%;transition:width 0.25s ease"></div>
+              </div>
+            </div>
+
+            <!-- ─── UNIFIED RESULT BLOCK: SRT OUTPUT & ACTIONS ─── -->
+            <div class="setting-row" style="margin-top:8px">
+              <div class="dash-sec-header">
+                <span class="dash-sec-title">📝 Phụ Đề .SRT Hoàn Thiện:</span>
+                <div style="display:flex;gap:6px">
+                  <button type="button" id="btn-download-srt-file" class="btn-clear" style="color:#38bdf8;font-weight:600" title="Tải file .SRT về máy để kéo vào Premiere / CapCut">📥 Tải .SRT</button>
+                  <button type="button" id="btn-clear-sub" class="btn-clear" title="Xóa toàn bộ phụ đề">✕ Xóa</button>
+                </div>
+              </div>
+              <textarea id="custom-srt-text" name="custom_srt" class="insp-textarea" style="height:110px;font-size:11px"
+                        placeholder="Mốc phụ đề .SRT sẽ tự động xuất hiện ở đây sau khi so khớp hoặc tạo xong..."></textarea>
+              <div id="sub-status-badge" class="sub-status-badge" style="display:none;margin-top:2px">
+                ✅ Đã sẵn sàng <span id="sub-line-count">0</span> đoạn phụ đề
+              </div>
+            </div>
+
+            <div style="display:flex;gap:6px;margin-top:6px">
+              <button type="button" id="btn-parse-script" class="btn-sub-action" style="flex:1;background:linear-gradient(135deg,#6366f1,#06b6d4);color:#fff;font-weight:700;padding:7px;font-size:11.5px" title="Nạp và đồng bộ mốc thời gian phụ đề lên Timeline">
+                ⚡ Đẩy Sang Timeline
+              </button>
+              <button type="button" id="btn-dash-translate" class="btn-sub-action" style="flex:1;background:linear-gradient(135deg,#0284c7,#38bdf8);color:#fff;font-weight:700;padding:7px;font-size:11.5px" title="Dịch phụ đề sang Tiếng Việt">
+                🌐 Dịch sang Tiếng Việt
+              </button>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- ════════ COLUMN 3: VIDEO EXPORT SPECS ════════ -->
+        <section class="dash-card">
+          <div class="dash-card-header">
+            <span class="dash-card-icon">⚙️</span>
+            <span class="dash-card-title">3. Cấu Hình Video Xuất Bản</span>
+          </div>
+          <div class="dash-card-body">
+            
+            <!-- Aspect Ratio -->
+            <div class="setting-row">
+              <label class="setting-label">📐 Tỷ lệ Khung hình (Aspect Ratio):</label>
+              <div class="btn-group" data-hidden="aspect_ratio" style="flex-wrap:wrap">
+                <button type="button" class="bopt active" data-val="16:9">16:9 (YouTube)</button>
+                <button type="button" class="bopt" data-val="9:16">9:16 (TikTok/Shorts)</button>
+                <button type="button" class="bopt" data-val="1:1">1:1 (Vuông)</button>
+                <button type="button" class="bopt" data-val="4:5">4:5 (Feed)</button>
+                <button type="button" class="bopt" data-val="21:9">21:9 (Cinema)</button>
+              </div>
+              <input type="hidden" name="aspect_ratio" value="16:9" id="hid-aspect-ratio" />
+            </div>
+
+            <!-- Resolution -->
+            <div class="setting-row">
+              <label class="setting-label">📺 Độ phân giải (Resolution):</label>
+              <div class="btn-group" data-hidden="resolution">
+                <button type="button" class="bopt" data-val="720p">720p (HD)</button>
+                <button type="button" class="bopt active" data-val="1080p">1080p (Full HD)</button>
+                <button type="button" class="bopt" data-val="1440p">1440p (2K)</button>
+                <button type="button" class="bopt" data-val="4K">4K (Ultra HD)</button>
+              </div>
+              <input type="hidden" name="resolution" value="1080p" />
+            </div>
+
+            <!-- FPS -->
+            <div class="setting-row">
+              <label class="setting-label">🎞️ Tốc độ Khung hình (FPS):</label>
+              <div class="btn-group" data-hidden="fps">
+                <button type="button" class="bopt" data-val="24">24 fps</button>
+                <button type="button" class="bopt active" data-val="25">25 fps</button>
+                <button type="button" class="bopt" data-val="30">30 fps</button>
+                <button type="button" class="bopt" data-val="60">60 fps</button>
+              </div>
+              <input type="hidden" name="fps" value="25" />
+            </div>
+
+            <!-- Codec & Quality (CRF) -->
+            <div class="setting-row">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                <div>
+                  <label class="setting-label">📼 Bộ mã hóa (Codec):</label>
+                  <select id="sel-codec" name="codec" class="finput" style="width:100%;padding:5px 8px;font-size:12px;background:#1e293b;color:#f8fafc;border:1px solid #334155;border-radius:6px">
+                    <option value="h264" selected>H.264 (libx264 - Tương thích cao)</option>
+                    <option value="hevc">H.265 / HEVC (libx265 - Siêu nén)</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="setting-label">💎 Chất lượng (CRF):</label>
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <input type="range" id="sl-crf" min="15" max="28" value="19" class="wslider" style="flex:1" />
+                    <input type="number" id="inp-crf-num" name="crf" min="15" max="28" value="19" class="num-input" style="width:45px;padding:3px 4px;font-size:11px;text-align:center;font-weight:700;color:#38bdf8" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Default Image Duration -->
+            <div class="setting-row">
+              <div class="row-inline">
+                <label class="setting-label">⏱️ Thời lượng mặc định mỗi ảnh:</label>
+                <div class="input-unit">
+                  <input type="number" id="inp-duration" name="duration" min="0.5" max="60" step="0.5" value="3.5" class="num-input" style="width:75px;text-align:center;color:#38bdf8;font-weight:700" />
+                  <span class="unit">giây</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Transitions & Durations -->
+            <div class="setting-row">
+              <div class="row-inline">
+                <label class="setting-label">✨ Chuyển cảnh hòa tan (Cross Dissolve 0.5s):</label>
+                <label class="toggle">
+                  <input type="checkbox" id="chk-transition" checked />
+                  <span class="toggle-track"></span>
+                </label>
+              </div>
+            </div>
+
+            <!-- 🎨 Subtitle Styling (Font, Size, Stroke, Box) -->
+            <div class="setting-row" style="background:rgba(2,132,199,0.06);border:1px solid #0284c7;border-radius:6px;padding:8px 10px;margin-top:2px">
+              <label class="setting-label" style="color:#38bdf8;font-weight:700;margin-bottom:6px">🎨 Định Dạng Phụ Đề (Subtitle Style):</label>
+              
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+                <div>
+                  <label style="font-size:10px;color:#94a3b8">Font chữ:</label>
+                  <select id="sel-sub-font" name="sub_font" class="sel-input" style="font-size:11px;padding:3px 5px">
+                    <optgroup label="🇰🇷 Font Tiếng Hàn (Noonnu)">
+                      <option value="paperlogy" selected>Paperlogy ExtraBold (페이퍼로지)</option>
+                      <option value="jalnan">Jalnan (여기어때 잘난체)</option>
+                      <option value="isamanru">Isamanru (이사만루체)</option>
+                      <option value="fromsol">Dear Fromsol (그리운 프롬솔)</option>
+                      <option value="katuri">Katuri (엄마까투리체)</option>
+                    </optgroup>
+                    <optgroup label="🌐 Font Quốc Tế / Chuẩn">
+                      <option value="montserrat">Montserrat Bold</option>
+                      <option value="tahoma">Tahoma Bold</option>
+                      <option value="applesd">Apple SD Gothic Neo</option>
+                      <option value="arial">Arial Bold</option>
+                      <option value="roboto">Roboto</option>
+                    </optgroup>
+                  </select>
+                </div>
+                <div>
+                  <label style="font-size:10px;color:#94a3b8">Cỡ chữ Subtitle:</label>
+                  <div style="display:flex;align-items:center;gap:4px">
+                    <input type="range" id="sl-sub-size" min="16" max="80" value="36" class="wslider" style="width:75px" />
+                    <input type="number" id="inp-sub-size-num" min="16" max="80" value="36" class="num-input" style="width:40px;padding:2px 3px;font-size:10.5px;text-align:center;font-weight:700;color:#38bdf8" />
+                    <span style="font-size:10px;color:#94a3b8">px</span>
+                  </div>
+                </div>
+              </div>
+
+              <div style="display:flex;align-items:center;justify-content:space-between;border-top:1px dashed #334155;padding-top:5px;margin-top:4px">
+                <label style="font-size:10.5px;color:#e2e8f0;display:flex;align-items:center;gap:4px;cursor:pointer">
+                  <input type="checkbox" id="chk-sub-stroke-c3" checked /> 
+                  <span>✒️ Viền chữ đen</span>
+                </label>
+                <label style="font-size:10.5px;color:#e2e8f0;display:flex;align-items:center;gap:4px;cursor:pointer">
+                  <input type="checkbox" id="chk-sub-bg-c3" /> 
+                  <span>💊 Hộp nền đen</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Ken Burns Weights -->
+            <div class="setting-row">
+              <label class="setting-label">✨ Trọng số Hiệu ứng Ken Burns:</label>
+              <div class="weight-grid" style="gap:3px">
+                <div class="wrow"><span class="wlabel">🔍 Zoom In</span><input type="range" class="wslider" id="sl-zi" min="0" max="100" value="25" /><span class="wval" id="sv-zi">25</span><input type="hidden" name="weight_zoom_in" id="hid-zi" value="25" /></div>
+                <div class="wrow"><span class="wlabel">🔎 Zoom Out</span><input type="range" class="wslider" id="sl-zo" min="0" max="100" value="25" /><span class="wval" id="sv-zo">25</span><input type="hidden" name="weight_zoom_out" id="hid-zo" value="25" /></div>
+                <div class="wrow"><span class="wlabel">↔️ Pan</span><input type="range" class="wslider" id="sl-pan" min="0" max="100" value="25" /><span class="wval" id="sv-pan">25</span><input type="hidden" name="weight_pan" id="hid-pan" value="25" /></div>
+                <div class="wrow"><span class="wlabel">↕️ Tilt</span><input type="range" class="wslider" id="sl-tilt" min="0" max="100" value="25" /><span class="wval" id="sv-tilt">25</span><input type="hidden" name="weight_tilt" id="hid-tilt" value="25" /></div>
+              </div>
+            </div>
+
+            <!-- Direct Jump to Timeline Button -->
+            <button type="button" id="btn-jump-timeline" class="btn-jump-timeline" style="margin-top:auto;background:linear-gradient(135deg,#6366f1,#38bdf8);color:#fff;font-weight:700;padding:10px;border-radius:6px;border:none;cursor:pointer;box-shadow:0 4px 14px rgba(99,102,241,.4)">
+              🎞️ Mở Tab Timeline &amp; Xem Preview ➔
+            </button>
+
+          </div>
+        </section>
+
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         VIEW 2: TIMELINE EDITOR & LIVE PREVIEW MONITOR (PREMIERE / CAPCUT STYLE)
+         ════════════════════════════════════════════════════════════════════ -->
+    <div id="view-timeline" class="studio-view">
+      <div class="timeline-studio-layout">
+
+        <!-- ── TOP ROW: PRO 3-PANEL STUDIO (LEFT DRAWER + MONITOR + INSPECTOR) ── -->
+        <div class="studio-top-row">
+
+          <!-- 🗂️ 1. LEFT ASSET & TOOL DRAWER SIDEBAR -->
+          <div class="studio-left-drawer">
+            <div class="drawer-icon-bar">
+              <button type="button" class="dnav-btn active" data-pane="dpane-media" title="Thư viện ảnh">
+                <span class="dnav-icon">📁</span>
+                <span class="dnav-lbl">Media</span>
+              </button>
+              <button type="button" class="dnav-btn" data-pane="dpane-text" title="Mẫu chữ &amp; Phụ đề">
+                <span class="dnav-icon">🔤</span>
+                <span class="dnav-lbl">Văn bản</span>
+              </button>
+              <button type="button" class="dnav-btn" data-pane="dpane-voice" title="Voice Studio">
+                <span class="dnav-icon">🎙️</span>
+                <span class="dnav-lbl">Voice AI</span>
+              </button>
+              <button type="button" class="dnav-btn" data-pane="dpane-trans" title="Dịch Thuật">
+                <span class="dnav-icon">🌐</span>
+                <span class="dnav-lbl">Dịch</span>
+              </button>
+            </div>
+
+            <div class="drawer-content-pane">
+              <!-- Pane 1: Media Library -->
+              <div id="dpane-media" class="dpane-item active">
+                <div class="dpane-sec-header">
+                  <span>🖼️ Thư viện ảnh (<span id="drawer-img-count">0</span>)</span>
+                </div>
+                <div id="drawer-img-list" class="drawer-img-grid">
+                  <div class="drawer-empty-msg">Chưa có ảnh nào.</div>
+                </div>
+              </div>
+
+              <!-- Pane 2: Text / Subtitle Templates -->
+              <div id="dpane-text" class="dpane-item" style="display:none">
+                <div class="dpane-sec-header">
+                  <span>🔤 Mẫu Phụ Đề &amp; Kiểu Chữ</span>
+                </div>
+                <div class="drawer-template-list">
+                  <div class="dtpl-card active" data-style="white_black_stroke" data-font="montserrat">
+                    <div class="dtpl-preview" style="color:#fff;font-weight:800;text-shadow:-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 3px 6px #000;background:transparent;font-family:'Montserrat',sans-serif">
+                      Trắng Viền Đen
+                    </div>
+                    <span class="dtpl-title">✨ Chữ Trắng Viền Đen (Mẫu 1)</span>
+                  </div>
+                  <div class="dtpl-card" data-style="black_capsule" data-font="montserrat">
+                    <div class="dtpl-preview" style="color:#fff;background:rgba(0,0,0,0.8);border-radius:12px;padding:4px 10px;font-weight:700">
+                      Hộp Đen Bo Tròn
+                    </div>
+                    <span class="dtpl-title">💊 Capsule Pill Hộp Đen</span>
+                  </div>
+                  <div class="dtpl-card" data-style="yellow_black_stroke" data-font="montserrat">
+                    <div class="dtpl-preview" style="color:#facc15;font-weight:800;text-shadow:-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000;background:transparent">
+                      Phụ Đề Vàng Nổi
+                    </div>
+                    <span class="dtpl-title">🟡 Vàng Viền Đen</span>
+                  </div>
+                  <div class="dtpl-card" data-style="white_shadow" data-font="tahoma">
+                    <div class="dtpl-preview" style="color:#fff;font-weight:700;text-shadow:0 3px 8px rgba(0,0,0,0.9);background:transparent;font-family:'Tahoma',sans-serif">
+                      Tahoma Đổ Bóng
+                    </div>
+                    <span class="dtpl-title">🤍 Tahoma Đổ Bóng Tự Nhiên</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Pane 3: Voice Studio Actions -->
+              <div id="dpane-voice" class="dpane-item" style="display:none">
+                <div class="dpane-sec-header">
+                  <span>🎙️ Voice Studio</span>
+                </div>
+                <div class="dpane-actions-list">
+                  <button type="button" id="btn-drawer-tts" class="btn-sub-action" style="background:linear-gradient(135deg,#6366f1,#38bdf8);color:#fff;font-weight:700;padding:8px">
+                    ⚡ Sinh Giọng AI VoxCPM
+                  </button>
+                  <button type="button" id="btn-drawer-autosub" class="btn-sub-action" style="background:linear-gradient(135deg,#0284c7,#38bdf8);color:#fff;font-weight:700;padding:8px">
+                    🌟 AutoSub Stable-Whisper
+                  </button>
+                </div>
+              </div>
+
+              <!-- Pane 4: Translation Actions -->
+              <div id="dpane-trans" class="dpane-item" style="display:none">
+                <div class="dpane-sec-header">
+                  <span>🌐 Dịch Thuật Phụ Đề</span>
+                </div>
+                <div class="dpane-actions-list">
+                  <button type="button" id="btn-drawer-translate" class="btn-sub-action" style="background:linear-gradient(135deg,#0284c7,#38bdf8);color:#fff;font-weight:700;padding:8px">
+                    🌐 Dịch Toàn Bộ Sang Tiếng Việt
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 📺 2. LIVE PREVIEW MONITOR -->
+          <div class="preview-monitor-card">
+            <div class="monitor-screen-wrap">
+              <div id="preview-screen" class="preview-screen aspect-16-9">
+                <img id="monitor-img" class="monitor-img" src="" alt="Preview Screen" style="display:none" />
+                <div id="monitor-placeholder" class="monitor-placeholder">
+                  <span style="font-size:36px">🎬</span>
+                  <span>Chưa có ảnh nào được nạp</span>
+                </div>
+                <!-- Live Subtitle Overlay -->
+                <div id="monitor-subtitle" class="monitor-subtitle" style="display:none"></div>
+              </div>
+            </div>
+
+            <!-- Player Controls Bar -->
+            <div class="monitor-controls-bar">
+              <div class="mc-left">
+                <button type="button" id="btn-prev-scene" class="mc-btn" title="Cảnh trước">⏮️</button>
+                <button type="button" id="btn-play-pause" class="mc-btn mc-btn-play" title="Phát / Dừng">▶️</button>
+                <button type="button" id="btn-next-scene" class="mc-btn" title="Cảnh sau">⏭️</button>
+              </div>
+
+              <div class="mc-center">
+                <span id="mc-time-current" class="mc-timecode">00:00.00</span>
+                <span class="mc-time-sep">/</span>
+                <span id="mc-time-total" class="mc-timecode">00:00.00</span>
+                <select id="sel-monitor-ratio" class="sel-ratio-mini" style="background:#0f172a;border:1px solid #334155;color:#38bdf8;font-size:11px;padding:2px 6px;border-radius:4px;cursor:pointer">
+                  <option value="16:9" selected>16:9 (YouTube)</option>
+                  <option value="9:16">9:16 (TikTok)</option>
+                  <option value="1:1">1:1 (Square)</option>
+                </select>
+              </div>
+
+              <div class="mc-right">
+                <button type="button" id="btn-monitor-fullscreen" class="mc-btn" title="Xem Toàn Màn Hình">⛶</button>
+                <span id="mc-scene-indicator" class="mc-badge">Ảnh 0 / 0</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- ⚙️ 3. RIGHT INSPECTOR (PROPERTIES & BILINGUAL SUITE) -->
+          <div class="inspector-card">
+            <div class="insp-tab-header" style="display:flex;gap:4px;margin-bottom:10px;border-bottom:1px solid #334155;padding-bottom:6px">
+              <button type="button" class="insp-tab-btn active" id="insp-tab-props-btn" style="flex:1;padding:6px;font-size:11.5px;font-weight:700;background:#334155;color:#38bdf8;border:none;border-radius:4px;cursor:pointer">⚙️ Thuộc tính</button>
+              <button type="button" class="insp-tab-btn" id="insp-tab-sublist-btn" style="flex:1;padding:6px;font-size:11.5px;font-weight:700;background:transparent;color:#94a3b8;border:none;border-radius:4px;cursor:pointer">📋 Danh sách Phụ đề (<span id="insp-sub-count">0</span>)</button>
+            </div>
+
+            <!-- Tab Pane 1: Properties Inspector -->
+            <div id="insp-pane-props">
+              <div id="inspector-empty" class="inspector-empty">
+                <span>Nhấp chọn phân cảnh, phụ đề hoặc giọng đọc trên Timeline để chỉnh sửa.</span>
+              </div>
+
+              <div id="inspector-content" class="inspector-content" style="display:none">
+                
+                <!-- Common Header Row -->
+                <div class="insp-row-header">
+                  <span id="insp-type-icon" style="font-size:14px">🖼️</span>
+                  <label class="setting-label" id="insp-type-label" style="font-weight:700;color:#f8fafc">Phân Cảnh:</label>
+                  <span id="insp-scene-id" class="insp-tag">scene_001</span>
+                </div>
+
+                <!-- Voice Audio Editing Fields (Visible when Audio is selected) -->
+                <div id="insp-audio-fields" class="insp-field-block" style="display:none">
+                  <div class="insp-field-group">
+                    <div class="row-inline">
+                      <label class="setting-label">🔊 Âm lượng (Volume):</label>
+                      <span id="insp-audio-vol-val" class="mval" style="color:#38bdf8">100%</span>
+                    </div>
+                    <input type="range" id="sl-audio-vol" min="0" max="150" value="100" />
+                  </div>
+                  <div class="insp-field-group">
+                    <label class="setting-label">⚡ Tốc độ phát lại:</label>
+                    <div class="btn-group" id="audio-speed-group">
+                      <button type="button" class="bopt" data-spd="0.5">0.5x</button>
+                      <button type="button" class="bopt" data-spd="0.75">0.75x</button>
+                      <button type="button" class="bopt active" data-spd="1.0">1x</button>
+                      <button type="button" class="bopt" data-spd="1.25">1.25x</button>
+                      <button type="button" class="bopt" data-spd="1.5">1.5x</button>
+                      <button type="button" class="bopt" data-spd="2.0">2x</button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Subtitle Editing Fields (Visible when Subtitle is selected) -->
+                <div id="insp-sub-fields" class="insp-field-block" style="display:none">
+                  <div class="insp-field-group">
+                    <label class="setting-label">📝 Phụ đề Tiếng Việt (Target):</label>
+                    <textarea id="insp-subtitle-text" class="insp-textarea" placeholder="Nhập câu phụ đề tiếng Việt..."></textarea>
+                  </div>
+
+                  <div class="insp-field-group">
+                    <label class="setting-label">🌐 Câu thoại gốc (Source):</label>
+                    <input type="text" id="insp-subtitle-orig-text" class="insp-input" placeholder="Câu thoại gốc..." />
+                  </div>
+
+                  <!-- 🎨 Subtitle Design & Position Engine (Tách Nền, Viền & Vị trí X Y Z) -->
+                  <div class="insp-field-group" style="background:rgba(15,23,42,0.85);border:1px solid #0284c7;border-radius:8px;padding:10px;margin-top:6px;box-shadow:0 4px 12px rgba(0,0,0,0.3)">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;border-bottom:1px solid #334155;padding-bottom:4px">
+                      <label class="setting-label" style="color:#38bdf8;font-weight:800;font-size:12px;margin:0">🎨 Thiết Kế &amp; Vị Trí Subtitle</label>
+                      <button type="button" id="btn-insp-apply-all-subs" class="btn-dur-step" style="background:#0284c7;color:#fff;font-size:10px;padding:2px 6px;border-radius:4px" title="Áp dụng kiểu dáng và vị trí này cho toàn bộ phụ đề">🌐 Áp dụng TẤT CẢ</button>
+                    </div>
+
+                    <!-- 1. Font & Text Color & Size -->
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+                      <div>
+                        <label style="font-size:10px;color:#94a3b8">Font chữ:</label>
+                        <select id="insp-sel-sub-font" class="sel-input" style="font-size:11px;padding:3px 5px">
+                          <optgroup label="🇰🇷 Font Tiếng Hàn (Noonnu)">
+                            <option value="paperlogy" selected>Paperlogy ExtraBold (페이퍼로지)</option>
+                            <option value="jalnan">Jalnan (여기어때 잘난체)</option>
+                            <option value="isamanru">Isamanru (이사만루체)</option>
+                            <option value="fromsol">Dear Fromsol (그리운 프롬솔)</option>
+                            <option value="katuri">Katuri (엄마까투리체)</option>
+                          </optgroup>
+                          <optgroup label="🌐 Font Quốc Tế / Chuẩn">
+                            <option value="montserrat">Montserrat Bold</option>
+                            <option value="tahoma">Tahoma Bold</option>
+                            <option value="applesd">Apple SD Gothic Neo</option>
+                            <option value="arial">Arial Bold</option>
+                            <option value="roboto">Roboto</option>
+                          </optgroup>
+                        </select>
+                      </div>
+                      <div>
+                        <label style="font-size:10px;color:#94a3b8">Màu chữ:</label>
+                        <div style="display:flex;align-items:center;gap:4px">
+                          <input type="color" id="insp-cp-sub-color" value="#ffffff" style="width:26px;height:24px;border:none;background:transparent;cursor:pointer" />
+                          <button type="button" class="btn-color-quick" data-color="#ffffff" style="background:#fff;width:16px;height:16px;border-radius:3px;border:1px solid #64748b" title="Trắng"></button>
+                          <button type="button" class="btn-color-quick" data-color="#facc15" style="background:#facc15;width:16px;height:16px;border-radius:3px;border:1px solid #64748b" title="Vàng"></button>
+                          <button type="button" class="btn-color-quick" data-color="#38bdf8" style="background:#38bdf8;width:16px;height:16px;border-radius:3px;border:1px solid #64748b" title="Xanh"></button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Cỡ chữ & Giãn cách (Letter / Line Spacing) -->
+                    <div class="row-inline" style="margin-bottom:6px">
+                      <label style="font-size:10px;color:#94a3b8">Cỡ chữ:</label>
+                      <div style="display:flex;align-items:center;gap:4px">
+                        <input type="range" id="insp-sl-sub-size" min="16" max="80" value="36" class="wslider" style="width:90px" />
+                        <div class="input-unit" style="display:flex;align-items:center">
+                          <input type="number" id="insp-inp-sub-size" min="16" max="80" value="36" class="num-input" style="width:40px;padding:2px 3px;font-size:10.5px;text-align:center;font-weight:700;color:#38bdf8" />
+                          <span style="font-size:10px;color:#94a3b8;margin-left:2px">px</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+                      <div>
+                        <label style="font-size:10px;color:#94a3b8">🔤 Giãn chữ (Letter):</label>
+                        <div style="display:flex;align-items:center;gap:3px">
+                          <input type="range" id="insp-sl-sub-letter-spacing" min="-2" max="12" value="0" class="wslider" style="width:60px" />
+                          <input type="number" id="insp-inp-sub-letter-spacing" min="-2" max="12" value="0" class="num-input" style="width:34px;padding:1px 2px;font-size:10px;text-align:center;color:#38bdf8;font-weight:700" />
+                          <span style="font-size:9.5px;color:#94a3b8">px</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label style="font-size:10px;color:#94a3b8">↕️ Giãn dòng (Line):</label>
+                        <div style="display:flex;align-items:center;gap:3px">
+                          <input type="range" id="insp-sl-sub-line-spacing" min="1.0" max="2.0" step="0.05" value="1.25" class="wslider" style="width:60px" />
+                          <input type="number" id="insp-inp-sub-line-spacing" min="1.0" max="2.0" step="0.05" value="1.25" class="num-input" style="width:38px;padding:1px 2px;font-size:10px;text-align:center;color:#38bdf8;font-weight:700" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- 2. VIỀN CHỮ (STROKE / OUTLINE) -->
+                    <div style="background:rgba(0,0,0,0.3);border:1px solid #334155;border-radius:6px;padding:6px 8px;margin-bottom:6px">
+                      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+                        <label style="font-size:11px;font-weight:700;color:#e2e8f0;display:flex;align-items:center;gap:5px;cursor:pointer">
+                          <input type="checkbox" id="insp-chk-sub-stroke" checked /> 
+                          <span>✒️ Viền Chữ (Stroke)</span>
+                        </label>
+                        <div style="display:flex;align-items:center;gap:3px">
+                          <span style="font-size:10px;color:#94a3b8">Màu viền:</span>
+                          <input type="color" id="insp-cp-sub-stroke-color" value="#000000" style="width:22px;height:20px;border:none;background:transparent;cursor:pointer" />
+                        </div>
+                      </div>
+                      <div id="insp-sub-stroke-opts" class="row-inline" style="margin-top:2px">
+                        <label style="font-size:10px;color:#94a3b8">Độ dày viền:</label>
+                        <div style="display:flex;align-items:center;gap:4px">
+                          <input type="range" id="insp-sl-sub-stroke-w" min="1" max="12" value="4" class="wslider" style="width:80px" />
+                          <input type="number" id="insp-inp-sub-stroke-w" min="1" max="12" value="4" class="num-input" style="width:40px;padding:1px 3px;font-size:10.5px;text-align:center;color:#38bdf8;font-weight:700" />
+                          <span style="font-size:10px;color:#94a3b8">px</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- 3. HỘP NỀN (BACKGROUND BOX / CAPSULE) -->
+                    <div style="background:rgba(0,0,0,0.3);border:1px solid #334155;border-radius:6px;padding:6px 8px;margin-bottom:6px">
+                      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+                        <label style="font-size:11px;font-weight:700;color:#e2e8f0;display:flex;align-items:center;gap:5px;cursor:pointer">
+                          <input type="checkbox" id="insp-chk-sub-bg" /> 
+                          <span>💊 Hộp Nền (Background Box)</span>
+                        </label>
+                        <div style="display:flex;align-items:center;gap:3px">
+                          <span style="font-size:10px;color:#94a3b8">Màu nền:</span>
+                          <input type="color" id="insp-cp-sub-bg-color" value="#000000" style="width:22px;height:20px;border:none;background:transparent;cursor:pointer" />
+                        </div>
+                      </div>
+                      <div id="insp-sub-bg-opts" style="display:none">
+                        <div class="row-inline" style="margin-top:2px">
+                          <label style="font-size:10px;color:#94a3b8">Độ mờ đục (Opacity):</label>
+                          <div style="display:flex;align-items:center;gap:4px">
+                            <input type="range" id="insp-sl-sub-bg-op" min="10" max="100" value="75" class="wslider" style="width:80px" />
+                            <input type="number" id="insp-inp-sub-bg-op" min="10" max="100" value="75" class="num-input" style="width:40px;padding:1px 3px;font-size:10.5px;text-align:center;color:#38bdf8;font-weight:700" />
+                            <span style="font-size:10px;color:#94a3b8">%</span>
+                          </div>
+                        </div>
+                        <div class="row-inline" style="margin-top:4px">
+                          <label style="font-size:10px;color:#94a3b8">Bo góc (Radius):</label>
+                          <div style="display:flex;gap:3px">
+                            <button type="button" class="btn-radius-quick active" data-rad="16" style="font-size:10px;padding:1px 5px;background:#334155;color:#fff;border:none;border-radius:3px">Capsule</button>
+                            <button type="button" class="btn-radius-quick" data-rad="6" style="font-size:10px;padding:1px 5px;background:#1e293b;color:#94a3b8;border:none;border-radius:3px">Góc nhẹ</button>
+                            <button type="button" class="btn-radius-quick" data-rad="0" style="font-size:10px;padding:1px 5px;background:#1e293b;color:#94a3b8;border:none;border-radius:3px">Vuông</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- 4. VỊ TRÍ HÀNG LOẠT (X, Y, Z POSITIONING) -->
+                    <div style="background:rgba(0,0,0,0.3);border:1px solid #334155;border-radius:6px;padding:6px 8px">
+                      <label style="font-size:11px;font-weight:700;color:#e2e8f0;margin-bottom:4px;display:block">📐 Vị Trí Trục X, Y, Z (Toàn bộ Sub)</label>
+                      
+                      <!-- Trục Y (Độ cao) -->
+                      <div class="row-inline" style="margin-top:2px">
+                        <label style="font-size:10px;color:#94a3b8">↕️ Vị trí Y (Độ cao):</label>
+                        <div style="display:flex;align-items:center;gap:4px">
+                          <input type="range" id="insp-sl-sub-pos-y" min="0" max="90" value="6" class="wslider" style="width:80px" />
+                          <input type="number" id="insp-inp-sub-pos-y" min="0" max="90" value="6" class="num-input" style="width:40px;padding:1px 3px;font-size:10.5px;text-align:center;color:#38bdf8;font-weight:700" />
+                          <span style="font-size:10px;color:#94a3b8">%</span>
+                        </div>
+                      </div>
+                      <div style="display:flex;gap:3px;justify-content:flex-end;margin-top:2px;margin-bottom:6px">
+                        <button type="button" class="btn-posy-preset" data-val="6" style="font-size:9.5px;padding:1px 5px;background:#1e293b;color:#38bdf8;border:1px solid #334155;border-radius:3px">Đáy (6%)</button>
+                        <button type="button" class="btn-posy-preset" data-val="50" style="font-size:9.5px;padding:1px 5px;background:#1e293b;color:#38bdf8;border:1px solid #334155;border-radius:3px">Giữa (50%)</button>
+                        <button type="button" class="btn-posy-preset" data-val="84" style="font-size:9.5px;padding:1px 5px;background:#1e293b;color:#38bdf8;border:1px solid #334155;border-radius:3px">Đỉnh (84%)</button>
+                      </div>
+
+                      <!-- Trục X (Căn lề / Dịch chuyển) -->
+                      <div class="row-inline" style="margin-top:2px">
+                        <label style="font-size:10px;color:#94a3b8">↔️ Lệch X (Ngang):</label>
+                        <div style="display:flex;align-items:center;gap:4px">
+                          <input type="range" id="insp-sl-sub-pos-x" min="-40" max="40" value="0" class="wslider" style="width:80px" />
+                          <input type="number" id="insp-inp-sub-pos-x" min="-40" max="40" value="0" class="num-input" style="width:40px;padding:1px 3px;font-size:10.5px;text-align:center;color:#38bdf8;font-weight:700" />
+                          <span style="font-size:10px;color:#94a3b8">%</span>
+                        </div>
+                      </div>
+
+                      <!-- Trục Z (Lớp hiển thị) -->
+                      <div class="row-inline" style="margin-top:4px">
+                        <label style="font-size:10px;color:#94a3b8">🔝 Lớp Z-Index:</label>
+                        <select id="insp-sel-sub-z" class="sel-input" style="font-size:10.5px;padding:2px 4px;width:120px">
+                          <option value="100" selected>Lớp trên cùng (Top)</option>
+                          <option value="10">Lớp trung bình</option>
+                          <option value="1">Lớp dưới</option>
+                        </select>
+                      </div>
+                    </div>
+
+                  </div>
+
+                  <div class="insp-field-group" style="margin-top:6px">
+                    <label class="setting-label">⏩ Tịnh tiến mốc thời gian câu thoại:</label>
+                    <div style="display:flex;gap:4px">
+                      <button type="button" id="btn-sub-nudge-left" class="btn-dur-step" style="flex:1" title="Dời câu này sớm hơn 0.1s">◀ -0.1s</button>
+                      <button type="button" id="btn-sub-nudge-right" class="btn-dur-step" style="flex:1" title="Dời câu này muộn hơn 0.1s">▶ +0.1s</button>
+                      <button type="button" id="btn-sub-nudge-all-left" class="btn-dur-step" style="flex:1;color:#38bdf8" title="Dời toàn bộ bài sub sớm hơn 0.5s">⏪ Bài -0.5s</button>
+                      <button type="button" id="btn-sub-nudge-all-right" class="btn-dur-step" style="flex:1;color:#38bdf8" title="Dời toàn bộ bài sub muộn hơn 0.5s">⏩ Bài +0.5s</button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Image Editing Fields (Visible when Image is selected) -->
+                <div id="insp-img-fields" class="insp-field-block" style="display:none">
+                  <div class="insp-field-group">
+                    <label class="setting-label">✨ Hiệu ứng Ken Burns:</label>
+                    <select id="insp-scene-effect" class="insp-input insp-select">
+                      <option value="none">⏸️ Ảnh tĩnh (Không hiệu ứng)</option>
+                      <option value="zoom_in">🔍 Zoom In (Phóng to)</option>
+                      <option value="zoom_out">🔍 Zoom Out (Thu nhỏ)</option>
+                      <option value="pan_lr">↔️ Pan (Trái → Phải)</option>
+                      <option value="pan_rl">↔️ Pan (Phải → Trái)</option>
+                      <option value="tilt_ud">↕️ Tilt (Trên → Dưới)</option>
+                      <option value="tilt_du">↕️ Tilt (Dưới → Trên)</option>
+                    </select>
+                    <button type="button" id="btn-apply-effect-all" class="btn-clear" style="margin-top:6px;font-size:11px;color:#38bdf8;padding:4px 8px;border:1px dashed #0284c7;border-radius:4px;width:100%" title="Gán hiệu ứng này cho toàn bộ danh sách ảnh">✨ Áp dụng hiệu ứng này cho TOÀN BỘ ảnh</button>
+                  </div>
+                </div>
+
+                <!-- Duration Control (Common for Images and Subtitles) -->
+                <div class="insp-field-group" id="insp-dur-group">
+                  <label class="setting-label" id="insp-dur-label">⏱️ Thời lượng (giây):</label>
+                  <div class="dur-control-row">
+                    <button type="button" id="btn-dur-minus" class="btn-dur-step">-0.5s</button>
+                    <input type="number" id="insp-scene-dur" min="0.3" max="60" step="0.1" class="num-input" style="width:80px;text-align:center;font-weight:700;color:#38bdf8" />
+                    <button type="button" id="btn-dur-plus" class="btn-dur-step">+0.5s</button>
+                  </div>
+
+                  <!-- Quick Duration Presets -->
+                  <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px" id="dur-preset-btns">
+                    <button type="button" class="btn-clear bopt-mini" data-dur="2.5" style="padding:2px 6px;font-size:10.5px;background:#1e293b;border:1px solid #334155;border-radius:4px;color:#94a3b8">2.5s</button>
+                    <button type="button" class="btn-clear bopt-mini" data-dur="3.5" style="padding:2px 6px;font-size:10.5px;background:#1e293b;border:1px solid #334155;border-radius:4px;color:#94a3b8">3.5s</button>
+                    <button type="button" class="btn-clear bopt-mini" data-dur="5.0" style="padding:2px 6px;font-size:10.5px;background:#1e293b;border:1px solid #334155;border-radius:4px;color:#94a3b8">5.0s</button>
+                    <button type="button" class="btn-clear bopt-mini" data-dur="7.0" style="padding:2px 6px;font-size:10.5px;background:#1e293b;border:1px solid #334155;border-radius:4px;color:#94a3b8">7.0s</button>
+                    <button type="button" class="btn-clear bopt-mini" data-dur="10.0" style="padding:2px 6px;font-size:10.5px;background:#1e293b;border:1px solid #334155;border-radius:4px;color:#94a3b8">10s</button>
+                  </div>
+
+                  <!-- Bulk Duration Actions for Images -->
+                  <div id="insp-bulk-dur-actions" style="display:flex;flex-direction:column;gap:5px;margin-top:6px">
+                    <button type="button" id="btn-insp-apply-all-dur" class="btn-sub-action" style="background:#1e293b;border:1px solid #38bdf8;color:#38bdf8;font-size:11px;font-weight:700;padding:5px;border-radius:4px;cursor:pointer" title="Đặt thời lượng này cho toàn bộ các ảnh trên Timeline">
+                      🌐 Áp dụng cho TẤT CẢ ảnh
+                    </button>
+                    <button type="button" id="btn-insp-autofit-voice" class="btn-sub-action" style="background:#0f172a;border:1px solid #10b981;color:#10b981;font-size:11px;font-weight:700;padding:5px;border-radius:4px;cursor:pointer" title="Tự động chia đều tổng thời lượng Voice cho tất cả ảnh">
+                      🧲 Cân đối đều theo Voice AI
+                    </button>
+                  </div>
+                </div>
+
+                <div class="insp-field-group" style="margin-top:2px">
+                  <span class="hint" style="font-size:11.5px;color:#94a3b8">Thời gian hiển thị: <b id="insp-time-range" style="color:#38bdf8;font-family:monospace">00:00.00 → 00:03.50</b></span>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- Tab Pane 2: Bilingual Subtitle List Inspector (Option C) -->
+            <div id="insp-pane-sublist" style="display:none">
+              <div style="display:flex;gap:6px;margin-bottom:8px">
+                <input type="text" id="sublist-search-inp" placeholder="🔍 Tìm câu thoại..." style="flex:1;background:#0f172a;border:1px solid #334155;border-radius:4px;padding:4px 8px;font-size:11.5px;color:#fff" />
+                <button type="button" id="btn-sublist-translate-all" class="btn-sub-action" style="background:#0284c7;color:#fff;font-size:11px;font-weight:700;padding:4px 8px;border-radius:4px">🌐 Dịch hết</button>
+              </div>
+              <div id="bilingual-sublist-scroll" style="max-height:360px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-right:4px">
+                <div style="color:#64748b;font-size:12px;text-align:center;padding:20px 0">Chưa có dữ liệu phụ đề. Nạp kịch bản JSON hoặc chạy AutoSub.</div>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+        <!-- ── BOTTOM HALF: CAPCUT-STYLE MULTI-TRACK TIMELINE SUITE ── -->
+        <div class="timeline-container-card">
+
+          <div class="tl-toolbar" style="flex-wrap:wrap;gap:8px">
+            <div class="tl-tb-left" style="gap:10px">
+              <span class="tl-title">🎞️ CapCut Multi-Track Suite</span>
+              <span id="tl-total-badge" class="tl-badge">0 Cảnh · Tổng ~0.0s</span>
+              
+              <!-- Quick CapCut Editing Tools -->
+              <div class="tl-quick-tools" style="display:inline-flex;align-items:center;gap:4px;background:#0f172a;padding:2px 6px;border-radius:6px;border:1px solid #334155">
+                <button type="button" id="btn-tl-split" class="tl-tool-btn" title="Cắt đôi clip tại Playhead (Phím S hoặc Cmd+B)" style="background:transparent;border:none;color:#38bdf8;font-size:12px;font-weight:700;cursor:pointer;padding:3px 6px;border-radius:4px">✂️ Cắt (S)</button>
+                <button type="button" id="btn-tl-delete-selected" class="tl-tool-btn" title="Xóa phân cảnh đang chọn (phím X hoặc Delete)" style="background:transparent;border:none;color:#f87171;font-size:12px;font-weight:700;cursor:pointer;padding:3px 6px;border-radius:4px">🗑️ Xóa (Del)</button>
+                <button type="button" id="btn-tl-undo" class="tl-tool-btn" title="Hoàn tác (Cmd+Z)" style="background:transparent;border:none;color:#94a3b8;font-size:12px;cursor:pointer;padding:3px 6px">⎌</button>
+                <button type="button" id="btn-tl-snap" class="tl-tool-btn active" title="Bật/Tắt Nam châm bám dính (Snap)" style="background:#1e293b;border:none;color:#10b981;font-size:12px;font-weight:700;cursor:pointer;padding:3px 6px;border-radius:4px">🧲 Snap</button>
+                <button type="button" id="btn-tl-bilingual-toggle" class="tl-tool-btn" title="Bật/Tắt hiển thị Track Phụ đề Gốc" style="background:transparent;border:none;color:#c084fc;font-size:12px;font-weight:700;cursor:pointer;padding:3px 6px;border-radius:4px">🔤 Song ngữ</button>
+              </div>
+            </div>
+
+            <div class="tl-tb-right" style="gap:8px">
+              <button type="button" id="btn-tl-forced-align" class="btn-sub-action" style="background:linear-gradient(135deg, #0284c7, #38bdf8);color:#fff;font-weight:700;padding:5px 12px;font-size:11.5px;box-shadow:0 2px 8px rgba(56,189,248,.3);cursor:pointer" title="So khớp âm học từng từ từ kịch bản gốc .txt với sóng âm voice (100% chuẩn xác)">
+                🎯 So Khớp Kịch Bản
+              </button>
+              <button type="button" id="btn-tl-translate" class="btn-sub-action" style="background:linear-gradient(135deg, #6366f1, #a855f7);color:#fff;font-weight:700;padding:5px 12px;font-size:11.5px;box-shadow:0 2px 8px rgba(99,102,241,.3);cursor:pointer" title="Dịch toàn bộ kịch bản / phụ đề sang Tiếng Việt">
+                🌐 Dịch sang Tiếng Việt
+              </button>
+              <button type="button" id="btn-tl-autosub" class="btn-sub-action" style="background:linear-gradient(135deg, #0f766e, #06b6d4);color:#fff;font-weight:700;padding:5px 12px;font-size:11.5px;box-shadow:0 2px 8px rgba(6,182,212,.3);cursor:pointer" title="Tự động đồng bộ và tạo Phụ đề bằng Gemini Cloud">
+                ⚡ AutoSub
+              </button>
+              <button type="button" id="btn-tl-dl-srt-clean" class="btn-sub-action" style="background:#1e293b;border:1px solid #0284c7;color:#38bdf8;font-weight:700;padding:5px 10px;font-size:11px;border-radius:6px;cursor:pointer" title="Tải file .SRT chuẩn 100% kịch bản gốc để kéo vào Premiere / CapCut">
+                ⬇️ Tải .SRT
+              </button>
+              <button type="button" id="btn-tl-render-direct" onclick="executeRenderVideo()" class="btn-sub-action" style="background:linear-gradient(135deg, #10b981, #06b6d4);color:#fff;font-weight:800;padding:5px 14px;font-size:12px;box-shadow:0 2px 10px rgba(16,185,129,.4);cursor:pointer;border-radius:6px" title="Bắt đầu Render xuất video hoàn chỉnh">
+                🎬 Xuất Video
+              </button>
+              <a id="btn-tl-dl-direct" class="btn-sub-action" style="display:none;background:linear-gradient(135deg, #f59e0b, #ef4444);color:#fff;font-weight:800;padding:5px 14px;font-size:12px;border-radius:6px;text-decoration:none;box-shadow:0 2px 10px rgba(239,68,68,.4)" href="#" download>
+                ⬇️ Tải Video .MP4
+              </a>
+              <div id="tl-autosub-prog-wrap" class="prog-wrap" style="display:none;min-width:120px;height:22px;padding:2px 8px;background:rgba(15,23,42,.8);border:1px solid #334155;border-radius:20px">
+                <div class="prog-track" style="height:5px"><div id="tl-autosub-prog-fill" class="prog-fill" style="background:linear-gradient(90deg, #6366f1, #38bdf8)"></div></div>
+                <span id="tl-autosub-prog-pct" class="prog-pct" style="font-size:10.5px;font-weight:700;color:#38bdf8">0%</span>
+              </div>
+              <label class="btn-sub-action btn-sub-upload" style="padding:4px 9px;font-size:11px;cursor:pointer" title="Nạp file JSON kịch bản thoại để đồng bộ phụ đề">
+                📥 Nhập JSON
+                <input type="file" id="tl-json-file-input" accept=".json" class="hidden-file-input" />
+              </label>
+              <label class="tl-zoom-lbl">Zoom:</label>
+              <input type="range" id="tl-zoom-slider" min="30" max="250" value="80" class="tl-zoom-slider" />
+              <button type="button" id="btn-tl-autofit-images" class="btn-clear" style="font-size:11px;color:#38bdf8;font-weight:700" title="Tự động dàn đều toàn bộ ảnh bám sát thời lượng của Voice (5s-8s/ảnh)">🧲 Cân đối 200 Ảnh</button>
+              <button type="button" id="btn-tl-random-effects" class="btn-clear" style="font-size:11px;color:#c084fc;font-weight:600" title="Tự động phân bổ ngẫu nhiên hiệu ứng cho tất cả ảnh (không bao giờ trùng lặp liên tiếp)">🎲 Random Hiệu ứng</button>
+              <button type="button" id="btn-tl-static-all" class="btn-clear" style="font-size:11px;color:#94a3b8;font-weight:600" title="Đặt tất cả ảnh thành Ảnh Tĩnh (không chuyển động)">⏸️ Tất cả Ảnh Tĩnh</button>
+              <button type="button" id="btn-tl-reset-durs" class="btn-clear" style="font-size:11px">Đặt đều</button>
+            </div>
+          </div>
+
+          <!-- Timeline Scrollable Viewport -->
+          <div id="timeline-viewport" class="timeline-viewport">
+
+            <!-- Playhead Indicator Line -->
+            <div id="tl-playhead" class="tl-playhead" style="left:0px">
+              <div class="tl-playhead-handle"></div>
+            </div>
+
+            <!-- Track 0: Time Ruler -->
+            <div id="tl-ruler" class="tl-track tl-ruler-track"></div>
+
+            <!-- ── Track 1: Subtitle Dịch (Target / VI) ── -->
+            <div class="tl-track-row" id="tl-row-sub-trans">
+              <div class="tl-track-header">
+                <span class="tl-track-icon">🔤</span>
+                <span class="tl-track-name">Sub (VI)</span>
+                <div class="tl-track-actions">
+                  <button type="button" class="tl-trk-btn" data-action="lock" title="Khóa Track">🔒</button>
+                  <button type="button" class="tl-trk-btn active" data-action="vis" title="Ẩn/Hiện Track">👁️</button>
+                </div>
+              </div>
+              <div id="tl-sub-track" class="tl-track-content"></div>
+            </div>
+
+            <!-- ── Track 2: Subtitle Gốc (Source / KO/ZH/EN) ── -->
+            <div class="tl-track-row" id="tl-row-sub-orig" style="display:flex">
+              <div class="tl-track-header">
+                <span class="tl-track-icon">🌐</span>
+                <span class="tl-track-name">Sub Gốc</span>
+                <div class="tl-track-actions">
+                  <button type="button" class="tl-trk-btn" data-action="lock" title="Khóa Track">🔒</button>
+                  <button type="button" class="tl-trk-btn active" data-action="vis" title="Ẩn/Hiện Track">👁️</button>
+                </div>
+              </div>
+              <div id="tl-sub-orig-track" class="tl-track-content"></div>
+            </div>
+
+            <!-- ── Track 3: Images & Ken Burns Visuals ── -->
+            <div class="tl-track-row" id="tl-row-images">
+              <div class="tl-track-header">
+                <span class="tl-track-icon">🖼️</span>
+                <span class="tl-track-name">Visuals</span>
+                <div class="tl-track-actions">
+                  <button type="button" class="tl-trk-btn" data-action="lock" title="Khóa Track">🔒</button>
+                  <button type="button" class="tl-trk-btn active" data-action="vis" title="Ẩn/Hiện Track">👁️</button>
+                </div>
+              </div>
+              <div id="tl-img-track" class="tl-track-content"></div>
+            </div>
+
+            <!-- ── Track 4: Overlays & Blur Mask ── -->
+            <div class="tl-track-row" id="tl-row-masks">
+              <div class="tl-track-header">
+                <span class="tl-track-icon">🎭</span>
+                <span class="tl-track-name">Lớp phủ</span>
+                <div class="tl-track-actions">
+                  <button type="button" class="tl-trk-btn" data-action="lock" title="Khóa Track">🔒</button>
+                  <button type="button" class="tl-trk-btn active" data-action="vis" title="Ẩn/Hiện Track">👁️</button>
+                </div>
+              </div>
+              <div id="tl-mask-track" class="tl-track-content"></div>
+            </div>
+
+            <!-- ── Track 5: Voice Audio Waveform Track ── -->
+            <div class="tl-track-row" id="tl-row-audio">
+              <div class="tl-track-header">
+                <span class="tl-track-icon">🎙️</span>
+                <span class="tl-track-name">Voice AI</span>
+                <div class="tl-track-actions">
+                  <button type="button" class="tl-trk-btn" data-action="lock" title="Khóa Track">🔒</button>
+                  <button type="button" class="tl-trk-btn active" data-action="mute" title="Mute Track">🔊</button>
+                </div>
+              </div>
+              <div id="tl-audio-track" class="tl-track-content">
+                <div id="tl-wavesurfer-container" class="tl-wavesurfer-container"></div>
+              </div>
+            </div>
+
+            <!-- ── Track 6: BGM / Background Sound Track ── -->
+            <div class="tl-track-row" id="tl-row-bgm">
+              <div class="tl-track-header">
+                <span class="tl-track-icon">🎵</span>
+                <span class="tl-track-name">BGM</span>
+                <div class="tl-track-actions">
+                  <button type="button" class="tl-trk-btn" data-action="lock" title="Khóa Track">🔒</button>
+                  <button type="button" class="tl-trk-btn active" data-action="mute" title="Mute Track">🔊</button>
+                </div>
+              </div>
+              <div id="tl-bgm-track" class="tl-track-content"></div>
+            </div>
+
+          </div>
+
+          <!-- ── MINI-MAP OVERVIEW NAVIGATOR (30-Minute Fast Scrubber) ── -->
+          <div id="tl-minimap-wrap" class="tl-minimap-wrap" style="position:relative;height:24px;background:#090d16;border-top:1px solid #1e293b;overflow:hidden;cursor:pointer">
+            <div id="tl-minimap-track" style="position:absolute;top:3px;bottom:3px;left:0;right:0;background:rgba(56,189,248,.1);border-radius:3px">
+              <div id="tl-minimap-handle" style="position:absolute;top:0;bottom:0;left:0;width:40px;background:rgba(56,189,248,.35);border:1px solid #38bdf8;border-radius:3px;cursor:grab"></div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+
+  </form>
+</main>
+
+<!-- ============================== FOOTER ================================= -->
+<footer class="footer">
+  <div class="footer-inner">
+    <div class="footer-info" id="footer-info">
+      <span id="fi-images">0 images</span>
+      <span class="sep">·</span>
+      <span id="fi-audio">No audio</span>
+      <span class="sep">·</span>
+      <span id="fi-dur">~0s video</span>
+    </div>
+    <div class="footer-actions">
+      <button type="button" id="render-btn" onclick="executeRenderVideo()" class="btn-render"
+              {% if not ffmpeg_available %}disabled{% endif %}>
+        🎬 Render Video Hoàn Chỉnh
+      </button>
+      <a id="dl-btn" class="btn-download" style="display:none" href="#">⬇️ Download Video</a>
+      <a id="dl-srt-btn" class="btn-download-srt" style="display:none" href="#">📄 Download .SRT</a>
+    </div>
+    <div id="prog-wrap" class="prog-wrap" style="display:none">
+      <div class="prog-track"><div id="prog-fill" class="prog-fill"></div></div>
+      <span id="prog-pct" class="prog-pct">0%</span>
+    </div>
+    <div id="err-box" class="err-box" style="display:none"></div>
+  </div>
+</footer>
+
+<!-- Auto-Update Modal -->
+<div id="update-modal" class="diag-modal-backdrop" style="display:none;z-index:99999">
+  <div class="diag-modal-card" style="max-width:560px;border:1px solid #818cf8;box-shadow:0 20px 50px rgba(0,0,0,0.8), 0 0 30px rgba(99,102,241,0.3)">
+    <div class="diag-modal-header" style="background:linear-gradient(135deg,rgba(99,102,241,0.25),rgba(244,63,94,0.15))">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:22px">🚀</span>
+        <span style="font-weight:800;font-size:16px;color:#f8fafc">CÓ BẢN CẬP NHẬT MỚI!</span>
+      </div>
+      <button type="button" id="btn-update-close" class="diag-close-btn">&times;</button>
+    </div>
+    <div class="diag-modal-body" style="padding:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;background:#0f172a;padding:10px 14px;border-radius:8px;border:1px solid #1e293b;margin-bottom:14px">
+        <div>
+          <div style="font-size:11px;color:#64748b;font-weight:700">PHIÊN BẢN HIỆN TẠI:</div>
+          <div style="font-size:14px;font-weight:800;color:#94a3b8">v<span id="upd-current-v">{{ app_version }}</span></div>
+        </div>
+        <div style="font-size:18px;color:#6366f1">➔</div>
+        <div>
+          <div style="font-size:11px;color:#64748b;font-weight:700">PHIÊN BẢN MỚI NHẤT:</div>
+          <div style="font-size:14px;font-weight:800;color:#38bdf8">v<span id="upd-latest-v">...</span></div>
+        </div>
+      </div>
+
+      <!-- Release Notes Box -->
+      <div class="diag-item-row">
+        <span class="diag-label" style="color:#f8fafc;font-weight:700">📝 NHẬT KÝ THAY ĐỔI (RELEASE NOTES):</span>
+        <div id="upd-release-notes" style="background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:12px;font-size:12.5px;color:#cbd5e1;max-height:160px;overflow-y:auto;line-height:1.6;white-space:pre-wrap;margin-top:6px">Đang tải thông tin...</div>
+      </div>
+
+      <!-- Download Progress Box -->
+      <div id="upd-progress-box" style="display:none;margin-top:14px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;color:#38bdf8;margin-bottom:6px">
+          <span id="upd-progress-text">Đang tải bản cập nhật...</span>
+          <span id="upd-progress-pct">0%</span>
+        </div>
+        <div style="width:100%;height:8px;background:#1e293b;border-radius:4px;overflow:hidden">
+          <div id="upd-progress-bar" style="width:0%;height:100%;background:linear-gradient(90deg,#6366f1,#38bdf8);transition:width 0.2s"></div>
+        </div>
+      </div>
+
+      <!-- Dev Mode Warning if any -->
+      <div id="upd-dev-msg" style="display:none;margin-top:12px;background:rgba(245,158,11,0.15);border:1px solid #f59e0b;color:#fcd34d;padding:8px 12px;border-radius:6px;font-size:12px">
+        ⚠️ <b>Môi trường phát triển (Dev Mode):</b> Tự động cập nhật file nguồn bị vô hiệu hóa để bảo vệ mã nguồn làm việc của bạn.
+      </div>
+    </div>
+    <div class="diag-modal-footer" style="display:flex;justify-content:space-between;align-items:center;background:#0b1120">
+      <button type="button" id="btn-update-skip" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:11.5px;text-decoration:underline">Bỏ qua bản này</button>
+      <div style="display:flex;gap:8px">
+        <button type="button" id="btn-update-later" class="btn-diag-action btn-diag-dismiss">Để Sau</button>
+        <button type="button" id="btn-update-now" class="btn-diag-action" style="background:linear-gradient(135deg,#6366f1,#38bdf8);color:#fff;font-weight:700">🚀 Cập Nhật Ngay</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- License Activation Modal -->
+<div id="license-modal" class="diag-modal-backdrop" style="display:none;z-index:99999">
+  <div class="diag-modal-card" style="max-width:520px;border:1px solid #6366f1;box-shadow:0 20px 50px rgba(0,0,0,0.8), 0 0 30px rgba(99,102,241,0.25)">
+    <div class="diag-modal-header" style="background:linear-gradient(135deg,rgba(99,102,241,0.2),rgba(56,189,248,0.1))">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:22px">🔐</span>
+        <span style="font-weight:800;font-size:16px;color:#818cf8">KÍCH HOẠT BẢN QUYỀN PHẦN MỀM</span>
+      </div>
+      <button type="button" id="btn-license-close" class="diag-close-btn">&times;</button>
+    </div>
+    <div class="diag-modal-body" style="padding:16px">
+      <div style="font-size:13px;color:#94a3b8;line-height:1.5;margin-bottom:14px">
+        Vui lòng nhập <b style="color:#f8fafc">License Key</b> được cấp từ hệ thống <b style="color:#38bdf8">2tamne.site</b> để mở khóa toàn bộ tính năng Render Video, TTS AI và AutoSub.
+      </div>
+
+      <!-- HWID Row -->
+      <div class="diag-item-row" style="background:#0f172a;padding:10px 12px;border-radius:8px;border:1px solid #1e293b;margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span class="diag-label" style="font-size:11px;color:#64748b">MÃ PHẦN CỨNG MÁY (HWID):</span>
+          <button type="button" id="btn-copy-hwid" style="background:none;border:none;color:#38bdf8;cursor:pointer;font-size:11px;font-weight:700;display:flex;align-items:center;gap:4px">
+            📋 Sao Chép HWID
+          </button>
+        </div>
+        <div id="lic-hwid-text" style="font-family:monospace;font-size:11px;color:#a5f3fc;word-break:break-all">Đang đọc HWID...</div>
+      </div>
+
+      <!-- License Key Input -->
+      <div class="diag-item-row">
+        <label class="diag-label" style="display:block;margin-bottom:6px;font-weight:700;color:#f8fafc">NHẬP LICENSE KEY:</label>
+        <input type="text" id="inp-license-key" placeholder="Ví dụ: 2TAMNE-PREMIUM-XXXX-YYYY" style="width:100%;padding:10px 12px;border-radius:8px;background:#0f172a;border:1px solid #334155;color:#f8fafc;font-family:monospace;font-size:13px;outline:none" />
+      </div>
+
+      <!-- Status Msg -->
+      <div id="lic-status-msg" style="margin-top:10px;font-size:12px;display:none"></div>
+    </div>
+    <div class="diag-modal-footer" style="display:flex;justify-content:space-between;align-items:center;background:#0b1120">
+      <a href="https://www.2tamne.site/" target="_blank" style="color:#64748b;font-size:12px;text-decoration:none">🌐 2tamne.site</a>
+      <div style="display:flex;gap:8px">
+        <button type="button" id="btn-license-cancel" class="btn-diag-action btn-diag-dismiss">Đóng</button>
+        <button type="button" id="btn-license-submit" class="btn-diag-action" style="background:linear-gradient(135deg,#6366f1,#38bdf8);color:#fff;font-weight:700">⚡ Kích Hoạt Ngay</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Diagnostic Error Modal -->
+<div id="diag-error-modal" class="diag-modal-backdrop" style="display:none">
+  <div class="diag-modal-card">
+    <div class="diag-modal-header">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:20px">⚠️</span>
+        <span style="font-weight:800;font-size:15px;color:#f87171">BẢNG CHẨN ĐOÁN LỖI HỆ THỐNG</span>
+      </div>
+      <button type="button" id="btn-diag-close" class="diag-close-btn">&times;</button>
+    </div>
+    <div class="diag-modal-body">
+      <div class="diag-item-row">
+        <span class="diag-label">MÃ LỖI (ERROR CODE):</span>
+        <span id="diag-error-code" class="diag-code-badge">ERR_UNKNOWN</span>
+      </div>
+      <div class="diag-item-row" style="margin-top:6px">
+        <span class="diag-label">THÔNG BÁO:</span>
+        <div id="diag-error-msg" class="diag-msg-text">Có lỗi xảy ra trong quá trình xử lý.</div>
+      </div>
+      <div class="diag-item-row" style="margin-top:10px">
+        <span class="diag-label">CHI TIẾT KỸ THUẬT / TRACEBACK:</span>
+        <pre id="diag-error-details" class="diag-details-box">Đang cập nhật chi tiết...</pre>
+      </div>
+      <div class="diag-item-row" style="margin-top:10px">
+        <span class="diag-label">GỢI Ý KHẮC PHỤC:</span>
+        <div id="diag-error-sugg" class="diag-sugg-box">Kiểm tra kết nối và thử lại.</div>
+      </div>
+    </div>
+    <div class="diag-modal-footer">
+      <button type="button" id="btn-diag-copy" class="btn-diag-action btn-diag-copy">📋 Sao Chép Mã Lỗi</button>
+      <button type="button" id="btn-diag-dismiss" class="btn-diag-action btn-diag-dismiss">Đóng</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Notifications Container -->
+<div id="toast-container" class="toast-container"></div>
+
+<script src="/static/js/wavesurfer.min.js"></script>
+<script src="/static/js/main.js?v=46"></script>
+</body>
+</html>
