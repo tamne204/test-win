@@ -3219,8 +3219,17 @@ function applySubtitleStylesToMonitor() {
     monitorSubtitle.style.borderRadius = '0';
   }
 
-  // Position X & Y
-  monitorSubtitle.style.bottom = `${posY}%`;
+  // Position X & Y (with 1-line vertical centering at midpoint of 2-line box)
+  let effectivePosY = posY;
+  const subText = monitorSubtitle.textContent || '';
+  const isOneLine = !subText.includes('\n');
+  if (isOneLine) {
+    const lineStepPx = scaledSize * (state.subLineSpacing || 1.25);
+    const offsetPercent = (lineStepPx / 2.0 / ph) * 100;
+    effectivePosY = posY + offsetPercent;
+  }
+
+  monitorSubtitle.style.bottom = `${effectivePosY.toFixed(2)}%`;
   if (posX !== 0) {
     monitorSubtitle.style.transform = `translateX(${posX}%)`;
   } else {

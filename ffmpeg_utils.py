@@ -717,6 +717,11 @@ def generate_subtitle_overlay_concat(
             # X & Y coordinates
             cx = int(W * 0.5 + W * (float(sub_pos_x) / 100.0))
             y1 = H - bottom_margin
+
+            # If subtitle has only 1 line, vertically center it at the midpoint of the 2-line text position
+            if len(lines) == 1:
+                y1 = y1 - int(line_step / 2.0)
+
             y0 = y1 - box_h
             x0 = cx - box_w // 2
             x1 = cx + box_w // 2
