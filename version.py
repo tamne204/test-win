@@ -4,7 +4,7 @@ Single source of truth for application versioning.
 Follows Semantic Versioning (MAJOR.MINOR.PATCH).
 """
 
-__version__ = "2.2.3.9"
+__version__ = "2.2.3.10"
 APP_NAME = "Slideshow Builder AI"
 GITHUB_REPO = "tamne204/ffmpeg-tool"
 RELEASE_PROXY_URL = "https://www.2tamne.site/api/license/check_update.php"

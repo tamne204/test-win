@@ -11,7 +11,7 @@ import sys
 import re
 import random
 import subprocess
-from typing import List, Dict, Any, Callable, Optional
+from typing import List, Tuple, Dict, Any, Callable, Optional
 try:
     from PIL import Image, ImageDraw, ImageFont
 except ImportError:
