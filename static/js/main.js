@@ -3085,30 +3085,32 @@ function updateMonitor(time) {
       }
       monitorImg.style.display = 'block';
 
-      // Real-time Live Ken Burns Motion Preview
+      // Real-time Live Ken Burns Motion Preview (Hermite Smoothstep Camera Model)
       const imgDur = Math.max(0.1, activeImg.duration || 5.0);
-      const t = Math.max(0, Math.min(1, (time - activeImg.startTime) / imgDur));
+      const rawT = Math.max(0, Math.min(1, (time - activeImg.startTime) / imgDur));
+      const s = rawT * rawT * (3.0 - 2.0 * rawT); // Hermite smoothstep easing S(t)
       const eff = activeImg.effect || 'zoom_in';
+      const mag = (state.zoomMagnitude !== undefined) ? state.zoomMagnitude : 0.20;
 
       let transformStr = 'scale(1.0)';
       if (eff === 'zoom_in') {
-        const s = 1.0 + 0.18 * t;
-        transformStr = `scale(${s.toFixed(3)})`;
+        const z = 1.0 + mag * s;
+        transformStr = `scale(${z.toFixed(4)})`;
       } else if (eff === 'zoom_out') {
-        const s = 1.18 - 0.18 * t;
-        transformStr = `scale(${s.toFixed(3)})`;
+        const z = 1.0 + mag * (1.0 - s);
+        transformStr = `scale(${z.toFixed(4)})`;
       } else if (eff === 'pan_lr') {
-        const tx = (-4 + 8 * t).toFixed(2);
-        transformStr = `scale(1.15) translateX(${tx}%)`;
+        const tx = (-4 + 8 * s).toFixed(2);
+        transformStr = `scale(${(1.0 + mag).toFixed(4)}) translateX(${tx}%)`;
       } else if (eff === 'pan_rl') {
-        const tx = (4 - 8 * t).toFixed(2);
-        transformStr = `scale(1.15) translateX(${tx}%)`;
+        const tx = (4 - 8 * s).toFixed(2);
+        transformStr = `scale(${(1.0 + mag).toFixed(4)}) translateX(${tx}%)`;
       } else if (eff === 'tilt_ud') {
-        const ty = (-4 + 8 * t).toFixed(2);
-        transformStr = `scale(1.15) translateY(${ty}%)`;
+        const ty = (-4 + 8 * s).toFixed(2);
+        transformStr = `scale(${(1.0 + mag).toFixed(4)}) translateY(${ty}%)`;
       } else if (eff === 'tilt_du') {
-        const ty = (4 - 8 * t).toFixed(2);
-        transformStr = `scale(1.15) translateY(${ty}%)`;
+        const ty = (4 - 8 * s).toFixed(2);
+        transformStr = `scale(${(1.0 + mag).toFixed(4)}) translateY(${ty}%)`;
       }
 
       monitorImg.style.transform = transformStr;
