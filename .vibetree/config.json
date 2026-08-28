@@ -1,0 +1,45 @@
+{
+  "project_name": "VibeCode Slideshow Builder AI",
+  "version": "2.2.3.7",
+  "worktree_root": ".worktrees",
+  "default_base_branch": "windows-dev",
+  "stable_branch": "macos-stable",
+  "main_branch": "main",
+  "platform_policies": {
+    "macos": {
+      "status": "PROTECTED",
+      "protected_files": [
+        "start_mac.command",
+        "platform/macos/**"
+      ],
+      "regression_check_required": true
+    },
+    "windows": {
+      "status": "ACTIVE_DEVELOPMENT",
+      "target_branch_prefix": "windows-fix-",
+      "platform_files": [
+        "start_windows.bat",
+        "start_windows.ps1",
+        "SlideshowStudio.vbs",
+        "platform/windows/**"
+      ]
+    },
+    "shared_core": {
+      "status": "RESTRICTED",
+      "files": [
+        "app.py",
+        "ffmpeg_utils.py",
+        "forced_alignment_engine.py",
+        "subtitles_engine.py",
+        "tts_utils.py",
+        "static/**",
+        "templates/**"
+      ],
+      "review_required": true
+    }
+  },
+  "hooks": {
+    "post_create": ".vibetree/hooks/post-create",
+    "pre_merge": ".vibetree/hooks/pre-merge"
+  }
+}

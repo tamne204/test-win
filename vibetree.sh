@@ -1,0 +1,1 @@
+.vibetree/scripts/vibetree.sh

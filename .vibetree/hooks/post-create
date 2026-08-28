@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# VibeTree Hook: post-create
+# Executed immediately after a new Git worktree is spawned for an AI task.
+# ==============================================================================
+set -e
+
+WORKTREE_DIR="${1:-$(pwd)}"
+MAIN_REPO="${2:-$(git rev-parse --show-toplevel 2>/dev/null || dirname "$WORKTREE_DIR")}"
+
+echo "🌲 [VibeTree Hook: post-create] Initializing worktree: $WORKTREE_DIR"
+cd "$WORKTREE_DIR"
+
+# 1. Shared Python Virtual Environment Linkage
+if [ -d "$MAIN_REPO/.venv" ] && [ ! -d "$WORKTREE_DIR/.venv" ]; then
+    echo "  • Linking shared virtual environment from main repo..."
+    ln -s "$MAIN_REPO/.venv" "$WORKTREE_DIR/.venv" 2>/dev/null || true
+fi
+
+# 2. Dependency Verification (Non-destructive)
+PYTHON_BIN="$WORKTREE_DIR/.venv/bin/python"
+if [ ! -f "$PYTHON_BIN" ]; then
+    PYTHON_BIN="python3"
+fi
+
+echo "  • Checking runtime environment using: $PYTHON_BIN"
+"$PYTHON_BIN" -c "
+import sys
+print(f'    - Python Version: {sys.version.split()[0]} ({sys.platform})')
+required = ['flask', 'faster_whisper', 'PIL', 'psutil', 'requests', 'pytest']
+missing = []
+for pkg in required:
+    try:
+        __import__(pkg)
+    except ImportError:
+        missing.append(pkg)
+if missing:
+    print(f'    ⚠️ Missing optional packages: {missing}')
+else:
+    print('    ✅ All core dependencies available')
+" || true
+
+# 3. FFmpeg & FFprobe Capability Check
+echo "  • Probing FFmpeg binaries..."
+"$PYTHON_BIN" -c "
+import ffmpeg_utils
+bin_path = ffmpeg_utils.get_ffmpeg_bin()
+probe_path = ffmpeg_utils.get_ffprobe_bin() if hasattr(ffmpeg_utils, 'get_ffprobe_bin') else 'ffprobe'
+print(f'    - FFmpeg binary: {bin_path}')
+print(f'    - FFprobe binary: {probe_path}')
+if ffmpeg_utils.check_ffmpeg():
+    print('    ✅ FFmpeg is operational')
+else:
+    print('    ⚠️ Warning: FFmpeg not detected in PATH or local candidate dirs')
+" || true
+
+# 4. Prepare Output and Temp Directories
+mkdir -p "$WORKTREE_DIR/outputs" "$WORKTREE_DIR/temp" "$WORKTREE_DIR/uploads" "$WORKTREE_DIR/tts_outputs"
+
+echo "🌲 [VibeTree Hook: post-create] Worktree environment ready for task execution!"
+exit 0

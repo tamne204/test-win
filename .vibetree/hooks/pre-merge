@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# VibeTree Hook: pre-merge
+# Validates task worktree before merging back into windows-dev or main.
+# ==============================================================================
+set -e
+
+WORKTREE_DIR="${1:-$(pwd)}"
+TARGET_BRANCH="${2:-windows-dev}"
+
+echo "🌲 [VibeTree Hook: pre-merge] Validating changes against $TARGET_BRANCH..."
+cd "$WORKTREE_DIR"
+
+PYTHON_BIN="$WORKTREE_DIR/.venv/bin/python"
+if [ ! -f "$PYTHON_BIN" ]; then
+    PYTHON_BIN="python3"
+fi
+
+# 1. Syntax Compilation Check
+echo "  • Running Python py_compile on all modified files..."
+git diff --name-only "$TARGET_BRANCH"...HEAD | grep '\.py$' | while read -r pyfile; do
+    if [ -f "$pyfile" ]; then
+        "$PYTHON_BIN" -m py_compile "$pyfile"
+        echo "    ✅ Syntax OK: $pyfile"
+    fi
+done
+
+# 2. Automated Regression Tests
+echo "  • Running Automated Test Suite..."
+PYTHONPATH="." "$PYTHON_BIN" -m pytest tests/ -v
+
+# 3. macOS Protection Check
+echo "  • Verifying macOS Protected Boundaries..."
+MAC_CHANGES=$(git diff --name-only "$TARGET_BRANCH"...HEAD | grep -E 'start_mac\.command|platform/macos/' || true)
+if [ -n "$MAC_CHANGES" ]; then
+    echo "  ⚠️ [WARNING] Detected changes in macOS protected files:"
+    echo "$MAC_CHANGES"
+    echo "  >> Please ensure these changes are intentional and regression-tested on macOS!"
+else
+    echo "  ✅ macOS protected boundaries intact (Zero regression)"
+fi
+
+echo "🌲 [VibeTree Hook: pre-merge] All pre-merge quality gates PASSED!"
+exit 0
