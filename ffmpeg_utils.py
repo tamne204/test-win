@@ -835,15 +835,32 @@ def build_command(
         try:
             with open(subtitle_path, 'r', encoding='utf-8') as f_sub:
                 srt_txt = f_sub.read()
-            matches = re.findall(r'(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{3})', srt_txt)
-            if len(matches) == n:
-                image_durations = []
-                for m in matches:
-                    st_sec = int(m[0])*3600 + int(m[1])*60 + int(m[2]) + int(m[3])/1000.0
-                    et_sec = int(m[4])*3600 + int(m[5])*60 + int(m[6]) + int(m[7])/1000.0
-                    image_durations.append(max(1.0, round(et_sec - st_sec, 3)))
+            raw_cues = parse_srt_cues_universal(srt_txt)
+            if len(raw_cues) == n:
+                image_durations = [max(1.0, round(et - st, 3)) for st, et, _ in raw_cues]
         except Exception:
             pass
+
+    # Synchronize image durations with audio duration to prevent early cutoff
+    has_audio = bool(audio_path and os.path.isfile(audio_path))
+    audio_dur = 0.0
+    if has_audio:
+        try:
+            from subtitles_engine import get_audio_duration
+            audio_dur = get_audio_duration(audio_path)
+        except Exception:
+            audio_dur = 0.0
+
+    if has_audio and audio_dur > 0:
+        if image_durations and len(image_durations) == n:
+            sum_durs = sum(image_durations)
+            if sum_durs < audio_dur:
+                # Extend the last image to guarantee video covers 100% of the audio
+                diff = round(audio_dur - sum_durs, 3)
+                image_durations[-1] = round(image_durations[-1] + diff, 3)
+        elif not image_durations:
+            dur_per_img = max(1.0, audio_dur / max(1, n))
+            image_durations = [dur_per_img] * n
 
     # Per-image specific effects or non-repeating random assignment
     custom_effects = settings.get('image_effects')
@@ -1028,6 +1045,8 @@ def build_command(
     }
 
     total_video_duration = 0.0
+    accum_time = 0.0
+    accum_frames = 0
 
     for i, effect in enumerate(effects):
         # Determine duration for image i
@@ -1037,7 +1056,11 @@ def build_command(
             dur_i = max(1.0, duration)
 
         total_video_duration += dur_i
-        total_frames_i = max(1, int(fps * dur_i))
+        accum_time += dur_i
+        target_total_frames = max(1, int(round(accum_time * fps)))
+        total_frames_i = max(1, target_total_frames - accum_frames)
+        accum_frames += total_frames_i
+
         td_i = min(td, dur_i / 2.0) if use_trans and n > 1 else 0.0
 
         mag = float(mag_for_effect.get(effect, zoom_mag))
@@ -1328,6 +1351,25 @@ def render_video_chunked(
 
     temp_dir = tempfile.mkdtemp(prefix="slideshow_chunks_")
     chunk_video_files = []
+
+    # Ensure total image durations match full audio duration
+    has_audio = bool(audio_path and os.path.isfile(audio_path))
+    if has_audio:
+        try:
+            from subtitles_engine import get_audio_duration
+            a_dur = get_audio_duration(audio_path)
+            if a_dur > 0:
+                img_durs = settings.get('image_durations')
+                if img_durs and len(img_durs) == total_imgs:
+                    sum_durs = sum(img_durs)
+                    if sum_durs < a_dur:
+                        img_durs[-1] = round(img_durs[-1] + (a_dur - sum_durs), 3)
+                        settings['image_durations'] = img_durs
+                elif not img_durs:
+                    dur_per = max(1.0, a_dur / max(1, total_imgs))
+                    settings['image_durations'] = [dur_per] * total_imgs
+        except Exception:
+            pass
 
     try:
         # 1. Render each chunk independently
