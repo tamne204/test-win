@@ -7,6 +7,7 @@ VoxCPM2 Text-to-Speech generation, and AutoSub subtitle recognition & embedding.
 
 import os
 import sys
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 import time
 import re
 import datetime

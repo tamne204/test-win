@@ -512,6 +512,89 @@ def generate_subtitle_overlay_concat(
     """
     if not subtitle_path or not os.path.isfile(subtitle_path):
         return None
+def parse_srt_cues_universal(srt_text: str) -> List[Tuple[float, float, str]]:
+    """Universal robust SRT/VTT parser that handles all timecode and newline variations."""
+    if not srt_text:
+        return []
+    clean_text = srt_text.lstrip('\ufeff').replace('\r\n', '\n').replace('\r', '\n')
+    tc_pattern = re.compile(
+        r'(?:(?:(\d{1,2}):)?(\d{1,2}):(\d{1,2})(?:[,.](\d{1,4}))?)\s*-->\s*(?:(?:(\d{1,2}):)?(\d{1,2}):(\d{1,2})(?:[,.](\d{1,4}))?)'
+    )
+    
+    def _parse_time(h, m, s, ms) -> float:
+        h_val = int(h) if h else 0
+        m_val = int(m) if m else 0
+        s_val = int(s) if s else 0
+        ms_val = float(f"0.{ms}") if ms else 0.0
+        return h_val * 3600.0 + m_val * 60.0 + s_val + ms_val
+
+    cues = []
+    lines = clean_text.split('\n')
+    i = 0
+    num_lines = len(lines)
+    
+    while i < num_lines:
+        line = lines[i].strip()
+        m = tc_pattern.search(line)
+        if m:
+            h1, m1, s1, ms1, h2, m2, s2, ms2 = m.groups()
+            st = _parse_time(h1, m1, s1, ms1)
+            et = _parse_time(h2, m2, s2, ms2)
+            if et <= st:
+                et = st + 1.0  # Fallback 1s duration
+                
+            text_parts = []
+            i += 1
+            while i < num_lines:
+                next_line = lines[i].strip()
+                if not next_line:
+                    if i + 1 < num_lines and (tc_pattern.search(lines[i+1]) or (lines[i+1].isdigit() and i + 2 < num_lines and tc_pattern.search(lines[i+2]))):
+                        break
+                    i += 1
+                    continue
+                if tc_pattern.search(next_line):
+                    break
+                if next_line.isdigit() and i + 1 < num_lines and tc_pattern.search(lines[i+1]):
+                    break
+                text_parts.append(next_line)
+                i += 1
+                
+            txt = " ".join(text_parts).strip()
+            if txt:
+                cues.append((round(st, 3), round(et, 3), txt))
+        else:
+            i += 1
+    return cues
+
+
+def generate_subtitle_overlay_concat(
+    subtitle_path: str,
+    W: int,
+    H: int,
+    is_vertical: bool = False,
+    sub_font: str = 'paperlogy',
+    sub_size: int = 36,
+    sub_color: str = '#ffffff',
+    sub_stroke_enabled: bool = True,
+    sub_stroke_color: str = '#000000',
+    sub_stroke_width: int = 4,
+    sub_bg_enabled: bool = False,
+    sub_bg_color: str = '#000000',
+    sub_bg_opacity: float = 0.55,
+    sub_bg_radius: int = 14,
+    sub_pos_y: int = 82,
+    sub_pos_x: int = 50,
+    sub_letter_spacing: int = 0,
+    sub_line_spacing: int = 8,
+    sub_align: str = 'center'
+) -> Optional[str]:
+    """
+    Render beautiful modern rounded capsule subtitles to PNG sequence and build a gapless
+    ffconcat script for FFmpeg overlay (matching Preview Canvas 1:1).
+    """
+    if not subtitle_path or not os.path.isfile(subtitle_path):
+        return None
+
     if Image is None or ImageDraw is None:
         return None
 
@@ -519,45 +602,7 @@ def generate_subtitle_overlay_concat(
         with open(subtitle_path, 'r', encoding='utf-8') as f:
             srt_text = f.read()
 
-        srt_text = srt_text.lstrip('\ufeff').replace('\r\n', '\n').replace('\r', '\n')
-        blocks = [b.strip() for b in re.split(r'\n\s*\n', srt_text.strip()) if b.strip()]
-        cues = []
-        
-        tc_pattern = re.compile(
-            r'(?:(\d{1,2}):)?(\d{1,2}):(\d{1,2})[,.](\d{1,3})\s*-->\s*(?:(\d{1,2}):)?(\d{1,2}):(\d{1,2})[,.](\d{1,3})'
-        )
-
-        for b in blocks:
-            lines = [l.strip() for l in b.split('\n') if l.strip()]
-            if not lines:
-                continue
-            
-            t_line_idx = -1
-            m = None
-            for idx, l in enumerate(lines):
-                if '-->' in l:
-                    m = tc_pattern.search(l)
-                    if m:
-                        t_line_idx = idx
-                        break
-
-            if m and t_line_idx >= 0:
-                h1, m1, s1, ms1, h2, m2, s2, ms2 = m.groups()
-                h1 = int(h1) if h1 else 0
-                h2 = int(h2) if h2 else 0
-                m1, s1 = int(m1), int(s1)
-                m2, s2 = int(m2), int(s2)
-                
-                ms1_val = float(f"0.{ms1}")
-                ms2_val = float(f"0.{ms2}")
-                
-                st = h1 * 3600 + m1 * 60 + s1 + ms1_val
-                et = h2 * 3600 + m2 * 60 + s2 + ms2_val
-                
-                text_lines = lines[t_line_idx + 1:]
-                txt = " ".join(text_lines).strip()
-                if txt and et > st:
-                    cues.append((st, et, txt))
+        cues = parse_srt_cues_universal(srt_text)
 
         if not cues:
             print(f"⚠️ [Subtitle Overlay] No cues parsed from {subtitle_path}")
@@ -814,35 +859,14 @@ def build_command(
             try:
                 with open(subtitle_path, 'r', encoding='utf-8') as fs:
                     srt_content = fs.read()
-                blocks = [b.strip() for b in re.split(r'\n\s*\n', srt_content.strip()) if b.strip()]
-                tc_pattern = re.compile(
-                    r'(?:(\d{1,2}):)?(\d{1,2}):(\d{1,2})[,.](\d{1,3})\s*-->\s*(?:(\d{1,2}):)?(\d{1,2}):(\d{1,2})[,.](\d{1,3})'
-                )
+                raw_cues = parse_srt_cues_universal(srt_content)
                 trimmed_cues = []
-                for b in blocks:
-                    lines = [l.strip() for l in b.split('\n') if l.strip()]
-                    m = None
-                    t_idx = -1
-                    for idx, l in enumerate(lines):
-                        if '-->' in l:
-                            m = tc_pattern.search(l)
-                            if m:
-                                t_idx = idx
-                                break
-                    if m and t_idx >= 0:
-                        h1, m1, s1, ms1, h2, m2, s2, ms2 = m.groups()
-                        h1 = int(h1) if h1 else 0
-                        h2 = int(h2) if h2 else 0
-                        m1, s1 = int(m1), int(s1)
-                        m2, s2 = int(m2), int(s2)
-                        st = h1 * 3600 + m1 * 60 + s1 + float(f"0.{ms1}")
-                        et = h2 * 3600 + m2 * 60 + s2 + float(f"0.{ms2}")
-                        txt = " ".join(lines[t_idx + 1:]).strip()
-                        if et > render_in and (render_out is None or st < render_out):
-                            n_st = max(0.0, st - render_in)
-                            n_et = (min(render_out, et) - render_in) if render_out else (et - render_in)
-                            if n_et > n_st:
-                                trimmed_cues.append((n_st, n_et, txt))
+                for st, et, txt in raw_cues:
+                    if et > render_in and (render_out is None or st < render_out):
+                        n_st = max(0.0, st - render_in)
+                        n_et = (min(render_out, et) - render_in) if render_out else (et - render_in)
+                        if n_et > n_st:
+                            trimmed_cues.append((n_st, n_et, txt))
                 
                 if trimmed_cues:
                     trimmed_srt_path = os.path.join(os.path.dirname(subtitle_path), f"trimmed_{int(render_in)}_{int(render_out or 0)}.srt")

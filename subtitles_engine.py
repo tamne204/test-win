@@ -8,6 +8,8 @@ Features:
 """
 
 import os
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+import sys
 import re
 import json
 import time
@@ -59,38 +61,63 @@ def warmup_whisper_in_background():
 
 
 def parse_srt_content(srt_text: str) -> List[Dict[str, Any]]:
-    """Parse SRT text string into a list of subtitle objects."""
+    """Universal robust SRT/VTT parser that handles all timecode and newline variations."""
     if not srt_text:
         return []
-    subs = []
-    srt_text = srt_text.lstrip('\ufeff').replace('\r\n', '\n').replace('\r', '\n')
-    blocks = [b.strip() for b in re.split(r'\n\s*\n', srt_text.strip()) if b.strip()]
+    clean_text = srt_text.lstrip('\ufeff').replace('\r\n', '\n').replace('\r', '\n')
     tc_pattern = re.compile(
-        r'(?:(\d{1,2}):)?(\d{1,2}):(\d{1,2})[,.](\d{1,3})\s*-->\s*(?:(\d{1,2}):)?(\d{1,2}):(\d{1,2})[,.](\d{1,3})'
+        r'(?:(?:(\d{1,2}):)?(\d{1,2}):(\d{1,2})(?:[,.](\d{1,4}))?)\s*-->\s*(?:(?:(\d{1,2}):)?(\d{1,2}):(\d{1,2})(?:[,.](\d{1,4}))?)'
     )
-    for idx, block in enumerate(blocks):
-        lines = [l.strip() for l in block.split('\n') if l.strip()]
-        time_line_idx = -1
-        m = None
-        for l_idx, l in enumerate(lines):
-            if '-->' in l:
-                m = tc_pattern.search(l)
-                if m:
-                    time_line_idx = l_idx
-                    break
-        if m and time_line_idx >= 0:
+    
+    def _parse_time(h, m, s, ms) -> float:
+        h_val = int(h) if h else 0
+        m_val = int(m) if m else 0
+        s_val = int(s) if s else 0
+        ms_val = float(f"0.{ms}") if ms else 0.0
+        return h_val * 3600.0 + m_val * 60.0 + s_val + ms_val
+
+    subs = []
+    lines = clean_text.split('\n')
+    i = 0
+    num_lines = len(lines)
+    
+    while i < num_lines:
+        line = lines[i].strip()
+        m = tc_pattern.search(line)
+        if m:
             h1, m1, s1, ms1, h2, m2, s2, ms2 = m.groups()
-            h1 = int(h1) if h1 else 0
-            h2 = int(h2) if h2 else 0
-            st = h1 * 3600 + int(m1) * 60 + int(s1) + float(f"0.{ms1}")
-            et = h2 * 3600 + int(m2) * 60 + int(s2) + float(f"0.{ms2}")
-            txt = " ".join(lines[time_line_idx + 1:]).strip()
-            subs.append({
-                'id': len(subs) + 1,
-                'start': round(st, 3),
-                'end': round(et, 3),
-                'text': txt
-            })
+            st = _parse_time(h1, m1, s1, ms1)
+            et = _parse_time(h2, m2, s2, ms2)
+            if et <= st:
+                et = st + 1.0  # Fallback 1s duration
+                
+            text_parts = []
+            i += 1
+            while i < num_lines:
+                next_line = lines[i].strip()
+                if not next_line:
+                    if i + 1 < num_lines and (tc_pattern.search(lines[i+1]) or (lines[i+1].isdigit() and i + 2 < num_lines and tc_pattern.search(lines[i+2]))):
+                        break
+                    i += 1
+                    continue
+                if tc_pattern.search(next_line):
+                    break
+                if next_line.isdigit() and i + 1 < num_lines and tc_pattern.search(lines[i+1]):
+                    break
+                text_parts.append(next_line)
+                i += 1
+                
+            txt = " ".join(text_parts).strip()
+            if txt:
+                subs.append({
+                    'id': len(subs) + 1,
+                    'start': round(st, 3),
+                    'end': round(et, 3),
+                    'text': txt
+                })
+        else:
+            i += 1
+    return subs
     return subs
 
 

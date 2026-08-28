@@ -8,6 +8,7 @@ Produces millisecond-accurate SRT subtitles preserving exact text, casing, and p
 """
 
 import os
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 import re
 import time
 import threading
