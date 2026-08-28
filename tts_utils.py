@@ -263,6 +263,8 @@ def generate_tts(
     current_time = 0.0
     silence_duration = 0.45  # Natural pause between sentences (seconds)
 
+    kwargs = {'creationflags': 0x08000000} if sys.platform == 'win32' else {}
+
     # Generate silence file
     ffmpeg_bin = get_ffmpeg_bin()
     silence_file = os.path.join(temp_dir, "silence.wav")
@@ -273,7 +275,7 @@ def generate_tts(
         "-t", str(silence_duration),
         "-c:a", "pcm_s16le",
         silence_file
-    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **kwargs)
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -308,7 +310,7 @@ def generate_tts(
                 "-ac", "1",
                 "-c:a", "pcm_s16le",
                 chunk_wav
-            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **kwargs)
 
             chunk_dur = get_audio_duration_seconds(chunk_wav)
             if chunk_dur <= 0.05:
@@ -346,11 +348,12 @@ def generate_tts(
         output_path = tmp.name
         tmp.close()
 
-    # Concat all chunk files using FFmpeg
+    # Concat all chunk files using FFmpeg (normalized forward slashes for Windows compatibility)
     concat_list_path = os.path.join(temp_dir, "concat_list.txt")
     with open(concat_list_path, "w", encoding="utf-8") as f:
         for cf in chunk_files:
-            f.write(f"file '{cf}'\n")
+            escaped_cf = os.path.abspath(cf).replace('\\', '/')
+            f.write(f"file '{escaped_cf}'\n")
 
     cmd = [
         ffmpeg_bin, "-y",
@@ -361,12 +364,13 @@ def generate_tts(
         "-ar", "24000",
         output_path
     ]
-    res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, **kwargs)
     if res.returncode != 0:
-        print("FFmpeg concat error:", res.stderr.decode())
+        err_msg = res.stderr.decode('utf-8', errors='replace') if res.stderr else ''
+        print(f"⚠️ [Edge-TTS Concat] FFmpeg error: {err_msg}. Using primary chunk fallback.")
         # Fallback
         cmd_fallback = [ffmpeg_bin, "-y", "-i", chunk_files[0], "-c:a", "pcm_s16le", output_path]
-        subprocess.run(cmd_fallback, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(cmd_fallback, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **kwargs)
 
     # Format SRT content
     srt_lines = []

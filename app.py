@@ -389,6 +389,7 @@ def render():
 
             bg_colors = ['0x090d16', '0x0f172a', '0x1e1b4b', '0x172554', '0x042f2e', '0x1f1641']
             ffmpeg_bin = ffmpeg_utils.get_ffmpeg_bin()
+            kwargs = {'creationflags': 0x08000000} if sys.platform == 'win32' else {}
             for i in range(slide_count):
                 slide_img = str(job_dir / f"slide_{i:04d}.png")
                 col = bg_colors[i % len(bg_colors)]
@@ -398,7 +399,7 @@ def render():
                     '-i', f'color=c={col}:s={W}x{H}:d=1',
                     '-vframes', '1',
                     slide_img
-                ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **kwargs)
                 image_paths.append(slide_img)
 
         output_path = str(OUTPUT_DIR / f'{job_id}.mp4')

@@ -37,13 +37,27 @@ def get_hwid() -> str:
     raw_id = ""
     try:
         if system == "Windows":
-            cmd = "wmic csproduct get uuid"
-            out = subprocess.check_output(cmd, shell=True, timeout=3).decode(errors="ignore").splitlines()
-            if len(out) > 1:
-                raw_id = out[1].strip()
-            if not raw_id or "UUID" in raw_id:
-                cmd2 = "vol c:"
-                raw_id = subprocess.check_output(cmd2, shell=True, timeout=3).decode(errors="ignore").strip()
+            try:
+                import winreg
+                key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Cryptography")
+                guid, _ = winreg.QueryValueEx(key, "MachineGuid")
+                if guid:
+                    raw_id = str(guid).strip()
+            except Exception:
+                pass
+
+            if not raw_id:
+                try:
+                    kwargs = {'creationflags': 0x08000000} if sys.platform == 'win32' else {}
+                    cmd = "wmic csproduct get uuid"
+                    out = subprocess.check_output(cmd, shell=True, timeout=3, **kwargs).decode(errors="ignore").splitlines()
+                    if len(out) > 1:
+                        raw_id = out[1].strip()
+                    if not raw_id or "UUID" in raw_id:
+                        cmd2 = "vol c:"
+                        raw_id = subprocess.check_output(cmd2, shell=True, timeout=3, **kwargs).decode(errors="ignore").strip()
+                except Exception:
+                    pass
         elif system == "Darwin":  # macOS
             cmd = "ioreg -rd1 -c IOPlatformExpertDevice | grep IOPlatformUUID"
             out = subprocess.check_output(cmd, shell=True, timeout=3).decode(errors="ignore").strip()

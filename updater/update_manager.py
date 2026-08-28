@@ -28,6 +28,23 @@ class UpdateManager:
         self.backups_dir = os.path.join(self.root_dir, "backups")
         os.makedirs(self.temp_dir, exist_ok=True)
         os.makedirs(self.backups_dir, exist_ok=True)
+        self._cleanup_old_files()
+
+    def _cleanup_old_files(self):
+        """Purge orphaned .old_<pid> files left over from previous Windows updates."""
+        try:
+            for root, _, files in os.walk(self.root_dir):
+                if any(x in root for x in (".git", ".venv", "__pycache__")):
+                    continue
+                for f in files:
+                    if ".old_" in f:
+                        fpath = os.path.join(root, f)
+                        try:
+                            os.remove(fpath)
+                        except Exception:
+                            pass
+        except Exception:
+            pass
 
     def is_dev_mode(self) -> bool:
         """

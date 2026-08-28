@@ -342,10 +342,11 @@ def align_with_acoustic_vad(
     ffprobe_bin = get_ffprobe_bin()
     ffmpeg_bin = get_ffmpeg_bin()
 
+    kwargs = {'creationflags': 0x08000000} if sys.platform == 'win32' else {}
     probe = subprocess.run([
         ffprobe_bin, '-v', 'error', '-show_entries', 'format=duration',
         '-of', 'default=noprint_wrappers=1:nokey=1', audio_path
-    ], capture_output=True, text=True)
+    ], capture_output=True, text=True, **kwargs)
     try:
         total_dur = float(probe.stdout.strip())
     except Exception:
@@ -357,7 +358,7 @@ def align_with_acoustic_vad(
         '-af', 'silencedetect=noise=-30dB:d=0.25',
         '-f', 'null', '-'
     ]
-    res = subprocess.run(cmd, capture_output=True, text=True)
+    res = subprocess.run(cmd, capture_output=True, text=True, **kwargs)
     
     silence_starts = [float(x) for x in re.findall(r'silence_start:\s*([\d\.]+)', res.stderr)]
     silence_ends = [float(x) for x in re.findall(r'silence_end:\s*([\d\.]+)', res.stderr)]
@@ -450,10 +451,11 @@ def align_with_stable_whisper(
         )
 
     # Probe audio duration to strictly bound timestamps
+    ffprobe_bin = get_ffprobe_bin() if 'get_ffprobe_bin' in globals() else 'ffprobe'
     probe = subprocess.run([
-        'ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+        ffprobe_bin, '-v', 'error', '-show_entries', 'format=duration',
         '-of', 'default=noprint_wrappers=1:nokey=1', audio_path
-    ], capture_output=True, text=True)
+    ], capture_output=True, text=True, **kwargs)
     try:
         audio_dur = float(probe.stdout.strip())
     except Exception:

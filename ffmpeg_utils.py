@@ -112,7 +112,8 @@ def detect_best_hw_encoder(ffmpeg_bin: str) -> Dict[str, Any]:
 def get_filter_complex_file_arg(ffmpeg_bin: str, script_file: str) -> List[str]:
     """Return the correct filter script flag depending on FFmpeg version."""
     try:
-        res = subprocess.run([ffmpeg_bin, '-/filter_complex', script_file], capture_output=True, text=True, timeout=2)
+        kwargs = {'creationflags': 0x08000000} if sys.platform == 'win32' else {}
+        res = subprocess.run([ffmpeg_bin, '-/filter_complex', script_file], capture_output=True, text=True, timeout=2, **kwargs)
         if 'Option not found' not in res.stderr and 'Unrecognized' not in res.stderr:
             return ['-/filter_complex', script_file]
     except Exception:
@@ -146,9 +147,10 @@ def check_ffmpeg() -> bool:
     """Return True if ffmpeg is installed and reachable."""
     try:
         bin_path = get_ffmpeg_bin()
+        kwargs = {'creationflags': 0x08000000} if sys.platform == 'win32' else {}
         result = subprocess.run(
             [bin_path, '-version'],
-            capture_output=True, text=True, timeout=5
+            capture_output=True, text=True, timeout=5, **kwargs
         )
         return result.returncode == 0
     except Exception:
@@ -866,7 +868,8 @@ def build_command(
                 if render_out is not None:
                     trim_cmd += ['-to', str(render_out)]
                 trim_cmd += ['-i', audio_path, trimmed_audio_path]
-                res_trim = subprocess.run(trim_cmd, capture_output=True, text=True)
+                kwargs = {'creationflags': 0x08000000} if sys.platform == 'win32' else {}
+                res_trim = subprocess.run(trim_cmd, capture_output=True, text=True, **kwargs)
                 if res_trim.returncode == 0 and os.path.isfile(trimmed_audio_path):
                     audio_path = trimmed_audio_path
             except Exception as e:
