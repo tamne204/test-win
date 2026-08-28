@@ -10,22 +10,10 @@ Features:
 import os
 import re
 import json
-import time
 import threading
 import subprocess
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional, Any
-import numpy as np
-
-def get_ffmpeg_bin() -> str:
-    """Return best available ffmpeg binary."""
-    from ffmpeg_utils import get_ffmpeg_bin as _get_ff
-    return _get_ff()
-
-def get_ffprobe_bin() -> str:
-    """Return best available ffprobe binary."""
-    from ffmpeg_utils import get_ffprobe_bin as _get_fp
-    return _get_fp()
 
 _whisper_model = None
 _whisper_lock = threading.Lock()
@@ -60,75 +48,42 @@ def warmup_whisper_in_background():
 
 def parse_srt_content(srt_text: str) -> List[Dict[str, Any]]:
     """Parse SRT text string into a list of subtitle objects."""
-    if not srt_text:
-        return []
     subs = []
-    srt_text = srt_text.lstrip('\ufeff').replace('\r\n', '\n').replace('\r', '\n')
-    blocks = [b.strip() for b in re.split(r'\n\s*\n', srt_text.strip()) if b.strip()]
-    tc_pattern = re.compile(
-        r'(?:(\d{1,2}):)?(\d{1,2}):(\d{1,2})[,.](\d{1,3})\s*-->\s*(?:(\d{1,2}):)?(\d{1,2}):(\d{1,2})[,.](\d{1,3})'
-    )
+    blocks = re.split(r'\n\s*\n', srt_text.strip())
     for idx, block in enumerate(blocks):
         lines = [l.strip() for l in block.split('\n') if l.strip()]
-        time_line_idx = -1
-        m = None
-        for l_idx, l in enumerate(lines):
-            if '-->' in l:
-                m = tc_pattern.search(l)
-                if m:
-                    time_line_idx = l_idx
-                    break
-        if m and time_line_idx >= 0:
-            h1, m1, s1, ms1, h2, m2, s2, ms2 = m.groups()
-            h1 = int(h1) if h1 else 0
-            h2 = int(h2) if h2 else 0
-            st = h1 * 3600 + int(m1) * 60 + int(s1) + float(f"0.{ms1}")
-            et = h2 * 3600 + int(m2) * 60 + int(s2) + float(f"0.{ms2}")
-            txt = " ".join(lines[time_line_idx + 1:]).strip()
-            subs.append({
-                'id': len(subs) + 1,
-                'start': round(st, 3),
-                'end': round(et, 3),
-                'text': txt
-            })
+        time_line = next((l for l in lines if '-->' in l), None)
+        if time_line:
+            m = re.match(r'(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{3})', time_line)
+            if m:
+                st = int(m.group(1))*3600 + int(m.group(2))*60 + int(m.group(3)) + int(m.group(4))/1000.0
+                et = int(m.group(5))*3600 + int(m.group(6))*60 + int(m.group(7)) + int(m.group(8))/1000.0
+                t_idx = lines.index(time_line)
+                txt = " ".join(lines[t_idx+1:])
+                subs.append({
+                    'id': idx + 1,
+                    'start': round(st, 3),
+                    'end': round(et, 3),
+                    'text': txt
+                })
     return subs
 
 
 def get_audio_duration(audio_path: str) -> float:
-    """Get exact audio duration using ffprobe with multi-layer fallback."""
+    """Get exact audio duration using ffprobe."""
     if not audio_path or not os.path.isfile(audio_path):
         return 0.0
     try:
-        ffprobe_bin = get_ffprobe_bin()
         cmd = [
-            ffprobe_bin, '-v', 'error',
+            'ffprobe', '-v', 'error',
             '-show_entries', 'format=duration',
             '-of', 'default=noprint_wrappers=1:nokey=1',
             audio_path
         ]
-        kwargs = {'creationflags': 0x08000000} if sys.platform == 'win32' else {}
-        res = subprocess.run(cmd, capture_output=True, text=True, check=True, **kwargs)
-        val = float(res.stdout.strip())
-        if val > 0:
-            return val
+        res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        return float(res.stdout.strip())
     except Exception:
-        pass
-
-    try:
-        import soundfile as sf
-        info = sf.info(audio_path)
-        return float(info.duration)
-    except Exception:
-        pass
-
-    try:
-        import wave
-        with wave.open(audio_path, 'rb') as wf:
-            return wf.getnframes() / float(wf.getframerate())
-    except Exception:
-        pass
-
-    return 0.0
+        return 0.0
 
 
 def format_srt_time(seconds: float) -> str:
@@ -320,34 +275,51 @@ def align_script_with_audio_whisper(
     progress_callback: Optional[Any] = None
 ) -> Tuple[str, List[Dict[str, Any]]]:
     """
-    Precision Two-Pass Anchor Forced Alignment:
-    Matches 100% ground-truth script with ASR word timestamps, 20ms safety gap buffer, and duration bounds.
+    Instant Acoustic Forced Alignment:
+    Uses Ultra-Fast VAD when script is present (0.2s) or Faster-Whisper ASR if no script (transcription).
     """
-    if not script_raw_text or not script_raw_text.strip():
+    scenes = parse_script_scenes(script_raw_text)
+    if not scenes:
         if audio_path and os.path.isfile(audio_path):
             return transcribe_audio_whisper(audio_path, language=language, progress_callback=progress_callback)
         return "", []
 
-    if not audio_path or not os.path.isfile(audio_path):
-        scenes = parse_script_scenes(script_raw_text)
+    total_dur = get_audio_duration(audio_path) if (audio_path and os.path.isfile(audio_path)) else 0.0
+
+    # If no audio provided or audio file missing, fallback to proportional
+    if total_dur <= 0.0 or not audio_path or not os.path.isfile(audio_path):
         subs = []
         cur_t = 0.0
-        for i, sc in enumerate(scenes):
-            st = round(cur_t, 3)
-            et = round(cur_t + duration_per_image, 3)
-            subs.append({'id': i + 1, 'start': st, 'end': et, 'text': sc['subtitles']})
-            cur_t += duration_per_image
+        for sc in scenes:
+            txt = sc['subtitles']
+            dur = max(1.0, duration_per_image)
+            subs.append({
+                'start': cur_t,
+                'end': cur_t + dur,
+                'text': txt
+            })
+            cur_t += dur
+        if progress_callback:
+            progress_callback(100, "Đã hoàn thành!")
         return create_srt_content(subs), subs
 
-    import forced_alignment_engine
-    res = forced_alignment_engine.forced_align(
-        audio_path=audio_path,
-        script_text=script_raw_text,
-        engine='whisperx',
-        language=language or 'auto',
-        progress_callback=progress_callback
-    )
-    return res.get('srt', ''), res.get('segments', [])
+    # Run Ultra-Fast Acoustic VAD Alignment (<0.3s)
+    return align_script_with_audio_fast_vad(scenes, audio_path, total_dur, progress_callback=progress_callback)
+
+    # Fallback: Proportional character distribution across actual audio duration
+    total_chars = sum(max(len(sc['subtitles']), 4) for sc in scenes)
+    cur_t = 0.0
+    for sc in scenes:
+        weight = max(len(sc['subtitles']), 4) / float(total_chars)
+        seg_dur = weight * total_dur
+        subs.append({
+            'start': round(cur_t, 3),
+            'end': round(min(cur_t + seg_dur, total_dur), 3),
+            'text': sc['subtitles']
+        })
+        cur_t += seg_dur
+
+    return create_srt_content(subs), subs
 
 
 def transcribe_audio_whisper(

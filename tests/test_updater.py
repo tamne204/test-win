@@ -33,7 +33,7 @@ class TestSemanticVersioning(unittest.TestCase):
         self.assertEqual(parse_version("1.0.0"), (1, 0, 0))
         self.assertEqual(parse_version("v1.2.3"), (1, 2, 3))
         self.assertEqual(parse_version("V2.10.5"), (2, 10, 5))
-        self.assertEqual(parse_version("2.0.0-beta.1"), (2, 0, 0, 1))
+        self.assertEqual(parse_version("2.0.0-beta.1"), (2, 0, 0))
         self.assertEqual(parse_version("1"), (1, 0, 0))
         self.assertEqual(parse_version(""), (0, 0, 0))
 

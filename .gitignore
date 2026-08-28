@@ -76,8 +76,15 @@ go0.png
 go100.png
 fr_*.png
 
-# IDE
+# IDE & Agent Worktrees
 .idea/
 .vscode/
 *.swp
 *.swo
+.worktrees/
+worktree/
+worktrees/
+
+# Archive builds
+*.zip
+*.tar.gz

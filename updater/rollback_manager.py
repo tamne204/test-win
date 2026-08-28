@@ -75,6 +75,10 @@ def restore_backup(backup_path: str, target_dir: str) -> bool:
         return False
     try:
         with zipfile.ZipFile(backup_path, "r") as zf:
+            for member in zf.infolist():
+                target_p = os.path.abspath(os.path.join(target_dir, member.filename))
+                if not target_p.startswith(os.path.abspath(target_dir)):
+                    raise ValueError(f"Malicious zip file entry: {member.filename}")
             zf.extractall(target_dir)
         return True
     except Exception as e:

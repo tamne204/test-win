@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  srt-service:
+    build: .
+    container_name: srt_microservice
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - WORKERS=2
+    volumes:
+      - ./temp:/app/temp
+    deploy:
+      resources:
+        limits:
+          memory: 4096M

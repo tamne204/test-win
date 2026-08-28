@@ -6,6 +6,10 @@ VoxCPM2 Text-to-Speech generation, and AutoSub subtitle recognition & embedding.
 """
 
 import os
+import sys
+import time
+import re
+import datetime
 import uuid
 import json
 import tempfile
@@ -30,6 +34,13 @@ import translation_utils
 import license_manager
 from version import __version__, APP_NAME
 from updater import UpdateManager, check_for_updates
+
+def sanitize_project_id(pid: str) -> str:
+    """Sanitize project_id to prevent path traversal attacks (BUG-04)."""
+    if not pid:
+        return ""
+    clean = re.sub(r'[^A-Za-z0-9_\-]', '', str(pid).strip())
+    return clean
 
 # Initialize and verify license on startup
 license_manager.verify_license()
@@ -115,15 +126,50 @@ def api_update_download():
     except Exception as e:
         return jsonify({'ok': False, 'message': f'Lỗi khi tải hoặc xác thực bản cập nhật: {e}'}), 500
 
+def restart_server():
+    """Detached restart supporting Windows, macOS, and Linux without port collisions."""
+    def _worker():
+        time.sleep(0.5)
+        try:
+            python_bin = sys.executable
+            app_script = os.path.abspath(__file__)
+            app_dir = os.path.dirname(app_script)
+
+            if sys.platform == 'win32':
+                # Create a temporary standalone restart script that waits for port 8080 to be released
+                bat_path = os.path.join(tempfile.gettempdir(), f"restart_{os.getpid()}.bat")
+                with open(bat_path, "w", encoding="utf-8") as f:
+                    f.write("@echo off\r\n")
+                    f.write("timeout /t 2 /nobreak >nul\r\n")
+                    f.write(f'cd /d "{app_dir}"\r\n')
+                    f.write(f'start "" "{python_bin}" "{app_script}"\r\n')
+                    f.write('del "%~f0"\r\n')
+
+                CREATE_NEW_CONSOLE = 0x00000010
+                CREATE_NEW_PROCESS_GROUP = 0x00000200
+                subprocess.Popen(
+                    ['cmd.exe', '/c', bat_path],
+                    creationflags=CREATE_NEW_CONSOLE | CREATE_NEW_PROCESS_GROUP,
+                    close_fds=True
+                )
+            else:
+                launcher_cmd = f'sleep 1.5 && "{python_bin}" "{app_script}"'
+                subprocess.Popen(
+                    ['sh', '-c', launcher_cmd],
+                    cwd=app_dir,
+                    close_fds=True
+                )
+        except Exception as e:
+            print(f"[Restart Error] {e}")
+        finally:
+            os._exit(0)
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+
 @app.route('/api/update/apply', methods=['POST'])
 def api_update_apply():
     """Apply staged update atomically with backup and rollback."""
-    if update_mgr.is_dev_mode():
-        return jsonify({
-            'ok': False,
-            'message': 'Đang chạy trong môi trường phát triển (Dev Mode/Git Repository). Tự động cập nhật bị vô hiệu hóa để bảo vệ mã nguồn của bạn.'
-        }), 403
-
     data = request.get_json(force=True, silent=True) or {}
     staging_dir = data.get('staging_dir') or os.path.join(update_mgr.temp_dir, 'staging')
 
@@ -131,6 +177,10 @@ def api_update_apply():
         return jsonify({'ok': False, 'message': 'Không tìm thấy thư mục staging bản cập nhật.'}), 400
 
     res = update_mgr.apply_update_atomic(staging_dir)
+    if res.get('ok'):
+        restart_server()
+        res['restarting'] = True
+        res['message'] = "Cập nhật thành công! Máy chủ đang tự động khởi động lại trong giây lát..."
     return jsonify(res)
 
 
@@ -147,7 +197,7 @@ def health_check():
         'ffmpeg_available': FFMPEG_AVAILABLE,
         'edge_tts_available': EDGE_TTS_AVAILABLE,
         'active_jobs': len(jobs),
-        'server_time': os.environ.get('TZ', 'UTC')
+        'server_time': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     })
 
 @app.route('/')
@@ -240,7 +290,7 @@ def render():
             settings['image_effects'] = image_effects
 
         # Subtitle styling & positioning settings
-        settings['sub_font'] = request.form.get('sub_font', 'montserrat').strip()
+        settings['sub_font'] = request.form.get('sub_font', 'paperlogy').strip()
         settings['sub_color'] = request.form.get('sub_color', '#ffffff').strip()
         settings['sub_stroke_enabled'] = request.form.get('sub_stroke_enabled', 'true').strip()
         settings['sub_stroke_color'] = request.form.get('sub_stroke_color', '#000000').strip()
@@ -288,6 +338,21 @@ def render():
         except (ValueError, TypeError):
             settings['sub_line_spacing'] = 1.25
 
+        # In/Out selection render points
+        render_in = request.form.get('render_in')
+        if render_in is not None and str(render_in).strip() != '':
+            try:
+                settings['render_in'] = float(render_in)
+            except (ValueError, TypeError):
+                pass
+
+        render_out = request.form.get('render_out')
+        if render_out is not None and str(render_out).strip() != '':
+            try:
+                settings['render_out'] = float(render_out)
+            except (ValueError, TypeError):
+                pass
+
         # Audio: either an uploaded file OR a previously generated TTS job
         audio_path = None
         audio_file = request.files.get('audio')
@@ -309,24 +374,26 @@ def render():
         if not image_paths:
             W, H = ffmpeg_utils.build_resolution(settings.get('aspect_ratio', '16:9'), settings.get('resolution', '1080p'))
             slide_count = 1
-            if image_durations:
-                slide_count = len(image_durations)
-            elif audio_path:
+            if audio_path and os.path.isfile(audio_path):
                 try:
-                    cmd_probe = ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', audio_path]
+                    ffprobe_bin = ffmpeg_utils.get_ffprobe_bin()
+                    cmd_probe = [ffprobe_bin, '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', audio_path]
                     a_dur = float(subprocess.check_output(cmd_probe).decode().strip())
                     slide_count = max(1, int(a_dur / 4.5))
                     dur_each = round(a_dur / slide_count, 3)
                     settings['image_durations'] = [dur_each] * slide_count
                 except Exception:
                     slide_count = 1
+            elif image_durations:
+                slide_count = len(image_durations)
 
             bg_colors = ['0x090d16', '0x0f172a', '0x1e1b4b', '0x172554', '0x042f2e', '0x1f1641']
+            ffmpeg_bin = ffmpeg_utils.get_ffmpeg_bin()
             for i in range(slide_count):
                 slide_img = str(job_dir / f"slide_{i:04d}.png")
                 col = bg_colors[i % len(bg_colors)]
                 subprocess.run([
-                    'ffmpeg', '-y',
+                    ffmpeg_bin, '-y',
                     '-f', 'lavfi',
                     '-i', f'color=c={col}:s={W}x{H}:d=1',
                     '-vframes', '1',
@@ -351,7 +418,7 @@ def render():
         custom_srt_text = request.form.get('custom_srt', '').strip()
         sorted_preview = [os.path.basename(p) for p in sort_images(image_paths)]
 
-        project_id = request.form.get('project_id', '').strip()
+        project_id = sanitize_project_id(request.form.get('project_id', ''))
 
         print("\n" + "="*60)
         print(f"📥 [Render API] NHẬN LỆNH RENDER VIDEO:")
@@ -488,7 +555,7 @@ def download(job_id):
         j['output'],
         mimetype='video/mp4',
         as_attachment=True,
-        download_name='slideshow.mp4'
+        download_name=f"slideshow_{job_id[:8]}.mp4"
     )
 
 
@@ -708,11 +775,15 @@ def api_forced_align():
 
         def run_worker():
             try:
+                t0 = time.time()
+                print(f"🎯 [Forced-Align] Bắt đầu so khớp kịch bản (Engine: {engine}, Language: {language})...")
                 def progress_cb(pct, msg=""):
                     if job_id in jobs:
                         jobs[job_id]['progress'] = pct
                         jobs[job_id]['message'] = msg
                         job_q.put({'progress': pct, 'message': msg})
+                        if pct in (15, 50, 70, 100):
+                            print(f"   • [{pct}%] {msg}")
 
                 res = forced_alignment_engine.forced_align(
                     audio_path=audio_path,
@@ -732,6 +803,8 @@ def api_forced_align():
 
                 srt_content = res['srt']
                 subs = res['segments']
+                elapsed = time.time() - t0
+                print(f"✅ [Forced-Align] Hoàn tất 100% so khớp {len(subs)} câu kịch bản trong {elapsed:.1f}s!")
 
                 jobs[job_id]['status'] = 'done'
                 jobs[job_id]['progress'] = 100
@@ -747,6 +820,9 @@ def api_forced_align():
                     'count': len(subs)
                 })
             except Exception as e:
+                import traceback
+                print(f"❌ [Forced-Align Error] {e}")
+                traceback.print_exc()
                 jobs[job_id]['status'] = 'error'
                 jobs[job_id]['error'] = str(e)
                 job_q.put({'error': str(e)})
@@ -825,10 +901,10 @@ def forced_align():
                 })
                 return jsonify({'job_id': job_id})
 
-        engine_type = req_data.get('engine_type', 'stable-ts')
-        model_size = req_data.get('model_size', 'large-v3')
-        demucs_flag = req_data.get('demucs', True)
-        initial_prompt = req_data.get('initial_prompt')
+        engine_type = request.form.get('engine_type', 'stable-ts')
+        model_size = request.form.get('model_size', 'large-v3')
+        demucs_flag = request.form.get('demucs', 'true').lower() in ('true', '1', 'yes')
+        initial_prompt = request.form.get('initial_prompt')
 
         def run_worker():
             try:
@@ -838,21 +914,29 @@ def forced_align():
                         jobs[job_id]['message'] = msg
                         job_q.put({'progress': pct, 'message': msg})
 
-                if engine_type == 'stable-ts':
+                if not audio_path or not os.path.isfile(audio_path):
+                    raise ValueError("Không tìm thấy tệp âm thanh để căn chỉnh phụ đề.")
+
+                if script_text and script_text.strip():
+                    # High precision Two-Pass Anchor Forced Alignment (100% script match, 20ms gap buffer)
+                    import forced_alignment_engine
+                    res = forced_alignment_engine.forced_align(
+                        audio_path=audio_path,
+                        script_text=script_text,
+                        engine='whisperx',
+                        language=lang,
+                        model_size=model_size if model_size in ('tiny', 'base', 'small', 'medium') else 'base',
+                        progress_callback=progress_cb
+                    )
+                    srt_content = res.get('srt', '')
+                    subs = res.get('segments', [])
+                elif engine_type == 'stable-ts':
                     srt_content, subs = subtitles_engine.transcribe_audio_stable_whisper(
                         audio_path=audio_path,
                         language=lang,
                         model_size=model_size,
                         demucs=demucs_flag,
                         initial_prompt=initial_prompt,
-                        progress_callback=progress_cb
-                    )
-                elif script_text and script_text.strip():
-                    srt_content, subs = subtitles_engine.align_script_with_audio_whisper(
-                        script_text,
-                        audio_path=audio_path,
-                        language=lang,
-                        duration_per_image=duration_per_image,
                         progress_callback=progress_cb
                     )
                 else:
@@ -1107,11 +1191,10 @@ def create_project():
 @app.route('/api/projects/save', methods=['POST'])
 def save_project():
     """Save full project state to project.json and assets."""
-    import datetime
     req_data = request.get_json(silent=True) or {}
-    project_id = req_data.get('project_id')
+    project_id = sanitize_project_id(req_data.get('project_id'))
     if not project_id:
-        return jsonify({'error': 'project_id is required'}), 400
+        return jsonify({'error': 'Valid project_id is required'}), 400
         
     project_path = PROJECTS_DIR / project_id
     if not project_path.exists():
@@ -1150,7 +1233,10 @@ def save_project():
 @app.route('/api/projects/<project_id>/load', methods=['GET'])
 def load_project(project_id):
     """Load project state from project.json."""
-    project_path = PROJECTS_DIR / project_id
+    clean_pid = sanitize_project_id(project_id)
+    if not clean_pid:
+        return jsonify({'error': 'Invalid project_id'}), 400
+    project_path = PROJECTS_DIR / clean_pid
     meta_file = project_path / 'project.json'
     if not meta_file.is_file():
         return jsonify({'error': 'Project not found'}), 404
@@ -1167,6 +1253,27 @@ def load_project(project_id):
 # Entry point
 # ---------------------------------------------------------------------------
 
+
+# ---------------------------------------------------------------------------
+# Server Lifecycle Management (Auto-Restart & Shutdown)
+# ---------------------------------------------------------------------------
+
+@app.route('/api/server/restart', methods=['POST'])
+def api_server_restart():
+    """Seamlessly restart Flask server process in background."""
+    restart_server()
+    return jsonify({'ok': True, 'message': 'Máy chủ đang tự động khởi động lại...'})
+
+@app.route('/api/server/shutdown', methods=['POST'])
+def api_server_shutdown():
+    """Gracefully shutdown server process."""
+    def _do_shutdown():
+        time.sleep(0.8)
+        os._exit(0)
+
+    threading.Thread(target=_do_shutdown, daemon=True).start()
+    return jsonify({'ok': True, 'message': 'Đã tắt máy chủ thành công.'})
+
 if __name__ == '__main__':
     print("=" * 55)
     print(f"{'✅' if FFMPEG_AVAILABLE else '❌'}  FFmpeg: {'found' if FFMPEG_AVAILABLE else 'NOT found — install ffmpeg'}")
@@ -1175,4 +1282,4 @@ if __name__ == '__main__':
     print()
     print("🎬  Slideshow Builder  →  http://localhost:8080")
     print("=" * 55)
-    app.run(debug=False, port=8080, threaded=True)
+    app.run(host='0.0.0.0', port=8080, debug=False, threaded=True)

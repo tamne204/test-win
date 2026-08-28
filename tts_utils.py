@@ -19,6 +19,14 @@ import subprocess
 from pathlib import Path
 from typing import Optional, Callable, List, Tuple, Dict, Any
 
+def get_ffmpeg_bin() -> str:
+    from ffmpeg_utils import get_ffmpeg_bin as _get_ff
+    return _get_ff()
+
+def get_ffprobe_bin() -> str:
+    from ffmpeg_utils import get_ffprobe_bin as _get_fp
+    return _get_fp()
+
 _EDGE_TTS_AVAILABLE: Optional[bool] = None
 
 # Curated high-quality neural voices
@@ -112,8 +120,9 @@ def format_srt_time(seconds: float) -> str:
 def get_audio_duration_seconds(file_path: str) -> float:
     """Probe exact duration of an audio file in seconds via ffprobe."""
     try:
+        ffprobe_bin = get_ffprobe_bin()
         cmd = [
-            "ffprobe", "-v", "error",
+            ffprobe_bin, "-v", "error",
             "-show_entries", "format=duration",
             "-of", "default=noprint_wrappers=1:nokey=1",
             file_path
@@ -255,9 +264,10 @@ def generate_tts(
     silence_duration = 0.45  # Natural pause between sentences (seconds)
 
     # Generate silence file
+    ffmpeg_bin = get_ffmpeg_bin()
     silence_file = os.path.join(temp_dir, "silence.wav")
     subprocess.run([
-        "ffmpeg", "-y",
+        ffmpeg_bin, "-y",
         "-f", "lavfi",
         "-i", "anullsrc=r=24000:cl=mono",
         "-t", str(silence_duration),
@@ -292,7 +302,7 @@ def generate_tts(
 
             # Convert MP3 to 24000Hz Mono WAV for sample-perfect concatenation
             subprocess.run([
-                "ffmpeg", "-y",
+                ffmpeg_bin, "-y",
                 "-i", chunk_mp3,
                 "-ar", "24000",
                 "-ac", "1",
@@ -343,7 +353,7 @@ def generate_tts(
             f.write(f"file '{cf}'\n")
 
     cmd = [
-        "ffmpeg", "-y",
+        ffmpeg_bin, "-y",
         "-f", "concat",
         "-safe", "0",
         "-i", concat_list_path,
@@ -355,7 +365,7 @@ def generate_tts(
     if res.returncode != 0:
         print("FFmpeg concat error:", res.stderr.decode())
         # Fallback
-        cmd_fallback = ["ffmpeg", "-y", "-i", chunk_files[0], "-c:a", "pcm_s16le", output_path]
+        cmd_fallback = [ffmpeg_bin, "-y", "-i", chunk_files[0], "-c:a", "pcm_s16le", output_path]
         subprocess.run(cmd_fallback, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     # Format SRT content

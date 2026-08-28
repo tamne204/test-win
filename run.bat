@@ -2,12 +2,8 @@
 title Slideshow Builder AI - 2tamne.site
 cd /d "%~dp0"
 
-set "PYTHONUTF8=1"
-set "PYTHONIOENCODING=utf-8"
-chcp 65001 >nul 2>nul
-
 echo ========================================================
-echo        SLIDESHOW BUILDER AI - 2TAMNE.SITE (x64)
+echo        SLIDESHOW BUILDER AI - 2TAMNE.SITE
 echo ========================================================
 echo.
 
@@ -71,38 +67,17 @@ exit /b 1
 
 :run_server
 echo [OK] Found Python: %PYCMD%
-"%PYCMD%" -c "import struct; assert struct.calcsize('P') * 8 == 64" >nul 2>nul
-if %errorlevel% equ 0 (
-    echo [OK] Architecture: 64-bit (High Performance Mode)
-) else (
-    echo [WARN] Architecture: 32-bit (Limited to 2GB RAM. Recommend installing Python 64-bit)
-)
 echo [*] Checking dependencies...
-"%PYCMD%" -c "import flask, faster_whisper, requests, PIL, psutil" >nul 2>nul
-if %errorlevel% neq 0 (
-    echo [*] Installing missing requirements (one-time setup)...
-    "%PYCMD%" -m pip install -r requirements.txt
-) else (
-    echo [OK] All dependencies verified!
-)
+"%PYCMD%" -m pip install -r requirements.txt
 echo.
-echo [*] Launching browser at http://localhost:8080 in background...
-start /b cmd /c "timeout /t 2 /nobreak >nul & start http://localhost:8080"
-:loop_server
+echo [*] Starting web server at http://localhost:8080 ...
+start "" http://localhost:8080
+echo.
 echo ========================================================
 echo  SERVER IS RUNNING - PLEASE KEEP THIS WINDOW OPEN!
 echo ========================================================
 echo.
 "%PYCMD%" app.py
-set APP_EXIT_CODE=%errorlevel%
-
-if %APP_EXIT_CODE% equ 10 (
-    echo.
-    echo [*] Restarting server...
-    timeout /t 1 /nobreak >nul
-    goto :loop_server
-)
-
 echo.
-echo [INFO] Server stopped (Exit code: %APP_EXIT_CODE%).
+echo [INFO] Server stopped.
 pause

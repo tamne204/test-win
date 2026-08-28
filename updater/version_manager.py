@@ -19,7 +19,9 @@ def parse_version(v_str: str) -> Tuple[int, ...]:
         return (0, 0, 0)
     
     clean_str = v_str.strip().lstrip("vV")
-    num_parts = [int(x) for x in re.findall(r"\d+", clean_str)]
+    # Separate pre-release / build suffix so e.g. 2.0.0-beta.1 doesn't add '1' as a 4th component
+    main_part = clean_str.split('-')[0].split('+')[0]
+    num_parts = [int(x) for x in re.findall(r"\d+", main_part)]
 
     while len(num_parts) < 3:
         num_parts.append(0)

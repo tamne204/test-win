@@ -1,0 +1,11 @@
+{
+    "platform": "macos",
+    "gpu_priority": ["h264_videotoolbox"],
+    "ffmpeg_path_hints": [
+        "/opt/homebrew/bin/ffmpeg",
+        "/usr/local/bin/ffmpeg",
+        "/opt/local/bin/ffmpeg"
+    ],
+    "launch_script": "start_mac.command",
+    "notes": "Khởi động bằng cách click đúp start_mac.command trong Finder"
+}

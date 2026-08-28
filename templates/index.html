@@ -56,6 +56,10 @@
       {% if not ffmpeg_available %}
       <div class="badge badge-warn">⚠️ FFmpeg missing</div>
       {% endif %}
+      <button type="button" id="btn-shutdown-app" class="badge" style="cursor:pointer;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:#f87171;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:5px;transition:all .2s" title="Tắt ứng dụng và dừng toàn bộ tiến trình máy chủ">
+        <span>🛑</span>
+        <span>Tắt Tool</span>
+      </button>
       <div class="badge badge-ok">🎤 Edge-TTS Cloud</div>
       <div class="badge badge-sub">☁️ Gemini 3.6 Flash / 2.5 Flash / 2.5 Flash Lite</div>
     </div>
@@ -235,14 +239,29 @@
               </div>
 
               <div class="setting-row" style="margin-top:4px">
-                <label class="setting-label" style="font-size:11px">⚙️ Chọn Động Cơ So Khớp:</label>
-                <div class="btn-group" id="forced-align-engine-group" style="display:flex;gap:5px">
-                  <button type="button" class="btn-option active" data-engine="gemini" style="flex:1;font-size:11px;padding:5px 6px" title="Sử dụng Gemini Flash Cloud siêu nhanh (2-3s), 0% RAM">
-                    ☁️ Gemini Cloud (2-3s)
-                  </button>
-                  <button type="button" class="btn-option" data-engine="stable-whisper" style="flex:1;font-size:11px;padding:5px 6px" title="Chạy Offline trực tiếp trên máy Mac (Không cần API Key)">
-                    💻 Stable-Whisper (Offline)
-                  </button>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+                  <div>
+                    <label class="setting-label" style="font-size:11px">🌐 Ngôn Ngữ Kịch Bản:</label>
+                    <select id="sel-fa-lang" class="sel-input" style="font-size:11px;padding:4px 5px">
+                      <option value="auto" selected>✨ Tự Động (Auto-detect)</option>
+                      <option value="ko">🇰🇷 Korean (한국어)</option>
+                      <option value="vi">🇻🇳 Vietnamese (Tiếng Việt)</option>
+                      <option value="en">🇺🇸 English</option>
+                      <option value="ja">🇯🇵 Japanese (日本語)</option>
+                      <option value="zh">🇨🇳 Chinese (中文)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="setting-label" style="font-size:11px">⚙️ Động Cơ So Khớp:</label>
+                    <div class="btn-group" id="forced-align-engine-group" style="display:flex;gap:4px">
+                      <button type="button" class="btn-option active" data-engine="whisperx" style="flex:1;font-size:10.5px;padding:4px 2px" title="Sử dụng WhisperX Wav2Vec2/MMS CTC Alignment căn chỉnh từng từ chính xác 100% (Khuyên dùng)">
+                        🎯 WhisperX
+                      </button>
+                      <button type="button" class="btn-option" data-engine="gemini" style="flex:1;font-size:10.5px;padding:4px 2px" title="Sử dụng Gemini Flash Cloud siêu nhanh (2-3s), 0% RAM">
+                        ☁️ Cloud
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -281,7 +300,7 @@
 
               <div class="setting-row">
                 <label class="setting-label">📝 Initial Prompt (Mồi ngữ cảnh):</label>
-                <textarea id="inp-initial-prompt" class="insp-textarea" style="height:38px;font-size:11px">안녕하세요. 노후의 진실, 인생 이야기입니다. 오늘 들려드릴 사연은 다음과 같습니다.</textarea>
+                <textarea id="inp-initial-prompt" class="insp-textarea" style="height:38px;font-size:11px" placeholder="Tùy chọn: Nhập từ khóa chuyên ngành, tên riêng để AI nhận diện chuẩn hơn..."></textarea>
               </div>
 
               <div style="margin-top:6px">
@@ -384,8 +403,12 @@
                 <div>
                   <label class="setting-label">📼 Bộ mã hóa (Codec):</label>
                   <select id="sel-codec" name="codec" class="finput" style="width:100%;padding:5px 8px;font-size:12px;background:#1e293b;color:#f8fafc;border:1px solid #334155;border-radius:6px">
-                    <option value="h264" selected>H.264 (libx264 - Tương thích cao)</option>
-                    <option value="hevc">H.265 / HEVC (libx265 - Siêu nén)</option>
+                    <option value="auto" selected>⚡ Tự động (Ưu tiên NVIDIA RTX/GTX → Intel → AMD)</option>
+                    <option value="nvenc">🟢 NVIDIA NVENC (GeForce RTX/GTX - Siêu tốc)</option>
+                    <option value="qsv">🔵 Intel QuickSync (Intel Core i3/i5/i7/i9)</option>
+                    <option value="amf">🔴 AMD Radeon AMF (Card đồ họa AMD)</option>
+                    <option value="h264_cpu">⚙️ CPU Multi-Core (libx264 - Mặc định CPU)</option>
+                    <option value="hevc">📦 H.265 / HEVC (libx265 - Siêu nén)</option>
                   </select>
                 </div>
                 <div>
@@ -938,11 +961,16 @@
             <div class="tl-tb-left" style="gap:10px">
               <span class="tl-title">🎞️ CapCut Multi-Track Suite</span>
               <span id="tl-total-badge" class="tl-badge">0 Cảnh · Tổng ~0.0s</span>
+              <span id="tl-in-out-badge" class="tl-badge" style="display:none;background:rgba(56,189,248,0.15);border:1px solid #0284c7;color:#38bdf8;font-weight:700">🎯 In/Out: 00:00.00 → 00:00.00 (~0.0s)</span>
               
               <!-- Quick CapCut Editing Tools -->
               <div class="tl-quick-tools" style="display:inline-flex;align-items:center;gap:4px;background:#0f172a;padding:2px 6px;border-radius:6px;border:1px solid #334155">
+                <button type="button" id="btn-tl-mark-in" class="tl-tool-btn" title="Đặt mốc Bắt Đầu (In) tại Playhead (Phím I)" style="background:transparent;border:none;color:#38bdf8;font-size:12px;font-weight:700;cursor:pointer;padding:3px 6px;border-radius:4px">📥 In (I)</button>
+                <button type="button" id="btn-tl-mark-out" class="tl-tool-btn" title="Đặt mốc Kết Thúc (Out) tại Playhead (Phím O)" style="background:transparent;border:none;color:#38bdf8;font-size:12px;font-weight:700;cursor:pointer;padding:3px 6px;border-radius:4px">📤 Out (O)</button>
+                <button type="button" id="btn-tl-clear-in-out" class="tl-tool-btn" title="Bỏ chọn vùng In/Out (Phím X hoặc Alt+X)" style="background:transparent;border:none;color:#f87171;font-size:11.5px;cursor:pointer;padding:3px 6px;display:none">✖ Bỏ In/Out</button>
+                <span style="color:#334155;font-size:10px">|</span>
                 <button type="button" id="btn-tl-split" class="tl-tool-btn" title="Cắt đôi clip tại Playhead (Phím S hoặc Cmd+B)" style="background:transparent;border:none;color:#38bdf8;font-size:12px;font-weight:700;cursor:pointer;padding:3px 6px;border-radius:4px">✂️ Cắt (S)</button>
-                <button type="button" id="btn-tl-delete-selected" class="tl-tool-btn" title="Xóa phân cảnh đang chọn (phím X hoặc Delete)" style="background:transparent;border:none;color:#f87171;font-size:12px;font-weight:700;cursor:pointer;padding:3px 6px;border-radius:4px">🗑️ Xóa (Del)</button>
+                <button type="button" id="btn-tl-delete-selected" class="tl-tool-btn" title="Xóa phân cảnh đang chọn (phím Del)" style="background:transparent;border:none;color:#f87171;font-size:12px;font-weight:700;cursor:pointer;padding:3px 6px;border-radius:4px">🗑️ Xóa (Del)</button>
                 <button type="button" id="btn-tl-undo" class="tl-tool-btn" title="Hoàn tác (Cmd+Z)" style="background:transparent;border:none;color:#94a3b8;font-size:12px;cursor:pointer;padding:3px 6px">⎌</button>
                 <button type="button" id="btn-tl-snap" class="tl-tool-btn active" title="Bật/Tắt Nam châm bám dính (Snap)" style="background:#1e293b;border:none;color:#10b981;font-size:12px;font-weight:700;cursor:pointer;padding:3px 6px;border-radius:4px">🧲 Snap</button>
                 <button type="button" id="btn-tl-bilingual-toggle" class="tl-tool-btn" title="Bật/Tắt hiển thị Track Phụ đề Gốc" style="background:transparent;border:none;color:#c084fc;font-size:12px;font-weight:700;cursor:pointer;padding:3px 6px;border-radius:4px">🔤 Song ngữ</button>
@@ -962,7 +990,7 @@
               <button type="button" id="btn-tl-dl-srt-clean" class="btn-sub-action" style="background:#1e293b;border:1px solid #0284c7;color:#38bdf8;font-weight:700;padding:5px 10px;font-size:11px;border-radius:6px;cursor:pointer" title="Tải file .SRT chuẩn 100% kịch bản gốc để kéo vào Premiere / CapCut">
                 ⬇️ Tải .SRT
               </button>
-              <button type="button" id="btn-tl-render-direct" onclick="executeRenderVideo()" class="btn-sub-action" style="background:linear-gradient(135deg, #10b981, #06b6d4);color:#fff;font-weight:800;padding:5px 14px;font-size:12px;box-shadow:0 2px 10px rgba(16,185,129,.4);cursor:pointer;border-radius:6px" title="Bắt đầu Render xuất video hoàn chỉnh">
+              <button type="button" id="btn-tl-render-direct" class="btn-sub-action" style="background:linear-gradient(135deg, #10b981, #06b6d4);color:#fff;font-weight:800;padding:5px 14px;font-size:12px;box-shadow:0 2px 10px rgba(16,185,129,.4);cursor:pointer;border-radius:6px" title="Bắt đầu Render xuất video hoàn chỉnh">
                 🎬 Xuất Video
               </button>
               <a id="btn-tl-dl-direct" class="btn-sub-action" style="display:none;background:linear-gradient(135deg, #f59e0b, #ef4444);color:#fff;font-weight:800;padding:5px 14px;font-size:12px;border-radius:6px;text-decoration:none;box-shadow:0 2px 10px rgba(239,68,68,.4)" href="#" download>
@@ -987,6 +1015,21 @@
 
           <!-- Timeline Scrollable Viewport -->
           <div id="timeline-viewport" class="timeline-viewport">
+
+            <!-- In/Out Selection Range Overlay Container -->
+            <div id="tl-in-out-overlay" class="tl-in-out-overlay" style="display:none">
+              <div id="tl-in-out-dim-left" class="tl-in-out-dim"></div>
+              <div id="tl-in-out-range-box" class="tl-in-out-range-box">
+                <div id="tl-in-handle" class="tl-in-handle" title="Kéo để chỉnh mốc In (Phím I)">
+                  <span class="tl-handle-tag">IN [</span>
+                </div>
+                <div class="tl-in-out-fill"></div>
+                <div id="tl-out-handle" class="tl-out-handle" title="Kéo để chỉnh mốc Out (Phím O)">
+                  <span class="tl-handle-tag">] OUT</span>
+                </div>
+              </div>
+              <div id="tl-in-out-dim-right" class="tl-in-out-dim"></div>
+            </div>
 
             <!-- Playhead Indicator Line -->
             <div id="tl-playhead" class="tl-playhead" style="left:0px">
@@ -1104,7 +1147,7 @@
       <span id="fi-dur">~0s video</span>
     </div>
     <div class="footer-actions">
-      <button type="button" id="render-btn" onclick="executeRenderVideo()" class="btn-render"
+      <button type="button" id="render-btn" class="btn-render"
               {% if not ffmpeg_available %}disabled{% endif %}>
         🎬 Render Video Hoàn Chỉnh
       </button>
@@ -1215,6 +1258,28 @@
         <button type="button" id="btn-license-cancel" class="btn-diag-action btn-diag-dismiss">Đóng</button>
         <button type="button" id="btn-license-submit" class="btn-diag-action" style="background:linear-gradient(135deg,#6366f1,#38bdf8);color:#fff;font-weight:700">⚡ Kích Hoạt Ngay</button>
       </div>
+    </div>
+  </div>
+<!-- Server Shutdown Confirmation Modal -->
+<div id="shutdown-modal" class="diag-modal-backdrop" style="display:none;z-index:999999">
+  <div class="diag-modal-card" style="max-width:440px;border:1px solid #ef4444;box-shadow:0 20px 50px rgba(0,0,0,0.8), 0 0 30px rgba(239,68,68,0.25)">
+    <div class="diag-modal-header" style="background:linear-gradient(135deg,rgba(239,68,68,0.2),rgba(15,23,42,0.8))">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:22px">🛑</span>
+        <span style="font-weight:800;font-size:15px;color:#f87171">XÁC NHẬN TẮT ỨNG DỤNG</span>
+      </div>
+      <button type="button" id="btn-shutdown-close" class="diag-close-btn">&times;</button>
+    </div>
+    <div class="diag-modal-body" style="padding:20px 16px;text-align:center">
+      <div style="font-size:38px;margin-bottom:10px">🔌</div>
+      <div style="font-size:14.5px;font-weight:700;color:#f8fafc;margin-bottom:8px">Bạn có chắc chắn muốn tắt hoàn toàn tool?</div>
+      <div style="font-size:12.5px;color:#94a3b8;line-height:1.5">
+        Máy chủ cục bộ và toàn bộ tiến trình ngầm sẽ dừng lại ngay lập tức. Sau khi tắt, bạn có thể đóng tab trình duyệt này.
+      </div>
+    </div>
+    <div class="diag-modal-footer" style="display:flex;justify-content:flex-end;gap:10px;background:#0b1120">
+      <button type="button" id="btn-shutdown-cancel" class="btn-diag-action btn-diag-dismiss">Không, Quay Lại</button>
+      <button type="button" id="btn-shutdown-confirm" class="btn-diag-action" style="background:linear-gradient(135deg,#dc2626,#ef4444);color:#fff;font-weight:700">🛑 Tắt Ngay</button>
     </div>
   </div>
 </div>

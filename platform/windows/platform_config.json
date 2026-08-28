@@ -1,0 +1,11 @@
+{
+    "platform": "windows",
+    "gpu_priority": ["h264_nvenc", "h264_qsv", "h264_amf"],
+    "ffmpeg_path_hints": [
+        "%LOCALAPPDATA%\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-*\\bin\\ffmpeg.exe",
+        "C:\\ffmpeg\\bin\\ffmpeg.exe",
+        "C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe"
+    ],
+    "launch_script": "SlideshowStudio.vbs",
+    "notes": "Khởi động bằng cách click đúp SlideshowStudio.vbs để ẩn cửa sổ CMD"
+}

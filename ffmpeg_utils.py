@@ -1,3 +1,5 @@
+import tempfile
+import uuid
 """
 ffmpeg_utils.py
 Core FFmpeg logic for the Slideshow Builder.
@@ -10,7 +12,12 @@ import re
 import random
 import subprocess
 from typing import List, Dict, Any, Callable, Optional
-from PIL import Image, ImageDraw, ImageFont
+try:
+    from PIL import Image, ImageDraw, ImageFont
+except ImportError:
+    Image = None
+    ImageDraw = None
+    ImageFont = None
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -24,18 +31,113 @@ SUPPORTED_AUDIO_EXTENSIONS = {'.mp3', '.wav', '.aac', '.m4a', '.ogg', '.flac'}
 # Utility helpers
 # ---------------------------------------------------------------------------
 
+import platform
+
+_cached_hw_encoder = None
+
+def detect_best_hw_encoder(ffmpeg_bin: str) -> Dict[str, Any]:
+    """
+    Detect the fastest available hardware GPU encoder on the system:
+    1. NVIDIA GPU (NVENC): h264_nvenc (Ultra-fast Windows/Linux)
+    2. Intel GPU (QuickSync): h264_qsv (Windows/Linux)
+    3. AMD GPU (AMF): h264_amf (Windows)
+    4. Apple Silicon (VideoToolbox): h264_videotoolbox (macOS)
+    5. Fallback: libx264 (CPU Multi-threaded)
+    """
+    global _cached_hw_encoder
+    if _cached_hw_encoder is not None:
+        return _cached_hw_encoder
+
+    system = platform.system()
+    candidates = []
+
+    if system == "Darwin":
+        candidates.append({
+            'name': 'Apple VideoToolbox (GPU)',
+            'codec': 'h264_videotoolbox',
+            'extra_args': ['-b:v', '8M', '-allow_sw', '1']
+        })
+    elif system == "Windows":
+        # 1. NVIDIA GeForce NVENC (Standard Auto GPU)
+        candidates.append({
+            'name': 'NVIDIA GeForce RTX / GTX (NVENC Turbo GPU)',
+            'codec': 'h264_nvenc',
+            'extra_args': ['-preset', 'fast', '-cq', '22', '-b:v', '0']
+        })
+        # 2. Intel QuickSync (Intel Core GPU)
+        candidates.append({
+            'name': 'Intel QuickSync (QSV GPU)',
+            'codec': 'h264_qsv',
+            'extra_args': ['-preset', 'veryfast', '-global_quality', '23']
+        })
+        # 3. AMD Radeon AMF (AMD GPU)
+        candidates.append({
+            'name': 'AMD Radeon (AMF GPU)',
+            'codec': 'h264_amf',
+            'extra_args': ['-quality', 'speed']
+        })
+        # 4. Windows Media Foundation Hardware GPU
+        candidates.append({
+            'name': 'Windows Media Foundation (D3D11 GPU)',
+            'codec': 'h264_mf',
+            'extra_args': ['-quality', '1']
+        })
+
+    # Test candidate on a 1-frame dummy encoding
+    for cand in candidates:
+        try:
+            test_cmd = [
+                ffmpeg_bin, '-y', '-f', 'lavfi', '-i', 'color=c=black:s=128x128:d=0.1',
+                '-c:v', cand['codec'], *cand['extra_args'], '-f', 'null', '-'
+            ]
+            kwargs = {'creationflags': 0x08000000} if sys.platform == 'win32' else {}
+            res = subprocess.run(test_cmd, capture_output=True, text=True, timeout=3, **kwargs)
+            if res.returncode == 0:
+                _cached_hw_encoder = cand
+                print(f"🚀 [Turbo GPU] Activated Hardware Encoder: {cand['name']}")
+                return cand
+        except Exception:
+            pass
+
+    # CPU Fallback with all cores multi-threading
+    cpu_encoder = {
+        'name': 'CPU Multi-Core (libx264 Ultra-Speed)',
+        'codec': 'libx264',
+        'extra_args': ['-preset', 'veryfast', '-crf', '22', '-threads', '0', '-x264-params', 'no-mbtree=1:lookahead=10']
+    }
+    _cached_hw_encoder = cpu_encoder
+    print(f"⚙️ [Render Engine] Activated CPU Multi-Core Engine ({cpu_encoder['name']})")
+    return cpu_encoder
+
+def get_filter_complex_file_arg(ffmpeg_bin: str, script_file: str) -> List[str]:
+    """Return the correct filter script flag depending on FFmpeg version."""
+    try:
+        res = subprocess.run([ffmpeg_bin, '-/filter_complex', script_file], capture_output=True, text=True, timeout=2)
+        if 'Option not found' not in res.stderr and 'Unrecognized' not in res.stderr:
+            return ['-/filter_complex', script_file]
+    except Exception:
+        pass
+    return ['-filter_complex_script', script_file]
+
 def get_ffmpeg_bin() -> str:
-    """Return best available ffmpeg binary, preferring ffmpeg-full with libass support."""
+    """Return best available ffmpeg binary, supporting Windows, macOS, and Linux."""
+    local_dir = os.path.dirname(os.path.abspath(__file__))
     candidates = [
+        os.path.join(local_dir, 'bin', 'ffmpeg.exe'),
+        os.path.join(local_dir, 'bin', 'ffmpeg'),
+        os.path.join(local_dir, 'ffmpeg.exe'),
+        'C:\\ffmpeg\\bin\\ffmpeg.exe',
+        'C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe',
         '/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg',
         '/opt/homebrew/Cellar/ffmpeg-full/9.0.1/bin/ffmpeg',
         '/usr/local/opt/ffmpeg-full/bin/ffmpeg',
         '/opt/homebrew/bin/ffmpeg',
         '/usr/local/bin/ffmpeg',
+        'ffmpeg.exe',
         'ffmpeg'
     ]
     for c in candidates:
-        if os.path.isabs(c) and os.path.isfile(c) and os.access(c, os.X_OK):
+        if os.path.isabs(c) and os.path.isfile(c):
             return c
     return 'ffmpeg'
 
@@ -210,80 +312,148 @@ def assign_effects(n: int, weights: Optional[Dict[str, float]] = None) -> List[s
 # Pillow Subtitle Overlay Generator (Exact UI Preview Styles & Custom Fonts)
 # ---------------------------------------------------------------------------
 
-def _get_subtitle_font(size: int, font_name: str = 'paperlogy'):
-    static_fonts_dir = os.path.join(os.path.dirname(__file__), 'static', 'fonts')
-    
+def _get_subtitle_font(size: int, font_name: str = 'paperlogy', sample_text: str = ''):
+    # Use absolute path of THIS file's directory to correctly resolve fonts
+    # regardless of working directory (critical for Windows .vbs launch)
+    _this_dir = os.path.dirname(os.path.abspath(__file__))
+    static_fonts_dir = os.path.join(_this_dir, 'static', 'fonts')
+    win_fonts = os.path.join(os.environ.get('WINDIR', 'C:\\Windows'), 'Fonts')
+    print(f"🔍 [Font] static_fonts_dir = {static_fonts_dir!r} (exists={os.path.isdir(static_fonts_dir)})")
+
+    # Detect if text contains Korean Hangul glyphs
+    is_korean = bool(re.search(r'[\uac00-\ud7a3\u1100-\u11ff\u3130-\u318f]', sample_text)) if sample_text else False
+
     font_map = {
         'paperlogy': [
             os.path.join(static_fonts_dir, 'Paperlogy-8ExtraBold.ttf'),
-            os.path.join(static_fonts_dir, 'Paperlogy-8ExtraBold.woff2'),
-            '/System/Library/Fonts/AppleSDGothicNeo.ttc'
+            os.path.join(static_fonts_dir, 'GongGothicBold.ttf'),
+            os.path.join(static_fonts_dir, 'Montserrat-Bold.ttf'),
+            os.path.join(win_fonts, 'arialbd.ttf'),
+            os.path.join(win_fonts, 'arial.ttf'),
+            '/System/Library/Fonts/AppleSDGothicNeo.ttc',
+            '/System/Library/Fonts/Supplemental/Arial Bold.ttf'
         ],
         'jalnan': [
             os.path.join(static_fonts_dir, 'Jalnan.ttf'),
-            os.path.join(static_fonts_dir, 'Jalnan.woff'),
-            '/System/Library/Fonts/AppleSDGothicNeo.ttc'
-        ],
-        'isamanru': [
-            os.path.join(static_fonts_dir, 'GongGothicBold.ttf'),
-            os.path.join(static_fonts_dir, 'GongGothicBold.woff'),
+            os.path.join(static_fonts_dir, 'Paperlogy-8ExtraBold.ttf'),
+            os.path.join(static_fonts_dir, 'Montserrat-Bold.ttf'),
             '/System/Library/Fonts/AppleSDGothicNeo.ttc'
         ],
         'gonggothic': [
             os.path.join(static_fonts_dir, 'GongGothicBold.ttf'),
-            os.path.join(static_fonts_dir, 'GongGothicBold.woff'),
+            os.path.join(static_fonts_dir, 'Paperlogy-8ExtraBold.ttf'),
+            os.path.join(static_fonts_dir, 'Montserrat-Bold.ttf'),
+            '/System/Library/Fonts/AppleSDGothicNeo.ttc'
+        ],
+        'isamanru': [
+            os.path.join(static_fonts_dir, 'GongGothicBold.ttf'),
+            os.path.join(static_fonts_dir, 'Paperlogy-8ExtraBold.ttf'),
+            os.path.join(static_fonts_dir, 'Montserrat-Bold.ttf'),
             '/System/Library/Fonts/AppleSDGothicNeo.ttc'
         ],
         'fromsol': [
             os.path.join(static_fonts_dir, 'Griun_Fromsol.ttf'),
-            os.path.join(static_fonts_dir, 'Griun_Fromsol.woff2'),
+            os.path.join(static_fonts_dir, 'Paperlogy-8ExtraBold.ttf'),
+            os.path.join(static_fonts_dir, 'Montserrat-Bold.ttf'),
             '/System/Library/Fonts/AppleSDGothicNeo.ttc'
         ],
         'griun_fromsol': [
             os.path.join(static_fonts_dir, 'Griun_Fromsol.ttf'),
-            os.path.join(static_fonts_dir, 'Griun_Fromsol.woff2'),
+            os.path.join(static_fonts_dir, 'Paperlogy-8ExtraBold.ttf'),
+            os.path.join(static_fonts_dir, 'Montserrat-Bold.ttf'),
             '/System/Library/Fonts/AppleSDGothicNeo.ttc'
         ],
         'katuri': [
             os.path.join(static_fonts_dir, 'Katuri.ttf'),
-            os.path.join(static_fonts_dir, 'Katuri.woff'),
-            '/System/Library/Fonts/AppleSDGothicNeo.ttc'
-        ],
-        'montserrat': [
+            os.path.join(static_fonts_dir, 'Paperlogy-8ExtraBold.ttf'),
             os.path.join(static_fonts_dir, 'Montserrat-Bold.ttf'),
-            '/System/Library/Fonts/AppleSDGothicNeo.ttc',
-            '/System/Library/Fonts/Supplemental/Arial Bold.ttf'
-        ],
-        'tahoma': [
-            os.path.join(static_fonts_dir, 'Tahoma-Bold.ttf'),
-            '/System/Library/Fonts/Supplemental/Tahoma Bold.ttf',
-            '/System/Library/Fonts/Supplemental/Tahoma.ttf',
             '/System/Library/Fonts/AppleSDGothicNeo.ttc'
         ],
         'applesd': [
             '/System/Library/Fonts/AppleSDGothicNeo.ttc',
-            '/System/Library/Fonts/Supplemental/Arial Bold.ttf'
+            os.path.join(static_fonts_dir, 'Paperlogy-8ExtraBold.ttf'),
+            os.path.join(static_fonts_dir, 'GongGothicBold.ttf'),
+            os.path.join(static_fonts_dir, 'Montserrat-Bold.ttf')
+        ],
+        'montserrat': [
+            os.path.join(static_fonts_dir, 'Montserrat-Bold.ttf'),
+            os.path.join(static_fonts_dir, 'Paperlogy-8ExtraBold.ttf'),
+            os.path.join(win_fonts, 'arialbd.ttf'),
+            os.path.join(win_fonts, 'arial.ttf'),
+            '/System/Library/Fonts/Supplemental/Arial Bold.ttf',
+            '/System/Library/Fonts/AppleSDGothicNeo.ttc'
+        ],
+        'tahoma': [
+            os.path.join(static_fonts_dir, 'Tahoma-Bold.ttf'),
+            os.path.join(static_fonts_dir, 'Tahoma-Regular.ttf'),
+            os.path.join(win_fonts, 'tahomabd.ttf'),
+            os.path.join(win_fonts, 'tahoma.ttf'),
+            os.path.join(static_fonts_dir, 'Paperlogy-8ExtraBold.ttf'),
+            '/System/Library/Fonts/Supplemental/Tahoma Bold.ttf',
+            '/System/Library/Fonts/Supplemental/Tahoma.ttf'
         ],
         'arial': [
+            os.path.join(win_fonts, 'arialbd.ttf'),
+            os.path.join(win_fonts, 'arial.ttf'),
             '/System/Library/Fonts/Supplemental/Arial Bold.ttf',
             '/System/Library/Fonts/Supplemental/Arial.ttf',
-            '/System/Library/Fonts/AppleSDGothicNeo.ttc'
+            os.path.join(static_fonts_dir, 'Paperlogy-8ExtraBold.ttf')
         ],
         'roboto': [
             os.path.join(static_fonts_dir, 'Montserrat-Bold.ttf'),
+            os.path.join(static_fonts_dir, 'Paperlogy-8ExtraBold.ttf'),
             '/System/Library/Fonts/Supplemental/Arial Bold.ttf',
             '/System/Library/Fonts/AppleSDGothicNeo.ttc'
         ]
     }
 
-    candidates = font_map.get(str(font_name).lower(), font_map['paperlogy'])
+    if ImageFont is None:
+        return None
+
+    # If text is Korean and user selected a Latin-only font, prioritize Paperlogy to avoid missing glyphs
+    requested_key = str(font_name).lower().strip()
+    if is_korean and requested_key in ('montserrat', 'tahoma', 'arial', 'roboto'):
+        requested_key = 'paperlogy'
+
+    candidates = font_map.get(requested_key, font_map['paperlogy'])
+    loaded_font = None
     for c in candidates:
-        if os.path.isfile(c):
+        abs_c = os.path.abspath(c)
+        if os.path.isfile(abs_c):
             try:
-                return ImageFont.truetype(c, size, index=0)
-            except Exception:
-                pass
-    return ImageFont.load_default()
+                loaded_font = ImageFont.truetype(abs_c, size, index=0)
+                print(f"✅ [Font] Loaded: {os.path.basename(abs_c)} @ {size}px")
+                return loaded_font
+            except Exception as fe:
+                print(f"⚠️ [Font] Failed to load {abs_c}: {fe}")
+
+    # Check any available .ttf in static_fonts_dir (prioritizing Paperlogy)
+    paperlogy_ttf = os.path.join(static_fonts_dir, 'Paperlogy-8ExtraBold.ttf')
+    if os.path.isfile(paperlogy_ttf):
+        try:
+            f = ImageFont.truetype(paperlogy_ttf, size)
+            print(f"✅ [Font] Fallback to Paperlogy @ {size}px")
+            return f
+        except Exception:
+            pass
+
+    if os.path.isdir(static_fonts_dir):
+        for fname in os.listdir(static_fonts_dir):
+            if fname.lower().endswith('.ttf'):
+                fpath = os.path.join(static_fonts_dir, fname)
+                try:
+                    f = ImageFont.truetype(fpath, size)
+                    print(f"✅ [Font] Fallback to {fname} @ {size}px")
+                    return f
+                except Exception:
+                    pass
+
+    print(f"❌ [Font] No usable TTF found in {static_fonts_dir}! Falling back to bitmap default (WILL LOOK WRONG).")
+    try:
+        return ImageFont.load_default()
+    except Exception:
+        return None
+
 
 
 def _hex_to_rgba(hex_str: str, alpha: int = 255) -> tuple:
@@ -312,7 +482,7 @@ def generate_subtitle_overlay_concat(
     W: int,
     H: int,
     is_vertical: bool = False,
-    sub_font: str = 'montserrat',
+    sub_font: str = 'paperlogy',
     sub_size: int = 36,
     sub_color: str = '#ffffff',
     sub_stroke_enabled: bool = True,
@@ -340,34 +510,55 @@ def generate_subtitle_overlay_concat(
     """
     if not subtitle_path or not os.path.isfile(subtitle_path):
         return None
+    if Image is None or ImageDraw is None:
+        return None
 
     try:
         with open(subtitle_path, 'r', encoding='utf-8') as f:
             srt_text = f.read()
 
+        srt_text = srt_text.lstrip('\ufeff').replace('\r\n', '\n').replace('\r', '\n')
         blocks = [b.strip() for b in re.split(r'\n\s*\n', srt_text.strip()) if b.strip()]
         cues = []
+        
+        tc_pattern = re.compile(
+            r'(?:(\d{1,2}):)?(\d{1,2}):(\d{1,2})[,.](\d{1,3})\s*-->\s*(?:(\d{1,2}):)?(\d{1,2}):(\d{1,2})[,.](\d{1,3})'
+        )
+
         for b in blocks:
             lines = [l.strip() for l in b.split('\n') if l.strip()]
-            if len(lines) >= 2:
-                t_line = None
-                text_lines = []
-                for idx, l in enumerate(lines):
-                    if '-->' in l:
-                        t_line = l
-                        text_lines = lines[idx+1:]
-                        break
-                if t_line and text_lines:
-                    m = re.search(r'(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{3})', t_line)
+            if not lines:
+                continue
+            
+            t_line_idx = -1
+            m = None
+            for idx, l in enumerate(lines):
+                if '-->' in l:
+                    m = tc_pattern.search(l)
                     if m:
-                        h1, m1, s1, ms1, h2, m2, s2, ms2 = map(int, m.groups())
-                        st = h1 * 3600 + m1 * 60 + s1 + ms1 / 1000.0
-                        et = h2 * 3600 + m2 * 60 + s2 + ms2 / 1000.0
-                        txt = " ".join(text_lines)
-                        if txt.strip() and et > st:
-                            cues.append((st, et, txt.strip()))
+                        t_line_idx = idx
+                        break
+
+            if m and t_line_idx >= 0:
+                h1, m1, s1, ms1, h2, m2, s2, ms2 = m.groups()
+                h1 = int(h1) if h1 else 0
+                h2 = int(h2) if h2 else 0
+                m1, s1 = int(m1), int(s1)
+                m2, s2 = int(m2), int(s2)
+                
+                ms1_val = float(f"0.{ms1}")
+                ms2_val = float(f"0.{ms2}")
+                
+                st = h1 * 3600 + m1 * 60 + s1 + ms1_val
+                et = h2 * 3600 + m2 * 60 + s2 + ms2_val
+                
+                text_lines = lines[t_line_idx + 1:]
+                txt = " ".join(text_lines).strip()
+                if txt and et > st:
+                    cues.append((st, et, txt))
 
         if not cues:
+            print(f"⚠️ [Subtitle Overlay] No cues parsed from {subtitle_path}")
             return None
 
         # Temp directory next to subtitle file
@@ -375,18 +566,23 @@ def generate_subtitle_overlay_concat(
         overlay_dir = os.path.join(sub_dir, 'sub_overlay_frames')
         os.makedirs(overlay_dir, exist_ok=True)
 
-        # Scale font size with video resolution & match visual preview scale
-        scale_factor = (H / 1080.0) if not is_vertical else (H / 1920.0)
-        base_size = int(sub_size * scale_factor * 1.5)
-        font_size = max(20, base_size)
-        font = _get_subtitle_font(font_size, sub_font)
+        # Scale font size with video resolution & match visual preview scale 1:1
+        if is_vertical:
+            font_size = max(22, int(sub_size * 3.74 * (H / 1920.0)))
+            stroke_w = max(1, int(sub_stroke_width * 3.74 * (H / 1920.0) * 0.5)) if sub_stroke_enabled else 0
+        else:
+            font_size = max(18, int(sub_size * 2.2 * (H / 1080.0)))
+            stroke_w = max(1, int(sub_stroke_width * 2.2 * (H / 1080.0) * 0.5)) if sub_stroke_enabled else 0
+
+        sample_txt = " ".join(c[2] for c in cues[:5])
+        font = _get_subtitle_font(font_size, sub_font, sample_text=sample_txt)
 
         blank_png = os.path.join(overlay_dir, 'blank.png')
         Image.new('RGBA', (W, H), (0, 0, 0, 0)).save(blank_png)
 
-        # Scale padding dynamically based on font size for perfect proportions
-        pad_x = max(18, int(font_size * 0.45))
-        pad_y = max(8, int(font_size * 0.22))
+        # Proportional padding and radius
+        pad_x = max(16, int(font_size * 0.35))
+        pad_y = max(8, int(font_size * 0.18))
 
         # Position calculations
         if sub_pos_y is None:
@@ -394,24 +590,24 @@ def generate_subtitle_overlay_concat(
         bottom_margin = int(H * (float(sub_pos_y) / 100.0))
 
         text_rgba = _hex_to_rgba(sub_color, 255)
-        stroke_w = max(1, int(sub_stroke_width * scale_factor * 1.5)) if sub_stroke_enabled else 0
         stroke_rgba = _hex_to_rgba(sub_stroke_color, 255) if sub_stroke_enabled else None
 
         bg_alpha = int(255 * (float(sub_bg_opacity) / 100.0))
         bg_rgba = _hex_to_rgba(sub_bg_color, bg_alpha)
-        radius = max(6, int(sub_bg_radius * scale_factor * 1.3))
+        radius = max(6, int(sub_bg_radius * (font_size / 50.0)))
 
         # Letter spacing & Line spacing scaling
-        l_space = int(float(sub_letter_spacing) * scale_factor * 1.5)
+        scale_ref = (H / 1080.0) if not is_vertical else (H / 1920.0)
+        l_space = int(float(sub_letter_spacing) * scale_ref * 2.0)
         line_height_multiplier = max(1.0, float(sub_line_spacing)) if sub_line_spacing else 1.25
         max_content_w = int(W * 0.88)
 
-        cue_files = []
-        for idx, (st, et, raw_text) in enumerate(cues):
+        def _render_single_cue(idx, st, et, raw_text):
+            fpath = os.path.join(overlay_dir, f'cue_{idx}.png')
             img = Image.new('RGBA', (W, H), (0, 0, 0, 0))
             draw = ImageDraw.Draw(img)
 
-            # Auto word-wrap into lines based on max_content_w
+            # Auto word-wrap into lines based on whole-string width measurement
             paragraphs = raw_text.split('\n')
             lines = []
             for p in paragraphs:
@@ -421,12 +617,8 @@ def generate_subtitle_overlay_concat(
                 curr_words = []
                 for w in words:
                     test_str = " ".join(curr_words + [w])
-                    # Measure test_str with l_space
-                    tw = 0
-                    for ch in test_str:
-                        cb = draw.textbbox((0, 0), ch, font=font, stroke_width=stroke_w)
-                        tw += (cb[2] - cb[0]) + l_space
-                    tw -= l_space
+                    bb = draw.textbbox((0, 0), test_str, font=font, stroke_width=stroke_w)
+                    tw = bb[2] - bb[0]
                     if tw > max_content_w and curr_words:
                         lines.append(" ".join(curr_words))
                         curr_words = [w]
@@ -438,21 +630,14 @@ def generate_subtitle_overlay_concat(
             if not lines:
                 lines = [raw_text]
 
-            # Measure all lines
+            # Measure all lines cleanly as full strings
             line_metrics = []
             max_line_w = 0
             for l in lines:
-                lw = 0
-                lh = 0
-                for ch in l:
-                    cb = draw.textbbox((0, 0), ch, font=font, stroke_width=stroke_w)
-                    lw += (cb[2] - cb[0]) + l_space
-                    ch_h = cb[3] - cb[1]
-                    if ch_h > lh:
-                        lh = ch_h
-                lw = max(0, lw - l_space)
-                lh = max(lh, int(font_size * 0.9))
-                line_metrics.append((l, lw, lh))
+                bb = draw.textbbox((0, 0), l, font=font, stroke_width=stroke_w)
+                lw = bb[2] - bb[0]
+                lh = bb[3] - bb[1]
+                line_metrics.append((l, lw, lh, bb[0], bb[1]))
                 if lw > max_line_w:
                     max_line_w = lw
 
@@ -461,7 +646,7 @@ def generate_subtitle_overlay_concat(
             box_w = max_line_w + pad_x * 2
             box_h = total_text_h + pad_y * 2
 
-            # X offset
+            # X & Y coordinates
             cx = int(W * 0.5 + W * (float(sub_pos_x) / 100.0))
             y1 = H - bottom_margin
             y0 = y1 - box_h
@@ -472,36 +657,40 @@ def generate_subtitle_overlay_concat(
             if sub_bg_enabled:
                 draw.rounded_rectangle([x0, y0, x1, y1], radius=radius, fill=bg_rgba)
 
-            # 2. Text rendering line by line
+            # 2. Native full-line text rendering with perfect OpenType typography
             curr_y = y0 + pad_y
-            for l_str, lw, lh in line_metrics:
-                start_x = cx - lw // 2
-                cur_x = start_x
-                for ch in l_str:
-                    cb = draw.textbbox((0, 0), ch, font=font, stroke_width=stroke_w)
-                    cw = cb[2] - cb[0]
-                    if sub_stroke_enabled and stroke_w > 0:
-                        draw.text(
-                            (cur_x - cb[0], curr_y - cb[1]),
-                            ch,
-                            font=font,
-                            fill=text_rgba,
-                            stroke_width=stroke_w,
-                            stroke_fill=stroke_rgba
-                        )
-                    else:
-                        draw.text(
-                            (cur_x - cb[0], curr_y - cb[1]),
-                            ch,
-                            font=font,
-                            fill=text_rgba
-                        )
-                    cur_x += cw + l_space
+            for l_str, lw, lh, bb_x0, bb_y0 in line_metrics:
+                lx = cx - lw // 2 - bb_x0
+                ly = curr_y - bb_y0
+                if sub_stroke_enabled and stroke_w > 0:
+                    draw.text(
+                        (lx, ly),
+                        l_str,
+                        font=font,
+                        fill=text_rgba,
+                        stroke_width=stroke_w,
+                        stroke_fill=stroke_rgba
+                    )
+                else:
+                    draw.text(
+                        (lx, ly),
+                        l_str,
+                        font=font,
+                        fill=text_rgba
+                    )
                 curr_y += line_step
 
-            fpath = os.path.join(overlay_dir, f'cue_{idx}.png')
             img.save(fpath)
-            cue_files.append((st, et, fpath))
+            return (idx, st, et, fpath)
+
+        import concurrent.futures
+        workers = min(8, os.cpu_count() or 4)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = [executor.submit(_render_single_cue, idx, st, et, raw_text) for idx, (st, et, raw_text) in enumerate(cues)]
+            results = [f.result() for f in futures]
+
+        results.sort(key=lambda x: x[0])
+        cue_files = [(r[1], r[2], r[3]) for r in results]
 
         abs_blank = os.path.abspath(blank_png).replace('\\', '/')
         concat_txt = os.path.join(overlay_dir, 'sub_concat.txt')
@@ -519,8 +708,9 @@ def generate_subtitle_overlay_concat(
             concat_lines.append(f"duration {dur:.3f}")
             current_time = et
 
+        # Trailing blank frame: 86400s (24h) to guarantee subtitle stream never finishes before long videos
         concat_lines.append(f"file '{abs_blank}'")
-        concat_lines.append("duration 10.0")
+        concat_lines.append("duration 86400.000")
         concat_lines.append(f"file '{abs_blank}'")
 
         with open(concat_txt, 'w', encoding='utf-8') as f:
@@ -582,7 +772,7 @@ def build_command(
                 image_durations = []
                 for m in matches:
                     st_sec = int(m[0])*3600 + int(m[1])*60 + int(m[2]) + int(m[3])/1000.0
-                    et_sec = int(m[4])*3600 + int(m[5])*60 + int(m[7])/1000.0
+                    et_sec = int(m[4])*3600 + int(m[5])*60 + int(m[6]) + int(m[7])/1000.0
                     image_durations.append(max(1.0, round(et_sec - st_sec, 3)))
         except Exception:
             pass
@@ -593,6 +783,121 @@ def build_command(
         effects = custom_effects
     else:
         effects = assign_effects(n, weights)
+
+    # --- IN / OUT REGION SELECTION RENDER (Mark In / Mark Out) ---
+    render_in_val = settings.get('render_in')
+    render_out_val = settings.get('render_out')
+    has_in_out = False
+    render_in = 0.0
+    render_out = None
+
+    if render_in_val is not None:
+        try:
+            render_in = max(0.0, float(render_in_val))
+            has_in_out = True
+        except (ValueError, TypeError):
+            render_in = 0.0
+
+    if render_out_val is not None:
+        try:
+            render_out = max(render_in + 0.3, float(render_out_val))
+            has_in_out = True
+        except (ValueError, TypeError):
+            render_out = None
+
+    if has_in_out and (render_in > 0.0 or render_out is not None):
+        print(f"🎯 [In/Out Render] Slicing timeline from {render_in:.2f}s to {render_out if render_out is not None else 'END'}s...")
+        # 1. Slice Subtitles
+        if subtitle_path and os.path.isfile(subtitle_path):
+            try:
+                with open(subtitle_path, 'r', encoding='utf-8') as fs:
+                    srt_content = fs.read()
+                blocks = [b.strip() for b in re.split(r'\n\s*\n', srt_content.strip()) if b.strip()]
+                tc_pattern = re.compile(
+                    r'(?:(\d{1,2}):)?(\d{1,2}):(\d{1,2})[,.](\d{1,3})\s*-->\s*(?:(\d{1,2}):)?(\d{1,2}):(\d{1,2})[,.](\d{1,3})'
+                )
+                trimmed_cues = []
+                for b in blocks:
+                    lines = [l.strip() for l in b.split('\n') if l.strip()]
+                    m = None
+                    t_idx = -1
+                    for idx, l in enumerate(lines):
+                        if '-->' in l:
+                            m = tc_pattern.search(l)
+                            if m:
+                                t_idx = idx
+                                break
+                    if m and t_idx >= 0:
+                        h1, m1, s1, ms1, h2, m2, s2, ms2 = m.groups()
+                        h1 = int(h1) if h1 else 0
+                        h2 = int(h2) if h2 else 0
+                        m1, s1 = int(m1), int(s1)
+                        m2, s2 = int(m2), int(s2)
+                        st = h1 * 3600 + m1 * 60 + s1 + float(f"0.{ms1}")
+                        et = h2 * 3600 + m2 * 60 + s2 + float(f"0.{ms2}")
+                        txt = " ".join(lines[t_idx + 1:]).strip()
+                        if et > render_in and (render_out is None or st < render_out):
+                            n_st = max(0.0, st - render_in)
+                            n_et = (min(render_out, et) - render_in) if render_out else (et - render_in)
+                            if n_et > n_st:
+                                trimmed_cues.append((n_st, n_et, txt))
+                
+                if trimmed_cues:
+                    trimmed_srt_path = os.path.join(os.path.dirname(subtitle_path), f"trimmed_{int(render_in)}_{int(render_out or 0)}.srt")
+                    with open(trimmed_srt_path, 'w', encoding='utf-8') as fts:
+                        for c_i, (c_st, c_et, c_txt) in enumerate(trimmed_cues):
+                            def _format_srt_time(sec: float) -> str:
+                                h = int(sec // 3600)
+                                m = int((sec % 3600) // 60)
+                                s = int(sec % 60)
+                                ms = int(round((sec - int(sec)) * 1000))
+                                return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+                            fts.write(f"{c_i + 1}\n{_format_srt_time(c_st)} --> {_format_srt_time(c_et)}\n{c_txt}\n\n")
+                    subtitle_path = trimmed_srt_path
+            except Exception as e:
+                print(f"⚠️ Error slicing subtitles for In/Out: {e}")
+
+        # 2. Slice Audio
+        if audio_path and os.path.isfile(audio_path):
+            try:
+                ffmpeg_bin_local = get_ffmpeg_bin()
+                trimmed_audio_path = os.path.join(os.path.dirname(audio_path), f"trimmed_{int(render_in)}_{int(render_out or 0)}.wav")
+                trim_cmd = [ffmpeg_bin_local, '-y', '-ss', str(render_in)]
+                if render_out is not None:
+                    trim_cmd += ['-to', str(render_out)]
+                trim_cmd += ['-i', audio_path, trimmed_audio_path]
+                res_trim = subprocess.run(trim_cmd, capture_output=True, text=True)
+                if res_trim.returncode == 0 and os.path.isfile(trimmed_audio_path):
+                    audio_path = trimmed_audio_path
+            except Exception as e:
+                print(f"⚠️ Error slicing audio for In/Out: {e}")
+
+        # 3. Slice Images & Durations
+        actual_durs = image_durations if (image_durations and len(image_durations) == n) else [duration] * n
+        actual_effs = effects if (effects and len(effects) == n) else ['zoom_in'] * n
+
+        new_images = []
+        new_durs = []
+        new_effs = []
+
+        cur_timeline_st = 0.0
+        for i_idx in range(n):
+            img_d = actual_durs[i_idx]
+            cur_timeline_et = cur_timeline_st + img_d
+            if cur_timeline_et > render_in and (render_out is None or cur_timeline_st < render_out):
+                sub_st = max(render_in, cur_timeline_st)
+                sub_et = min(render_out, cur_timeline_et) if render_out is not None else cur_timeline_et
+                slice_dur = max(0.5, round(sub_et - sub_st, 3))
+                new_images.append(image_paths[i_idx])
+                new_durs.append(slice_dur)
+                new_effs.append(actual_effs[i_idx])
+            cur_timeline_st = cur_timeline_et
+
+        if new_images:
+            image_paths = new_images
+            image_durations = new_durs
+            effects = new_effs
+            n = len(image_paths)
 
     # --- Build command ---
     ffmpeg_bin = get_ffmpeg_bin()
@@ -607,26 +912,27 @@ def build_command(
         cmd += ['-i', audio_path]
     audio_idx = n  # index of audio input stream
 
-    # Generate exact subtitle overlay (Pillow with chosen font, stroke, background, and X/Y/Z positions)
+    # Generate exact subtitle overlay (Pillow pill-capsule style)
     has_sub = subtitle_path is not None and os.path.isfile(subtitle_path)
     concat_txt_path = None
     if has_sub:
-        is_vertical = (aspect == '9:16' or aspect == '4:5')
-        sub_font = str(settings.get('sub_font', 'montserrat'))
-        sub_size = int(settings.get('sub_size', 36))
-        sub_color = str(settings.get('sub_color', '#ffffff'))
+        is_vertical = (H > W)
+        # Support both key names: 'sub_font' (legacy) and 'subtitle_font' (new)
+        sub_font          = str(settings.get('subtitle_font', settings.get('sub_font', 'paperlogy')))
+        sub_size          = int(settings.get('subtitle_font_size', settings.get('sub_size', 36)))
+        sub_color         = str(settings.get('subtitle_color', settings.get('sub_color', '#ffffff')))
         sub_stroke_enabled = str(settings.get('sub_stroke_enabled', 'true')).lower() in ('true', '1', 'yes')
-        sub_stroke_color = str(settings.get('sub_stroke_color', '#000000'))
-        sub_stroke_width = int(settings.get('sub_stroke_width', 4))
-        sub_bg_enabled = str(settings.get('sub_bg_enabled', 'false')).lower() in ('true', '1', 'yes')
-        sub_bg_color = str(settings.get('sub_bg_color', '#000000'))
-        sub_bg_opacity = int(settings.get('sub_bg_opacity', 75))
-        sub_bg_radius = int(settings.get('sub_bg_radius', 12))
-        sub_pos_y = float(settings.get('sub_pos_y', 14.0 if is_vertical else 6.5))
-        sub_pos_x = float(settings.get('sub_pos_x', 0.0))
+        sub_stroke_color  = str(settings.get('sub_stroke_color', '#000000'))
+        sub_stroke_width  = int(settings.get('sub_stroke_width', 4))
+        sub_bg_enabled    = str(settings.get('sub_bg_enabled', 'false')).lower() in ('true', '1', 'yes')
+        sub_bg_color      = str(settings.get('sub_bg_color', '#000000'))
+        sub_bg_opacity    = int(settings.get('sub_bg_opacity', 75))
+        sub_bg_radius     = int(settings.get('sub_bg_radius', 12))
+        sub_pos_y         = float(settings.get('sub_pos_y', 14.0 if is_vertical else 6.5))
+        sub_pos_x         = float(settings.get('sub_pos_x', 0.0))
         sub_letter_spacing = float(settings.get('sub_letter_spacing', 0.0))
-        sub_line_spacing = float(settings.get('sub_line_spacing', 1.25))
-        sub_align = str(settings.get('sub_align', 'center'))
+        sub_line_spacing  = float(settings.get('sub_line_spacing', 1.25))
+        sub_align         = str(settings.get('sub_align', 'center'))
 
         concat_txt_path = generate_subtitle_overlay_concat(
             subtitle_path, W, H,
@@ -647,11 +953,19 @@ def build_command(
             sub_line_spacing=sub_line_spacing,
             sub_align=sub_align
         )
+        if concat_txt_path:
+            print(f"✅ [Subtitle] PIL overlay generated: {concat_txt_path}")
+        else:
+            print("⚠️ [Subtitle] PIL overlay failed — subtitle will be burned via ffmpeg subtitles filter")
 
     sub_input_idx = None
-    if concat_txt_path:
+    use_subtitles_filter = False   # fallback: burn via ffmpeg subtitles= vf
+    if concat_txt_path and os.path.isfile(concat_txt_path):
         cmd += ['-f', 'concat', '-safe', '0', '-i', concat_txt_path]
         sub_input_idx = len(image_paths) + (1 if has_audio else 0)
+    elif has_sub:
+        # Fallback: burn subtitle directly via FFmpeg's subtitles filter
+        use_subtitles_filter = True
 
     # --- filter_complex ---
     filter_parts: List[str] = []
@@ -678,39 +992,47 @@ def build_command(
         total_frames_i = max(1, int(fps * dur_i))
         td_i = min(td, dur_i / 2.0) if use_trans and n > 1 else 0.0
 
-        mag = mag_for_effect.get(effect, zoom_mag)
-        max_w = int(round(W * (1.0 + mag)))
-        max_h = int(round(H * (1.0 + mag)))
+        mag = float(mag_for_effect.get(effect, zoom_mag))
+        step = mag / max(1, total_frames_i)
+        scale_w = W * 2
+        scale_h = H * 2
 
-        # Professional Memory-Safe Motion Engine with Cinematic Sine Easing
         if effect == 'zoom_in':
-            z_f = f"zoompan=z='1.0+{mag:.5f}*(1-cos(PI*on/{total_frames_i}))/2':x='(iw-iw/zoom)/2':y='(ih-ih/zoom)/2':d={total_frames_i}:s={W}x{H}:fps={fps}"
-            base_chain = f"scale={max_w}:{max_h}:force_original_aspect_ratio=increase,crop={max_w}:{max_h},format=yuv420p,setsar=1,{z_f},setsar=1,fps={fps}"
-            parts = [f"[{i}:v]", base_chain]
+            z_expr = f"min(zoom+{step:.7f},{1.0+mag:.5f})"
+            x_expr = "(iw-iw/zoom)/2"
+            y_expr = "(ih-ih/zoom)/2"
         elif effect == 'zoom_out':
-            z_f = f"zoompan=z='{1.0+mag:.5f}-{mag:.5f}*(1-cos(PI*on/{total_frames_i}))/2':x='(iw-iw/zoom)/2':y='(ih-ih/zoom)/2':d={total_frames_i}:s={W}x{H}:fps={fps}"
-            base_chain = f"scale={max_w}:{max_h}:force_original_aspect_ratio=increase,crop={max_w}:{max_h},format=yuv420p,setsar=1,{z_f},setsar=1,fps={fps}"
-            parts = [f"[{i}:v]", base_chain]
-        else:
-            prog = fr"(1-cos(PI*min(1\,n/{total_frames_i})))/2"
-            if effect == 'pan_lr':
-                crop_f = f"crop={W}:{H}:'(in_w-{W})*{prog}':(in_h-{H})/2"
-            elif effect == 'pan_rl':
-                crop_f = f"crop={W}:{H}:'(in_w-{W})*(1-{prog})':(in_h-{H})/2"
-            elif effect == 'tilt_ud':
-                crop_f = f"crop={W}:{H}:(in_w-{W})/2:'(in_h-{H})*{prog}'"
-            elif effect == 'tilt_du':
-                crop_f = f"crop={W}:{H}:(in_w-{W})/2:'(in_h-{H})*(1-{prog})'"
-            else: # static / none
-                crop_f = f"crop={W}:{H}:(in_w-{W})/2:(in_h-{H})/2"
+            z_expr = f"if(lte(on,1),{1.0+mag:.5f},max(zoom-{step:.7f},1.0))"
+            x_expr = "(iw-iw/zoom)/2"
+            y_expr = "(ih-ih/zoom)/2"
+        elif effect == 'pan_lr':
+            z_expr = f"{1.0+mag:.5f}"
+            x_expr = f"(on/{total_frames_i})*(iw-iw/zoom)"
+            y_expr = "(ih-ih/zoom)/2"
+        elif effect == 'pan_rl':
+            z_expr = f"{1.0+mag:.5f}"
+            x_expr = f"(1-on/{total_frames_i})*(iw-iw/zoom)"
+            y_expr = "(ih-ih/zoom)/2"
+        elif effect == 'tilt_ud':
+            z_expr = f"{1.0+mag:.5f}"
+            x_expr = "(iw-iw/zoom)/2"
+            y_expr = f"(on/{total_frames_i})*(ih-ih/zoom)"
+        elif effect == 'tilt_du':
+            z_expr = f"{1.0+mag:.5f}"
+            x_expr = "(iw-iw/zoom)/2"
+            y_expr = f"(1-on/{total_frames_i})*(ih-ih/zoom)"
+        else: # static / none
+            z_expr = "1.0"
+            x_expr = "(iw-iw/zoom)/2"
+            y_expr = "(ih-ih/zoom)/2"
 
-            base_chain = (
-                f"scale={max_w}:{max_h}:force_original_aspect_ratio=increase,"
-                f"crop={max_w}:{max_h},format=yuv420p,setsar=1,"
-                f"loop=loop={total_frames_i}:size=1:start=0,setpts=N/({fps}*TB)"
-            )
-            final_scale = f"scale={W}:{H}:flags=bicubic,setsar=1,fps={fps}"
-            parts = [f"[{i}:v]", base_chain, ",", crop_f, ",", final_scale]
+        base_chain = (
+            f"scale={scale_w}:{scale_h}:force_original_aspect_ratio=increase,"
+            f"crop={scale_w}:{scale_h},"
+            f"zoompan=z='{z_expr}':x='{x_expr}':y='{y_expr}':d={total_frames_i}:s={W}x{H}:fps={fps},"
+            f"format=yuv420p,setsar=1"
+        )
+        parts = [f"[{i}:v]", base_chain]
 
         if use_trans and td_i > 0:
             parts += [
@@ -723,11 +1045,20 @@ def build_command(
 
     # Subtitle burn filter (Modern Semi-Transparent Rounded Capsule Style matching Preview)
     if sub_input_idx is not None:
+        # PIL pill-capsule overlay via PNG concat stream
         if n == 1:
-            filter_parts.append(f"[v0][{sub_input_idx}:v]overlay=0:0:shortest=1[vout]")
+            filter_parts.append(f"[v0][{sub_input_idx}:v]overlay=0:0:eof_action=pass[vout]")
         else:
             concat_in = "".join(f"[v{i}]" for i in range(n))
-            filter_parts.append(f"{concat_in}concat=n={n}:v=1:a=0[v_concat];[v_concat][{sub_input_idx}:v]overlay=0:0:shortest=1[vout]")
+            filter_parts.append(f"{concat_in}concat=n={n}:v=1:a=0[v_concat];[v_concat][{sub_input_idx}:v]overlay=0:0:eof_action=pass[vout]")
+    elif use_subtitles_filter:
+        # Fallback: burn subtitle text via FFmpeg subtitles= filter (no PIL needed)
+        escaped_srt = subtitle_path.replace('\\', '/').replace(':', '\\:')
+        if n == 1:
+            filter_parts.append(f"[v0]subtitles=filename='{escaped_srt}'[vout]")
+        else:
+            concat_in = "".join(f"[v{i}]" for i in range(n))
+            filter_parts.append(f"{concat_in}concat=n={n}:v=1:a=0[v_raw];[v_raw]subtitles=filename='{escaped_srt}'[vout]")
     else:
         if n == 1:
             filter_parts.append("[v0]null[vout]")
@@ -737,34 +1068,83 @@ def build_command(
 
     filter_complex = ";".join(filter_parts)
 
-    cmd += ['-filter_complex', filter_complex]
+        # Use -filter_complex_script to bypass Windows [WinError 206] command length limit
+    filter_script_path = os.path.join(tempfile.gettempdir(), f"filter_{uuid.uuid4().hex[:8]}.txt")
+    with open(filter_script_path, 'w', encoding='utf-8') as f_sc:
+        f_sc.write(filter_complex)
+
+        ffmpeg_bin = get_ffmpeg_bin()
+    cmd += get_filter_complex_file_arg(ffmpeg_bin, filter_script_path)
     cmd += ['-map', '[vout]']
 
     if has_audio:
         cmd += ['-map', f'{audio_idx}:a', '-c:a', 'aac', '-b:a', '128k', '-shortest']
 
-    codec = str(settings.get('codec', 'h264')).lower()
-    if codec in ('hevc', 'h265', 'libx265'):
+    # Turbo GPU & CPU Acceleration Engine
+    hw_info = detect_best_hw_encoder(ffmpeg_bin)
+    user_codec = str(settings.get('codec', 'auto')).lower()
+
+    if user_codec in ('nvenc', 'nvidia', 'h264_nvenc'):
+        cmd += [
+            '-c:v', 'h264_nvenc',
+            '-preset', 'fast',
+            '-cq', '23',
+            '-pix_fmt', 'yuv420p',
+            '-threads', '0',
+            '-r', str(fps),
+            output_path,
+        ]
+    elif user_codec in ('qsv', 'intel', 'h264_qsv'):
+        cmd += [
+            '-c:v', 'h264_qsv',
+            '-preset', 'veryfast',
+            '-global_quality', '23',
+            '-pix_fmt', 'yuv420p',
+            '-threads', '0',
+            '-r', str(fps),
+            output_path,
+        ]
+    elif user_codec in ('amf', 'amd', 'h264_amf'):
+        cmd += [
+            '-c:v', 'h264_amf',
+            '-quality', 'speed',
+            '-pix_fmt', 'yuv420p',
+            '-threads', '0',
+            '-r', str(fps),
+            output_path,
+        ]
+    elif user_codec in ('hevc', 'h265', 'libx265'):
         cmd += [
             '-c:v', 'libx265',
-            '-preset', preset,
+            '-preset', 'veryfast',
             '-crf', str(crf),
             '-pix_fmt', 'yuv420p',
             '-tag:v', 'hvc1',
+            '-threads', '0',
+            '-r', str(fps),
+            output_path,
+        ]
+    elif user_codec == 'h264_cpu':
+        cmd += [
+            '-c:v', 'libx264',
+            '-preset', 'veryfast',
+            '-crf', str(crf),
+            '-pix_fmt', 'yuv420p',
+            '-threads', '0',
             '-r', str(fps),
             output_path,
         ]
     else:
+        # Auto Turbo Hardware Acceleration (NVENC / QSV / AMF / VideoToolbox)
         cmd += [
-            '-c:v', 'libx264',
-            '-preset', preset,
-            '-crf', str(crf),
+            '-c:v', hw_info['codec'],
+            *hw_info['extra_args'],
             '-pix_fmt', 'yuv420p',
+            '-threads', '0',
             '-r', str(fps),
             output_path,
         ]
 
-    total_video_duration = n * duration
     return cmd, total_video_duration
 
 
@@ -772,7 +1152,7 @@ def build_command(
 # Main render entry point
 # ---------------------------------------------------------------------------
 
-def render_video(
+def render_video_single_pass(
     image_paths: List[str],
     audio_path: Optional[str],
     output_path: str,
@@ -794,13 +1174,15 @@ def render_video(
     progress_callback(0, "Starting FFmpeg...")
 
     def run_ffmpeg_proc(current_cmd):
-        proc = subprocess.Popen(
-            current_cmd,
+        _kwargs = dict(
             stderr=subprocess.PIPE,
             stdout=subprocess.DEVNULL,
             universal_newlines=True,
             bufsize=1
         )
+        if sys.platform == 'win32':
+            _kwargs['creationflags'] = 0x08000000  # CREATE_NO_WINDOW
+        proc = subprocess.Popen(current_cmd, **_kwargs)
 
         stderr_lines: List[str] = []
 
@@ -822,24 +1204,51 @@ def render_video(
 
     code, err_lines = run_ffmpeg_proc(cmd)
 
-    # Fallback to software CPU libx264 if hardware encoder failed
-    if code != 0 and '-c:v' in cmd and 'h264_videotoolbox' in cmd:
-        print("⚠️ [FFmpeg] Hardware encoder failed, retrying with software libx264...")
-        cpu_cmd = []
-        skip_next = False
-        for idx, token in enumerate(cmd):
-            if skip_next:
-                skip_next = False
-                continue
-            if token == '-c:v' and idx + 1 < len(cmd) and cmd[idx + 1] == 'h264_videotoolbox':
-                cpu_cmd.extend(['-c:v', 'libx264', '-preset', 'medium', '-crf', '23'])
-                skip_next = True
-            elif token == '-b:v' and idx + 1 < len(cmd):
-                skip_next = True
-            else:
-                cpu_cmd.append(token)
+    # Automatic Universal Fallback if GPU hardware encoder (NVENC / QSV / AMF) encounters a driver error
+    hw_codecs = ['h264_nvenc', 'h264_qsv', 'h264_amf', 'h264_videotoolbox']
+    used_hw = next((c for c in hw_codecs if c in cmd), None)
 
-        code, err_lines = run_ffmpeg_proc(cpu_cmd)
+    if code != 0 and used_hw:
+        print(f"⚠️ [FFmpeg] GPU encoder {used_hw} encountered driver limit. Auto-retrying with Intel QSV / CPU Multi-Core...")
+        # 1. Try Intel QSV if NVENC failed on Windows
+        if used_hw == 'h264_nvenc' and platform.system() == 'Windows':
+            qsv_cmd = []
+            skip = False
+            for idx, token in enumerate(cmd):
+                if skip:
+                    skip = False
+                    continue
+                if token == '-c:v' and idx + 1 < len(cmd) and cmd[idx + 1] == 'h264_nvenc':
+                    qsv_cmd.extend(['-c:v', 'h264_qsv', '-preset', 'veryfast', '-global_quality', '23'])
+                    skip = True
+                elif token in ('-preset', '-cq', '-b:v') and idx + 1 < len(cmd):
+                    skip = True
+                else:
+                    qsv_cmd.append(token)
+            
+            code, err_lines = run_ffmpeg_proc(qsv_cmd)
+            if code == 0:
+                print("✅ [Auto-Fallback] Successfully rendered using Intel QuickSync GPU!")
+
+        # 2. If still failing, fallback to CPU Multi-Core
+        if code != 0:
+            cpu_cmd = []
+            skip = False
+            for idx, token in enumerate(cmd):
+                if skip:
+                    skip = False
+                    continue
+                if token == '-c:v' and idx + 1 < len(cmd) and cmd[idx + 1] in hw_codecs:
+                    cpu_cmd.extend(['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-threads', '0'])
+                    skip = True
+                elif token in ('-preset', '-cq', '-global_quality', '-quality', '-b:v') and idx + 1 < len(cmd):
+                    skip = True
+                else:
+                    cpu_cmd.append(token)
+
+            code, err_lines = run_ffmpeg_proc(cpu_cmd)
+            if code == 0:
+                print("✅ [Auto-Fallback] Successfully rendered using CPU Multi-Core Engine!")
 
     if code != 0:
         err_tail = "\n".join(err_lines[-30:])
@@ -849,3 +1258,272 @@ def render_video(
         )
 
     progress_callback(100, "Done!")
+
+
+def render_video_chunked(
+    images: List[str],
+    audio_path: Optional[str],
+    output_path: str,
+    settings: Dict[str, Any],
+    progress_callback: Callable[[int, str], None],
+    subtitle_path: Optional[str] = None
+) -> None:
+    """
+    Renders large slideshows (>12 slides) in memory-safe chunks (O(1) Constant RAM).
+    Prevents FFmpeg [Cannot allocate memory] errors on long videos.
+    """
+    import shutil
+    CHUNK_SIZE = 10
+    total_imgs = len(images)
+    chunks = [images[i:i + CHUNK_SIZE] for i in range(0, total_imgs, CHUNK_SIZE)]
+    num_chunks = len(chunks)
+
+    temp_dir = tempfile.mkdtemp(prefix="slideshow_chunks_")
+    chunk_video_files = []
+
+    try:
+        # 1. Render each chunk independently
+        for idx, chunk_imgs in enumerate(chunks):
+            chunk_out = os.path.join(temp_dir, f"chunk_{idx:04d}.mp4")
+            chunk_video_files.append(chunk_out)
+
+            start_idx = idx * CHUNK_SIZE
+            end_idx = start_idx + len(chunk_imgs)
+
+            img_durs = settings.get('image_durations')
+            chunk_durs = img_durs[start_idx:end_idx] if img_durs else None
+
+            all_effects = settings.get('effects') or settings.get('image_effects')
+            chunk_effects = all_effects[start_idx:end_idx] if all_effects else None
+
+            chunk_settings = dict(settings)
+            if chunk_durs:
+                chunk_settings['image_durations'] = chunk_durs
+            if chunk_effects:
+                chunk_settings['effects'] = chunk_effects
+                chunk_settings['image_effects'] = chunk_effects
+
+            base_pct = int((idx / num_chunks) * 85)
+            pct_span = int(85 / num_chunks)
+
+            def chunk_progress(p, msg):
+                actual_pct = base_pct + int(p * pct_span / 100)
+                progress_callback(min(85, actual_pct), f"[Đoạn {idx+1}/{num_chunks}] {msg}")
+
+            render_video_single_pass(
+                image_paths=chunk_imgs,
+                audio_path=None,
+                output_path=chunk_out,
+                settings=chunk_settings,
+                progress_callback=chunk_progress,
+                subtitle_path=None
+            )
+
+        # 2. Concat all chunks seamlessly using concat demuxer
+        progress_callback(86, "Đang ghép các đoạn video mượt mà (Lossless Concat)...")
+        concat_list_file = os.path.join(temp_dir, "concat_list.txt")
+        with open(concat_list_file, "w", encoding="utf-8") as f_list:
+            for c_file in chunk_video_files:
+                escaped_path = c_file.replace('\\', '/')
+                f_list.write(f"file '{escaped_path}'\n")
+
+        merged_video_path = os.path.join(temp_dir, "merged_visual.mp4")
+        ffmpeg_bin = get_ffmpeg_bin()
+
+        cmd_concat = [
+            ffmpeg_bin, '-y',
+            '-f', 'concat',
+            '-safe', '0',
+            '-i', concat_list_file,
+            '-c', 'copy',
+            merged_video_path
+        ]
+        _run_kw = {}
+        if sys.platform == 'win32':
+            _run_kw['creationflags'] = 0x08000000  # CREATE_NO_WINDOW
+        res = subprocess.run(cmd_concat, capture_output=True, text=True, **_run_kw)
+        if res.returncode != 0:
+            raise RuntimeError(f"Concat failed: {res.stderr}")
+
+
+        # 3. Final Pass: Attach Audio & Burn Subtitles (if any)
+        progress_callback(90, "Đang hoàn tất âm thanh & phụ đề...")
+
+        ffmpeg_bin = get_ffmpeg_bin()
+        has_audio = bool(audio_path and os.path.isfile(audio_path))
+        has_subs  = bool(subtitle_path and os.path.isfile(subtitle_path))
+
+        # Build input list with tracked indices
+        final_cmd = [ffmpeg_bin, '-y']
+        final_cmd += ['-i', merged_video_path]   # index 0: video
+        input_idx = 1
+
+        audio_input_idx = None
+        if has_audio:
+            final_cmd += ['-i', audio_path]
+            audio_input_idx = input_idx
+            input_idx += 1
+
+        # Generate subtitle overlay frames (PIL pill-capsule style)
+        concat_sub_txt = None
+        if has_subs:
+            aspect = settings.get('aspect_ratio', '16:9')
+            res = settings.get('resolution', '1080p')
+            W_sub, H_sub = build_resolution(aspect, res)
+            is_vert = (H_sub > W_sub)
+            sub_font = str(settings.get('subtitle_font', settings.get('sub_font', 'paperlogy')))
+            sub_size = int(settings.get('subtitle_font_size', settings.get('sub_size', 36)))
+            sub_color = str(settings.get('subtitle_color', settings.get('sub_color', '#FFFFFF')))
+            sub_stroke_enabled = str(settings.get('sub_stroke_enabled', 'true')).lower() in ('true', '1', 'yes')
+            sub_stroke_color = str(settings.get('sub_stroke_color', '#000000'))
+            sub_stroke_width = int(settings.get('sub_stroke_width', 4))
+            sub_bg_enabled = str(settings.get('sub_bg_enabled', 'false')).lower() in ('true', '1', 'yes')
+            sub_bg_color = str(settings.get('sub_bg_color', '#000000'))
+            sub_bg_opacity = int(settings.get('sub_bg_opacity', 75))
+            sub_bg_radius = int(settings.get('sub_bg_radius', 12))
+            sub_pos_y = float(settings.get('sub_pos_y', 14.0 if is_vert else 6.5))
+            sub_pos_x = float(settings.get('sub_pos_x', 0.0))
+            sub_letter_spacing = float(settings.get('sub_letter_spacing', 0.0))
+            sub_line_spacing = float(settings.get('sub_line_spacing', 1.25))
+            sub_align = str(settings.get('sub_align', 'center'))
+
+            concat_sub_txt = generate_subtitle_overlay_concat(
+                subtitle_path, W_sub, H_sub,
+                is_vertical=is_vert,
+                sub_font=sub_font,
+                sub_size=sub_size,
+                sub_color=sub_color,
+                sub_stroke_enabled=sub_stroke_enabled,
+                sub_stroke_color=sub_stroke_color,
+                sub_stroke_width=sub_stroke_width,
+                sub_bg_enabled=sub_bg_enabled,
+                sub_bg_color=sub_bg_color,
+                sub_bg_opacity=sub_bg_opacity,
+                sub_bg_radius=sub_bg_radius,
+                sub_pos_y=sub_pos_y,
+                sub_pos_x=sub_pos_x,
+                sub_letter_spacing=sub_letter_spacing,
+                sub_line_spacing=sub_line_spacing,
+                sub_align=sub_align
+            )
+            if concat_sub_txt:
+                print(f"✅ [Chunked Final Pass] PIL overlay generated: {concat_sub_txt}")
+            else:
+                print(f"⚠️ [Chunked Final Pass] PIL overlay failed — fallback to ffmpeg subtitles filter")
+
+        sub_input_idx = None
+        use_subtitles_filter = False
+        if concat_sub_txt and os.path.isfile(concat_sub_txt):
+            final_cmd += ['-f', 'concat', '-safe', '0', '-i', concat_sub_txt]
+            sub_input_idx = input_idx
+            input_idx += 1
+        elif has_subs:
+            use_subtitles_filter = True
+
+        # ---- Map streams (ALWAYS explicit) ----
+        need_reencode = False
+        if sub_input_idx is not None:
+            # Overlay subtitle PNG frames onto video
+            final_cmd += [
+                '-filter_complex',
+                f'[0:v][{sub_input_idx}:v]overlay=0:0:eof_action=pass[vout]',
+                '-map', '[vout]'
+            ]
+            need_reencode = True
+        elif use_subtitles_filter:
+            escaped_srt = subtitle_path.replace('\\', '/').replace(':', '\\:')
+            final_cmd += [
+                '-vf', f"subtitles='{escaped_srt}'",
+                '-map', '0:v'
+            ]
+            need_reencode = True
+        else:
+            # Always map video stream 0 explicitly
+            final_cmd += ['-map', '0:v']
+
+        if audio_input_idx is not None:
+            final_cmd += ['-map', f'{audio_input_idx}:a', '-c:a', 'aac', '-b:a', '128k', '-shortest']
+
+        # ---- Video codec ----
+        if need_reencode:
+            hw_info = detect_best_hw_encoder(ffmpeg_bin)
+            user_codec = str(settings.get('codec', 'auto')).lower()
+            if user_codec in ('nvenc', 'nvidia', 'h264_nvenc'):
+                final_cmd += ['-c:v', 'h264_nvenc', '-preset', 'fast', '-cq', '23', '-pix_fmt', 'yuv420p', '-threads', '0']
+            else:
+                final_cmd += ['-c:v', hw_info['codec'], *hw_info['extra_args'], '-pix_fmt', 'yuv420p', '-threads', '0']
+        else:
+            # No subtitle re-encode needed — lossless copy
+            final_cmd += ['-c:v', 'copy']
+
+        final_cmd.append(output_path)
+
+        _run_kw = {}
+        if sys.platform == 'win32':
+            _run_kw['creationflags'] = 0x08000000  # CREATE_NO_WINDOW
+
+        res_final = subprocess.run(final_cmd, capture_output=True, text=True, **_run_kw)
+        if res_final.returncode != 0:
+            # Universal CPU fallback
+            print("⚠️ [Final Pass] Primary failed, retrying with CPU libx264...")
+            cpu_final_cmd = []
+            skip = False
+            for idx, token in enumerate(final_cmd):
+                if skip:
+                    skip = False
+                    continue
+                if token == '-c:v' and idx + 1 < len(final_cmd) and final_cmd[idx + 1] not in ('copy', 'libx264'):
+                    cpu_final_cmd.extend(['-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-threads', '0'])
+                    skip = True
+                elif token in ('-preset', '-cq', '-b:v', '-global_quality', '-quality', '-allow_sw', '-tune', '-rc') and idx + 1 < len(final_cmd):
+                    skip = True
+                else:
+                    cpu_final_cmd.append(token)
+            res_final = subprocess.run(cpu_final_cmd, capture_output=True, text=True, **_run_kw)
+
+            if res_final.returncode != 0:
+                raise RuntimeError(f"Final merge failed: {res_final.stderr}")
+
+
+        progress_callback(100, "Done!")
+
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def render_video(
+    image_paths: List[str],
+    audio_path: Optional[str],
+    output_path: str,
+    settings: Dict[str, Any],
+    progress_callback: Callable[[int, str], None],
+    subtitle_path: Optional[str] = None
+) -> None:
+    """
+    Intelligently route to Single-Pass Turbo Engine (<= 250 slides) or Chunked Engine (> 250 slides).
+    Single-pass eliminates 100% redundant re-encoding passes and renders 171+ slides in minutes.
+    """
+    images = sort_images(image_paths)
+    if not images:
+        raise ValueError("No images provided")
+
+    if len(images) > 250:
+        print(f"📦 [Render Router] Large slideshow ({len(images)} slides > 250) -> Chunked Engine")
+        render_video_chunked(
+            images=images,
+            audio_path=audio_path,
+            output_path=output_path,
+            settings=settings,
+            progress_callback=progress_callback,
+            subtitle_path=subtitle_path
+        )
+    else:
+        print(f"🚀 [Render Router] Slideshow ({len(images)} slides <= 250) -> Single-Pass Turbo Engine")
+        render_video_single_pass(
+            image_paths=images,
+            audio_path=audio_path,
+            output_path=output_path,
+            settings=settings,
+            progress_callback=progress_callback,
+            subtitle_path=subtitle_path
+        )

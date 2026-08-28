@@ -879,28 +879,29 @@ input[type=range]::-webkit-slider-thumb:hover {
 }
 .monitor-subtitle {
   position: absolute;
-  bottom: 6%;
-  left: 4%;
-  right: 4%;
+  bottom: 6.5%;
+  left: 6%;
+  right: 6%;
   text-align: center;
   color: #ffffff;
-  font-size: 16px;
   font-weight: 700;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: 'Paperlogy', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   pointer-events: none;
-  background: rgba(0, 0, 0, 0.7);
-  padding: 5px 12px;
-  border-radius: 6px;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
   width: fit-content;
-  max-width: 92%;
+  max-width: 88%;
   margin: 0 auto;
-  line-height: 1.35;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6);
+  line-height: 1.25;
+  box-sizing: border-box;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
 }
 .preview-screen.aspect-9-16 .monitor-subtitle,
 .preview-screen.aspect-4-5 .monitor-subtitle {
   bottom: 14%;
-  font-size: 15px;
 }
 
 .monitor-controls-bar {
@@ -1071,6 +1072,84 @@ input[type=range]::-webkit-slider-thumb:hover {
   height: 10px;
   background: #ef4444;
   clip-path: polygon(0% 0%, 100% 0%, 50% 100%);
+}
+
+/* In/Out Selection Range Overlay */
+.tl-in-out-overlay {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  z-index: 50;
+}
+
+.tl-in-out-dim {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(1px);
+  pointer-events: auto;
+}
+
+.tl-in-out-range-box {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-top: 2px solid #38bdf8;
+  border-bottom: 2px solid #38bdf8;
+  pointer-events: none;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.25);
+}
+
+.tl-in-out-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(56, 189, 248, 0.08);
+  pointer-events: none;
+}
+
+.tl-in-handle, .tl-out-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 16px;
+  background: #0284c7;
+  cursor: ew-resize;
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  z-index: 55;
+  transition: background 0.15s;
+}
+
+.tl-in-handle:hover, .tl-out-handle:hover {
+  background: #38bdf8;
+}
+
+.tl-in-handle {
+  left: 0;
+  border-radius: 4px 0 0 4px;
+}
+
+.tl-out-handle {
+  right: 0;
+  border-radius: 0 4px 4px 0;
+}
+
+.tl-handle-tag {
+  font-size: 8px;
+  font-weight: 900;
+  color: #ffffff;
+  padding-top: 3px;
+  user-select: none;
+  letter-spacing: -0.5px;
 }
 
 /* Time Ruler */

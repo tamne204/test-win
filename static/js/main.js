@@ -34,6 +34,10 @@ const state = {
   playTimer:    null,
   isDraggingResizer: false,
   draggedSceneIdx: null,
+  markIn:       null,   // In-Point selection time in seconds
+  markOut:      null,   // Out-Point selection time in seconds
+  isDraggingInHandle: false,
+  isDraggingOutHandle: false,
 };
 
 // ─── DOM refs ─────────────────────────────────────────────────────────────────
@@ -188,8 +192,29 @@ window.addEventListener('keydown', e => {
     return;
   }
 
-  // Key 'X' or 'Delete' -> Delete currently selected item
-  if (e.key === 'x' || e.key === 'X' || e.key === 'Delete') {
+  // Key 'I' -> Mark In Point at Playhead
+  if (e.key === 'i' || e.key === 'I') {
+    e.preventDefault();
+    if (typeof setMarkIn === 'function') setMarkIn();
+    return;
+  }
+
+  // Key 'O' -> Mark Out Point at Playhead
+  if (e.key === 'o' || e.key === 'O') {
+    e.preventDefault();
+    if (typeof setMarkOut === 'function') setMarkOut();
+    return;
+  }
+
+  // Key 'Alt+X' -> Clear In/Out Range
+  if (e.altKey && (e.key === 'x' || e.key === 'X')) {
+    e.preventDefault();
+    if (typeof clearMarkInOut === 'function') clearMarkInOut();
+    return;
+  }
+
+  // Key 'Delete' or 'Backspace' -> Delete currently selected item
+  if (e.key === 'Delete' || e.key === 'Backspace') {
     e.preventDefault();
     deleteSelectedTimelineItem();
     return;
@@ -624,9 +649,15 @@ if (btnParseScript) {
     btnParseScript.disabled = true;
     btnParseScript.textContent = '⏳ Đang dùng Gemini 3.6 Flash căn chỉnh...';
 
-    await runAcousticForcedAlignment(raw);
-    btnParseScript.textContent = '⚡ Đồng bộ Kịch bản sang Timeline';
-    btnParseScript.disabled = false;
+    try {
+      await runAcousticForcedAlignment(raw);
+    } catch (err) {
+      console.error('Lỗi Forced Alignment:', err);
+      showToast('❌ Lỗi đồng bộ kịch bản: ' + (err.message || err), 'error', 5000);
+    } finally {
+      btnParseScript.textContent = '⚡ Đồng bộ Kịch bản sang Timeline';
+      btnParseScript.disabled = false;
+    }
   });
 }
 
@@ -716,7 +747,7 @@ async function runAutoWriteSrt() {
     const inpGeminiKey = $('inp-gemini-key');
 
     let engineType = engineSel ? engineSel.value : 'gemini-cloud-multimodal';
-    let modelSize = 'default';
+    let modelSize = 'base';
     const demucsVal = false;
     const promptVal = inpInitPrompt ? inpInitPrompt.value : '';
     const geminiKeyVal = (inpGeminiKey ? inpGeminiKey.value.trim() : '') || localStorage.getItem('gemini_api_key') || '';
@@ -742,7 +773,9 @@ async function runAutoWriteSrt() {
       ttsJobId: state.ttsJobId
     });
 
-    if (state.audio) {
+    if (state.activeTab === 'tts' && state.ttsJobId) {
+      fd.append('tts_job_id', state.ttsJobId);
+    } else if (state.audio) {
       fd.append('audio', state.audio);
     } else if (state.ttsJobId) {
       fd.append('tts_job_id', state.ttsJobId);
@@ -922,14 +955,15 @@ async function runForcedAlignment() {
       if (cardProgPct) cardProgPct.textContent = '10%';
       if (cardProgFill) cardProgFill.style.width = '10%';
     }
-    setAutoSubProgress(true);
-
     const engine = state.forcedAlignEngine || 'gemini';
+    const selFaLang = $('sel-fa-lang');
+    const faLang = (selFaLang ? selFaLang.value : 'auto') || (selSubLang ? selSubLang.value : 'auto');
+
     const formData = new FormData();
     if (audio) formData.append('audio', audio);
     if (ttsJobId) formData.append('tts_job_id', ttsJobId);
     formData.append('script_text', scriptText);
-    formData.append('language', (selSubLang ? selSubLang.value : 'vi') || 'vi');
+    formData.append('language', faLang);
     formData.append('engine', engine);
 
     const key = (inpGeminiKey ? inpGeminiKey.value.trim() : '') || (typeof getStoredGeminiKey === 'function' ? getStoredGeminiKey() : '');
@@ -1059,14 +1093,14 @@ c2TabBtns.forEach(btn => {
   });
 });
 
-state.forcedAlignEngine = 'gemini';
+state.forcedAlignEngine = 'whisperx';
 const faEngineBtns = $$('#forced-align-engine-group .btn-option');
 faEngineBtns.forEach(btn => {
   btn.addEventListener('click', () => {
     faEngineBtns.forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    state.forcedAlignEngine = btn.dataset.engine || 'gemini';
-    const engName = state.forcedAlignEngine === 'gemini' ? '☁️ Gemini Cloud (2-3s)' : '💻 Stable-Whisper (Offline)';
+    state.forcedAlignEngine = btn.dataset.engine || 'whisperx';
+    const engName = state.forcedAlignEngine === 'whisperx' ? '🎯 WhisperX (Khuyên Dùng - Wav2Vec2 CTC)' : '☁️ Gemini Cloud (2-3s)';
     showToast(`Đã chọn Engine: ${engName}`, 'info');
   });
 });
@@ -1236,7 +1270,14 @@ async function runAcousticForcedAlignment(scriptRawText, specificAudioPath = nul
   fd.append('image_count', state.images.length);
   fd.append('language', selSubLang ? selSubLang.value : 'auto');
 
-  if (state.audio) {
+  const geminiKeyVal = (typeof inpGeminiKey !== 'undefined' && inpGeminiKey ? inpGeminiKey.value.trim() : '') || localStorage.getItem('gemini_api_key') || '';
+  if (geminiKeyVal) {
+    fd.append('gemini_api_key', geminiKeyVal);
+  }
+
+  if (state.activeTab === 'tts' && state.ttsJobId) {
+    fd.append('tts_job_id', state.ttsJobId);
+  } else if (state.audio) {
     fd.append('audio', state.audio);
   } else if (state.ttsJobId) {
     fd.append('tts_job_id', state.ttsJobId);
@@ -1474,14 +1515,20 @@ function updateDurationsHidden() {
 
 function generateSrtFromSubtitles() {
   const lines = [];
-  state.subtitles.forEach((sub, idx) => {
-    if (sub.text && sub.text.trim()) {
-      lines.push(`${idx + 1}`);
-      lines.push(`${formatSrtTime(sub.start)} --> ${formatSrtTime(sub.end)}`);
-      lines.push(sub.text.trim());
-      lines.push('');
-    }
-  });
+  if (Array.isArray(state.subtitles)) {
+    state.subtitles.forEach((sub, idx) => {
+      if (!sub) return;
+      const text = (sub.text || sub.content || sub.subtitle || sub.trans_text || sub.orig_text || sub.origText || '').trim();
+      const start = (typeof sub.start === 'number') ? sub.start : parseFloat(sub.start || sub.start_time || 0);
+      const end = (typeof sub.end === 'number') ? sub.end : parseFloat(sub.end || sub.end_time || (start + 2.0));
+      if (text) {
+        lines.push(`${idx + 1}`);
+        lines.push(`${formatSrtTime(start)} --> ${formatSrtTime(end)}`);
+        lines.push(text);
+        lines.push('');
+      }
+    });
+  }
   return lines.join('\n');
 }
 
@@ -1584,7 +1631,16 @@ function renderTimelineUI() {
     tlRuler.appendChild(mark);
   }
 
-  // 2. Render Track 1: Target / Translated Subtitles (VI)
+function getSubLanguageFlag(text) {
+  if (!text) return '🌐';
+  if (/[\uac00-\ud7a3\u1100-\u11ff\u3130-\u318f]/.test(text)) return '🇰🇷';
+  if (/[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i.test(text)) return '🇻🇳';
+  if (/[\u3040-\u30ff]/.test(text)) return '🇯🇵';
+  if (/[\u4e00-\u9fff]/.test(text)) return '🇨🇳';
+  return '🇺🇸';
+}
+
+  // 2. Render Track 1: Target / Translated Subtitles (VI/KO/EN)
   tlSubTransTrack.innerHTML = '';
   state.subtitles.forEach((sub, idx) => {
     if (!sub.text) return;
@@ -1594,7 +1650,8 @@ function renderTimelineUI() {
     chip.style.left = (sub.start * pxPerSec) + 'px';
     chip.style.width = Math.max(25, (dur * pxPerSec) - 3) + 'px';
     chip.title = `${formatSecs(sub.start)} - ${formatSecs(sub.end)}: ${sub.text}`;
-    chip.innerHTML = `<span class="tl-sub-icon">🇻🇳</span> <span class="tl-sub-text-label">${sub.text}</span>`;
+    const flagIcon = getSubLanguageFlag(sub.text);
+    chip.innerHTML = `<span class="tl-sub-icon">${flagIcon}</span> <span class="tl-sub-text-label">${sub.text}</span>`;
     
     // Left & Right Trim Resizers
     const resizerL = document.createElement('div');
@@ -2810,6 +2867,164 @@ function updatePlayhead(sec) {
   tlPlayhead.style.left = leftPx + 'px';
 }
 
+// ─── Timeline In/Out Selection (Mark In / Mark Out) ───────────────────────────
+
+function setMarkIn(time) {
+  const t = (typeof time === 'number') ? time : state.currentTime;
+  if (state.markOut !== null && t >= state.markOut) {
+    state.markOut = null;
+  }
+  state.markIn = Math.max(0, Math.round(t * 100) / 100);
+  updateInOutOverlay();
+  showToast(`📥 Đã đặt mốc In: ${formatSecs(state.markIn)}`, 'info', 2000);
+}
+
+function setMarkOut(time) {
+  let t = (typeof time === 'number') ? time : state.currentTime;
+  if (state.markIn === null) {
+    state.markIn = 0.0;
+  }
+  if (t <= state.markIn) {
+    t = state.markIn + 1.0;
+  }
+  state.markOut = Math.round(t * 100) / 100;
+  updateInOutOverlay();
+  const dur = (state.markOut - state.markIn).toFixed(1);
+  showToast(`📤 Đã đặt mốc Out: ${formatSecs(state.markOut)} (Vùng chọn: ~${dur}s)`, 'info', 2500);
+}
+
+function clearMarkInOut() {
+  state.markIn = null;
+  state.markOut = null;
+  updateInOutOverlay();
+  showToast('✖ Đã xóa vùng chọn In/Out', 'info', 1800);
+}
+
+function updateInOutOverlay() {
+  const overlay = $('tl-in-out-overlay');
+  const badge = $('tl-in-out-badge');
+  const btnClear = $('btn-tl-clear-in-out');
+  const btnRender = $('btn-tl-render-direct');
+  if (!overlay) return;
+
+  if (state.markIn === null && state.markOut === null) {
+    overlay.style.display = 'none';
+    if (badge) badge.style.display = 'none';
+    if (btnClear) btnClear.style.display = 'none';
+    if (btnRender) btnRender.innerHTML = '🎬 Xuất Video';
+    return;
+  }
+
+  overlay.style.display = 'block';
+  if (btnClear) btnClear.style.display = 'inline-block';
+
+  const pxPerSec = state.zoomPxPerSec;
+  const headerW = 105;
+  const inT = state.markIn !== null ? state.markIn : 0.0;
+  
+  // Total timeline duration
+  const imgTotalDur = state.imagesData.reduce((acc, d) => acc + d.duration, 0);
+  const subTotalDur = state.subtitles.length > 0 ? state.subtitles[state.subtitles.length - 1].end : 0;
+  const totalDur = Math.max(imgTotalDur, subTotalDur, 1.0);
+  const outT = state.markOut !== null ? state.markOut : totalDur;
+
+  const inPx = headerW + (inT * pxPerSec);
+  const outPx = headerW + (outT * pxPerSec);
+  const rangeW = Math.max(16, outPx - inPx);
+
+  // Position Left Dim
+  const dimL = $('tl-in-out-dim-left');
+  if (dimL) {
+    dimL.style.left = headerW + 'px';
+    dimL.style.width = Math.max(0, inPx - headerW) + 'px';
+  }
+
+  // Position Range Box
+  const rangeBox = $('tl-in-out-range-box');
+  if (rangeBox) {
+    rangeBox.style.left = inPx + 'px';
+    rangeBox.style.width = rangeW + 'px';
+  }
+
+  // Position Right Dim
+  const dimR = $('tl-in-out-dim-right');
+  if (dimR) {
+    dimR.style.left = outPx + 'px';
+    dimR.style.right = '0px';
+  }
+
+  // Update Badge
+  const durSec = Math.max(0, outT - inT).toFixed(1);
+  if (badge) {
+    badge.style.display = 'inline-block';
+    badge.textContent = `🎯 Vùng In/Out: ${formatSecs(inT)} → ${formatSecs(outT)} (~${durSec}s)`;
+  }
+
+  if (btnRender) {
+    btnRender.innerHTML = `🎯 Xuất Vùng Chọn (~${durSec}s)`;
+  }
+}
+
+// In/Out Toolbar Buttons & Drag Listeners
+const btnMarkIn = $('btn-tl-mark-in');
+if (btnMarkIn) btnMarkIn.addEventListener('click', () => setMarkIn());
+
+const btnMarkOut = $('btn-tl-mark-out');
+if (btnMarkOut) btnMarkOut.addEventListener('click', () => setMarkOut());
+
+const btnClearInOut = $('btn-tl-clear-in-out');
+if (btnClearInOut) btnClearInOut.addEventListener('click', () => clearMarkInOut());
+
+const inHandle = $('tl-in-handle');
+if (inHandle) {
+  inHandle.addEventListener('mousedown', e => {
+    e.stopPropagation();
+    state.isDraggingInHandle = true;
+    const onMove = ev => {
+      if (!state.isDraggingInHandle || !tlViewport) return;
+      const rect = tlViewport.getBoundingClientRect();
+      const clickX = ev.clientX - rect.left + tlViewport.scrollLeft - 105;
+      const newIn = Math.max(0, clickX / state.zoomPxPerSec);
+      if (state.markOut === null || newIn < state.markOut) {
+        state.markIn = Math.round(newIn * 100) / 100;
+        updateInOutOverlay();
+      }
+    };
+    const onUp = () => {
+      state.isDraggingInHandle = false;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  });
+}
+
+const outHandle = $('tl-out-handle');
+if (outHandle) {
+  outHandle.addEventListener('mousedown', e => {
+    e.stopPropagation();
+    state.isDraggingOutHandle = true;
+    const onMove = ev => {
+      if (!state.isDraggingOutHandle || !tlViewport) return;
+      const rect = tlViewport.getBoundingClientRect();
+      const clickX = ev.clientX - rect.left + tlViewport.scrollLeft - 105;
+      const newOut = Math.max(0, clickX / state.zoomPxPerSec);
+      if (state.markIn === null || newOut > state.markIn) {
+        state.markOut = Math.round(newOut * 100) / 100;
+        updateInOutOverlay();
+      }
+    };
+    const onUp = () => {
+      state.isDraggingOutHandle = false;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  });
+}
+
 function updateMonitor(time) {
   if (mcTimeCurrent) mcTimeCurrent.textContent = formatSecs(time);
 
@@ -2878,7 +3093,7 @@ function updateMonitor(time) {
 
 function applySubtitleStylesToMonitor() {
   if (!monitorSubtitle) return;
-  const font = state.subFont || 'montserrat';
+  const font = state.subFont || 'paperlogy';
   const size = state.subSize || 36;
   const color = state.subColor || '#ffffff';
 
@@ -2891,19 +3106,29 @@ function applySubtitleStylesToMonitor() {
   const bgOpacity = ((state.subBgOpacity !== undefined ? state.subBgOpacity : 75) / 100.0);
   const bgRadius = state.subBgRadius || 16;
 
-  const posY = (state.subPosY !== undefined) ? state.subPosY : 6.0;
+  const posY = (state.subPosY !== undefined) ? state.subPosY : 6.5;
   const posX = (state.subPosX !== undefined) ? state.subPosX : 0.0;
   const layerZ = state.subLayerZ || 100;
 
   monitorSubtitle.className = 'monitor-subtitle';
   monitorSubtitle.classList.add(`sub-font-${font}`);
 
-  // Base font size in preview (scaled by preview-screen container)
+  // Base font size in preview (scaled to match backend video canvas 1:1)
   const monitorBox = $('preview-screen') || monitorSubtitle.parentElement;
-  const h = monitorBox ? monitorBox.clientHeight : 360;
-  const scale = (h > 0 ? h : 360) / 1080.0;
-  const scaledSize = Math.max(13, Math.round(size * scale * 2.2));
-  const scaledStrokeW = Math.max(1, Math.round(strokeWidth * scale * 2.0));
+  let pw = monitorBox ? monitorBox.clientWidth : 640;
+  let ph = monitorBox ? monitorBox.clientHeight : 360;
+  if (!pw || pw <= 0) pw = 640;
+  if (!ph || ph <= 0) ph = 360;
+  const isVertical = ph > pw;
+
+  let scaledSize, scaledStrokeW;
+  if (isVertical) {
+    scaledSize = Math.max(12, Math.round(size * 3.74 * (ph / 1920.0)));
+    scaledStrokeW = Math.max(1, Math.round(strokeWidth * 3.74 * (ph / 1920.0) * 0.5));
+  } else {
+    scaledSize = Math.max(12, Math.round(size * 2.2 * (ph / 1080.0)));
+    scaledStrokeW = Math.max(1, Math.round(strokeWidth * 2.2 * (ph / 1080.0) * 0.5));
+  }
 
   monitorSubtitle.style.color = color;
   monitorSubtitle.style.fontSize = `${scaledSize}px`;
@@ -2935,9 +3160,12 @@ function applySubtitleStylesToMonitor() {
       g = parseInt(cleanHex.slice(2, 4), 16) || 0;
       b = parseInt(cleanHex.slice(4, 6), 16) || 0;
     } catch(e) {}
+    const padX = Math.max(8, Math.round(scaledSize * 0.35));
+    const padY = Math.max(4, Math.round(scaledSize * 0.18));
+    const rad = Math.max(4, Math.round(bgRadius * (scaledSize / 50.0)));
     monitorSubtitle.style.background = `rgba(${r}, ${g}, ${b}, ${bgOpacity})`;
-    monitorSubtitle.style.padding = '4px 14px';
-    monitorSubtitle.style.borderRadius = `${bgRadius}px`;
+    monitorSubtitle.style.padding = `${padY}px ${padX}px`;
+    monitorSubtitle.style.borderRadius = `${rad}px`;
   } else {
     monitorSubtitle.style.background = 'transparent';
     monitorSubtitle.style.padding = '0';
@@ -3051,6 +3279,10 @@ $$('.btn-group').forEach(group => {
         if (screen) {
           screen.className = `preview-screen aspect-${aspectVal}`;
         }
+        setTimeout(() => {
+          applySubtitleStylesToMonitor();
+          updateMonitor(state.currentTime);
+        }, 60);
       }
     });
   });
@@ -3226,21 +3458,22 @@ async function executeRenderVideo(e) {
       fd.append('audio', state.audio);
     }
 
-    // Dynamic Image Durations and Effects from Timeline
-    if (Array.isArray(state.imagesData) && state.imagesData.length > 0) {
+    // Dynamic Image Durations and Effects from Timeline (only if user uploaded images)
+    if (Array.isArray(state.images) && state.images.length > 0 && Array.isArray(state.imagesData) && state.imagesData.length > 0) {
       const durs = state.imagesData.map(d => (d && typeof d.duration === 'number') ? d.duration : 5.0);
       fd.append('image_durations', JSON.stringify(durs));
       const effs = state.imagesData.map(d => (d && d.effect) ? d.effect : 'zoom_in');
       fd.append('image_effects', JSON.stringify(effs));
     }
 
-    // Subtitles
-    const hasSubs = Array.isArray(state.subtitles) && state.subtitles.length > 0;
-    const isSubEnabled = (chkSubtitlesMain && chkSubtitlesMain.checked) || hasSubs;
-    fd.append('enable_subtitles', isSubEnabled ? 'true' : 'false');
-    if (selSubLang) fd.append('subtitle_language', selSubLang.value || 'ko');
+    // Active Project ID
+    const curProjEl = document.getElementById('current-project-id');
+    const projId = curProjEl ? curProjEl.value.trim() : (state.currentProjectId || '');
+    if (projId) {
+      fd.append('project_id', projId);
+    }
 
-    // Sync exact SRT from Subtitles Track
+    // Subtitles: Collect from Timeline, customSrtText, or subScriptInput
     let finalSrt = '';
     try {
       finalSrt = generateSrtFromSubtitles();
@@ -3248,12 +3481,22 @@ async function executeRenderVideo(e) {
       console.warn('generateSrtFromSubtitles warning:', srtErr);
     }
 
-    if (finalSrt && finalSrt.trim()) {
+    if (!finalSrt && customSrtText && customSrtText.value && customSrtText.value.trim()) {
+      finalSrt = customSrtText.value.trim();
+    }
+    if (!finalSrt && subScriptInput && subScriptInput.value && subScriptInput.value.includes('-->')) {
+      finalSrt = subScriptInput.value.trim();
+    }
+
+    const hasSubs = Boolean(finalSrt && finalSrt.trim());
+    const isSubEnabled = (chkSubtitlesMain && chkSubtitlesMain.checked) || hasSubs;
+    fd.append('enable_subtitles', isSubEnabled ? 'true' : 'false');
+    if (selSubLang) fd.append('subtitle_language', selSubLang.value || 'vi');
+
+    if (hasSubs) {
       fd.append('custom_srt', finalSrt.trim());
       fd.append('enable_subtitles', 'true');
-    } else if (customSrtText && customSrtText.value && customSrtText.value.trim()) {
-      fd.append('custom_srt', customSrtText.value.trim());
-      fd.append('enable_subtitles', 'true');
+      console.log(`🎬 [Render Frontend] Đã gửi kèm ${finalSrt.split('\n').length} dòng phụ đề SRT sang máy chủ!`);
     }
 
     // Form Settings
@@ -3281,23 +3524,90 @@ async function executeRenderVideo(e) {
       fd.append(name, (el && el.value) ? el.value : defaultVals[name]);
     });
     fd.append('use_transition', (chkTransit && chkTransit.checked) ? 'true' : 'false');
-    fd.append('sub_font', state.subFont || 'montserrat');
-    fd.append('sub_size', String(state.subSize || 36));
-    fd.append('sub_color', state.subColor || '#ffffff');
-    fd.append('sub_stroke_enabled', state.subStrokeEnabled !== false ? 'true' : 'false');
-    fd.append('sub_stroke_color', state.subStrokeColor || '#000000');
-    fd.append('sub_stroke_width', String(state.subStrokeWidth || 4));
-    fd.append('sub_bg_enabled', state.subBgEnabled ? 'true' : 'false');
-    fd.append('sub_bg_color', state.subBgColor || '#000000');
-    fd.append('sub_bg_opacity', String(state.subBgOpacity !== undefined ? state.subBgOpacity : 75));
-    fd.append('sub_bg_radius', String(state.subBgRadius || 16));
-    fd.append('sub_pos_y', String(state.subPosY !== undefined ? state.subPosY : 6.0));
-    fd.append('sub_pos_x', String(state.subPosX !== undefined ? state.subPosX : 0.0));
-    fd.append('sub_letter_spacing', String(state.subLetterSpacing !== undefined ? state.subLetterSpacing : 0.0));
-    fd.append('sub_line_spacing', String(state.subLineSpacing !== undefined ? state.subLineSpacing : 1.25));
+    
+    // Live Subtitle Styling Parameters Direct from Inspector / Card 3 / State
+    const inspSelFont = $('insp-sel-sub-font');
+    const selSubFont = $('sel-sub-font');
+    const chosenFont = (inspSelFont && inspSelFont.value) ? inspSelFont.value : (selSubFont ? selSubFont.value : (state.subFont || 'paperlogy'));
+    
+    const inspSlSize = $('insp-sl-sub-size');
+    const slSubSize = $('sl-sub-size');
+    const chosenSize = (inspSlSize && inspSlSize.value) ? parseInt(inspSlSize.value, 10) : (slSubSize ? parseInt(slSubSize.value, 10) : (state.subSize || 36));
+
+    const inspCpColor = $('insp-cp-sub-color');
+    const chosenColor = (inspCpColor && inspCpColor.value) ? inspCpColor.value : (state.subColor || '#ffffff');
+
+    const inspChkStroke = $('insp-chk-sub-stroke');
+    const chkStrokeC3 = $('chk-sub-stroke-c3');
+    const chosenStrokeEnabled = (inspChkStroke ? inspChkStroke.checked : (chkStrokeC3 ? chkStrokeC3.checked : (state.subStrokeEnabled !== false)));
+
+    const inspCpStrokeColor = $('insp-cp-sub-stroke-color');
+    const chosenStrokeColor = (inspCpStrokeColor && inspCpStrokeColor.value) ? inspCpStrokeColor.value : (state.subStrokeColor || '#000000');
+
+    const inspSlStrokeW = $('insp-sl-sub-stroke-w');
+    const chosenStrokeWidth = (inspSlStrokeW && inspSlStrokeW.value) ? parseInt(inspSlStrokeW.value, 10) : (state.subStrokeWidth || 4);
+
+    const inspChkBg = $('insp-chk-sub-bg');
+    const chkBgC3 = $('chk-sub-bg-c3');
+    const chosenBgEnabled = (inspChkBg ? inspChkBg.checked : (chkBgC3 ? chkBgC3.checked : Boolean(state.subBgEnabled)));
+
+    const inspCpBgColor = $('insp-cp-sub-bg-color');
+    const chosenBgColor = (inspCpBgColor && inspCpBgColor.value) ? inspCpBgColor.value : (state.subBgColor || '#000000');
+
+    const inspSlBgOpacity = $('insp-sl-sub-bg-opacity');
+    const chosenBgOpacity = (inspSlBgOpacity && inspSlBgOpacity.value) ? parseInt(inspSlBgOpacity.value, 10) : (state.subBgOpacity !== undefined ? state.subBgOpacity : 75);
+
+    const chosenBgRadius = state.subBgRadius || 16;
+
+    const inspSlPosY = $('insp-sl-sub-pos-y');
+    const chosenPosY = (inspSlPosY && inspSlPosY.value) ? parseFloat(inspSlPosY.value) : (state.subPosY !== undefined ? state.subPosY : 14.0);
+
+    const inspSlPosX = $('insp-sl-sub-pos-x');
+    const chosenPosX = (inspSlPosX && inspSlPosX.value) ? parseFloat(inspSlPosX.value) : (state.subPosX !== undefined ? state.subPosX : 0.0);
+
+    const inspSlLetterSpacing = $('insp-sl-sub-letter-spacing');
+    const chosenLetterSpacing = (inspSlLetterSpacing && inspSlLetterSpacing.value) ? parseFloat(inspSlLetterSpacing.value) : (state.subLetterSpacing !== undefined ? state.subLetterSpacing : 0.0);
+
+    const inspSlLineSpacing = $('insp-sl-sub-line-spacing');
+    const chosenLineSpacing = (inspSlLineSpacing && inspSlLineSpacing.value) ? parseFloat(inspSlLineSpacing.value) : (state.subLineSpacing !== undefined ? state.subLineSpacing : 1.25);
+
+    fd.append('sub_font', chosenFont);
+    fd.append('sub_size', String(chosenSize));
+    fd.append('sub_color', chosenColor);
+    fd.append('sub_stroke_enabled', chosenStrokeEnabled ? 'true' : 'false');
+    fd.append('sub_stroke_color', chosenStrokeColor);
+    fd.append('sub_stroke_width', String(chosenStrokeWidth));
+    fd.append('sub_bg_enabled', chosenBgEnabled ? 'true' : 'false');
+    fd.append('sub_bg_color', chosenBgColor);
+    fd.append('sub_bg_opacity', String(chosenBgOpacity));
+    fd.append('sub_bg_radius', String(chosenBgRadius));
+    fd.append('sub_pos_y', String(chosenPosY));
+    fd.append('sub_pos_x', String(chosenPosX));
+    fd.append('sub_letter_spacing', String(chosenLetterSpacing));
+    fd.append('sub_line_spacing', String(chosenLineSpacing));
+
+    // In/Out Selection Range Slice
+    if (state.markIn !== null || state.markOut !== null) {
+      const inVal = state.markIn !== null ? state.markIn : 0.0;
+      const imgTotalDur = state.imagesData.reduce((acc, d) => acc + d.duration, 0);
+      const subTotalDur = state.subtitles.length > 0 ? state.subtitles[state.subtitles.length - 1].end : 0;
+      const totalDur = Math.max(imgTotalDur, subTotalDur, 1.0);
+      const outVal = state.markOut !== null ? state.markOut : totalDur;
+
+      if (outVal > inVal) {
+        fd.append('render_in', inVal.toFixed(3));
+        fd.append('render_out', outVal.toFixed(3));
+        console.log(`🎯 [executeRenderVideo] Slicing In/Out range: ${inVal.toFixed(2)}s -> ${outVal.toFixed(2)}s (~${(outVal - inVal).toFixed(1)}s)`);
+      }
+    }
 
     const countLabel = (state.images && state.images.length > 0) ? `${state.images.length} ảnh` : 'dữ liệu Timeline';
-    showToast(`📦 [Bước 2/4] Đang gửi ${countLabel} sang máy chủ...`, 'info', 3000);
+    const isInOutActive = (state.markIn !== null || state.markOut !== null);
+    if (isInOutActive) {
+      showToast(`🎯 [Bước 2/4] Đang gửi phân đoạn In/Out (${countLabel}) sang máy chủ...`, 'info', 3000);
+    } else {
+      showToast(`📦 [Bước 2/4] Đang gửi ${countLabel} sang máy chủ...`, 'info', 3000);
+    }
 
     const res = await fetch('/render', { method: 'POST', body: fd });
     let data;
@@ -3307,6 +3617,7 @@ async function executeRenderVideo(e) {
       throw new Error(`Máy chủ trả về dữ liệu không hợp lệ (${res.status}): ${res.statusText || 'No response'}`);
     }
 
+    let errorModalShown = false;
     if (!res.ok || (data && data.error)) {
       const errMsg = (data && data.error) ? data.error : `HTTP Status: ${res.status}`;
       showErrorModal({
@@ -3315,6 +3626,7 @@ async function executeRenderVideo(e) {
         details: errMsg,
         suggestion: 'Kiểm tra xem các tệp âm thanh hoặc thông số video có hợp lệ không.'
       });
+      errorModalShown = true;
       throw new Error(errMsg);
     }
     
@@ -3324,7 +3636,7 @@ async function executeRenderVideo(e) {
   } catch (err) {
     console.error('❌ executeRenderVideo catch:', err);
     showToast(`❌ Lỗi Render: ${err.message}`, 'error', 7000);
-    if (!err.message.includes('HTTP_')) {
+    if (typeof errorModalShown !== 'undefined' && !errorModalShown) {
       showErrorModal({
         code: 'ERR_RENDER_CLIENT_EXCEPTION',
         message: 'Có sự cố trong quá trình chuẩn bị dữ liệu render',
@@ -3679,7 +3991,7 @@ if (slCrf && inpCrfNum) {
 }
 
 // ─── Comprehensive Subtitle Font, Stroke, Background & Position Management ───
-state.subFont = localStorage.getItem('sub_font') || 'montserrat';
+state.subFont = localStorage.getItem('sub_font') || 'paperlogy';
 state.subSize = parseInt(localStorage.getItem('sub_size'), 10) || 36;
 state.subColor = localStorage.getItem('sub_color') || '#ffffff';
 state.subLetterSpacing = parseFloat(localStorage.getItem('sub_letter_spacing')) || 0.0;
@@ -3699,7 +4011,7 @@ state.subPosX = parseFloat(localStorage.getItem('sub_pos_x')) || 0.0;
 state.subLayerZ = parseInt(localStorage.getItem('sub_layer_z'), 10) || 100;
 
 function syncSubtitleStyleControls() {
-  const font = state.subFont || 'montserrat';
+  const font = state.subFont || 'paperlogy';
   const size = state.subSize || 36;
   const color = state.subColor || '#ffffff';
 
@@ -3712,7 +4024,7 @@ function syncSubtitleStyleControls() {
   const bgOpacity = state.subBgOpacity !== undefined ? state.subBgOpacity : 75;
   const bgRadius = state.subBgRadius || 16;
 
-  const posY = state.subPosY !== undefined ? state.subPosY : 6.0;
+  const posY = state.subPosY !== undefined ? state.subPosY : 6.5;
   const posX = state.subPosX !== undefined ? state.subPosX : 0.0;
   const layerZ = state.subLayerZ || 100;
 
@@ -4290,14 +4602,33 @@ if (btnUpdNow) {
         throw new Error(appData.message || 'Lỗi khi cài đặt bản cập nhật');
       }
 
-      if (progText) progText.textContent = 'Cập nhật thành công!';
+      if (progText) progText.textContent = '🚀 Đang tự động nạp phiên bản mới...';
       if (progPct) progPct.textContent = '100%';
       if (progBar) progBar.style.width = '100%';
 
-      showToast('🎉 Cập nhật thành công! Vui lòng khởi động lại ứng dụng.', 'success', 6000);
+      showToast('🎉 Đã cập nhật lên v' + (latestUpdateInfo.latest_version || '') + ' thành công! Máy chủ đang tự khởi động lại...', 'success', 8000);
+      if (updModal) updModal.style.display = 'none';
+      if (updBadge) updBadge.style.display = 'none';
+
+      // Auto poll health until new server responds, then seamlessly refresh
+      let pollAttempts = 0;
       setTimeout(() => {
-        location.reload();
-      }, 2500);
+        const pollTimer = setInterval(async () => {
+          pollAttempts++;
+          try {
+            const checkRes = await fetch('/api/health?_t=' + Date.now());
+            if (checkRes.ok) {
+              clearInterval(pollTimer);
+              location.reload();
+            }
+          } catch (e) {
+            if (pollAttempts > 25) {
+              clearInterval(pollTimer);
+              location.reload();
+            }
+          }
+        }, 800);
+      }, 1500);
 
     } catch (err) {
       showToast(`❌ Cập nhật thất bại: ${err.message}`, 'error', 6000);
@@ -4309,11 +4640,54 @@ if (btnUpdNow) {
   });
 }
 
+// =============================================================================
+// SERVER SHUTDOWN MANAGEMENT
+// =============================================================================
+const btnShutdownApp = $('btn-shutdown-app');
+const shutdownModal = $('shutdown-modal');
+const btnShutdownClose = $('btn-shutdown-close');
+const btnShutdownCancel = $('btn-shutdown-cancel');
+const btnShutdownConfirm = $('btn-shutdown-confirm');
+
+if (btnShutdownApp && shutdownModal) {
+  btnShutdownApp.addEventListener('click', () => {
+    shutdownModal.style.display = 'flex';
+  });
+
+  const closeShutdownModal = () => {
+    shutdownModal.style.display = 'none';
+  };
+
+  if (btnShutdownClose) btnShutdownClose.addEventListener('click', closeShutdownModal);
+  if (btnShutdownCancel) btnShutdownCancel.addEventListener('click', closeShutdownModal);
+
+  if (btnShutdownConfirm) {
+    btnShutdownConfirm.addEventListener('click', async () => {
+      btnShutdownConfirm.disabled = true;
+      btnShutdownConfirm.textContent = '⏳ Đang tắt...';
+      try {
+        await fetch('/api/server/shutdown', { method: 'POST' });
+        shutdownModal.innerHTML = `
+          <div class="diag-modal-card" style="max-width:420px;border:1px solid #64748b;text-align:center;padding:32px 20px;background:#0f172a">
+            <div style="font-size:44px;margin-bottom:12px">💤</div>
+            <div style="font-size:16px;font-weight:800;color:#f8fafc;margin-bottom:8px">Ứng Dụng Đã Tắt Hoàn Toàn</div>
+            <div style="font-size:13px;color:#94a3b8;line-height:1.5">Máy chủ cục bộ và toàn bộ tiến trình ngầm đã dừng thành công. Bạn có thể an tâm đóng tab trình duyệt này.</div>
+          </div>
+        `;
+        showToast('🛑 Ứng dụng đã tắt hoàn toàn. Tạm biệt!', 'info', 10000);
+      } catch (e) {
+        showToast('🛑 Đã gửi lệnh tắt ứng dụng.', 'info', 5000);
+      }
+    });
+  }
+}
+
 // Initial initialization
 updateFooterInfo();
 fetchProjectList();
 syncSubtitleStyleControls();
 checkLicenseStatus(true);
 checkForAppUpdates();
+
 
 

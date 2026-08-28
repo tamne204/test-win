@@ -10,25 +10,12 @@ Produces millisecond-accurate SRT subtitles preserving exact text, casing, and p
 import os
 import re
 import time
-import threading
 import subprocess
 import json
 import sys
 import tempfile
 import uuid
 from typing import List, Dict, Any, Optional, Tuple
-
-_fw_align_model = None
-_fw_align_lock = threading.Lock()
-
-def get_faster_whisper_aligner(model_size="tiny"):
-    global _fw_align_model
-    with _fw_align_lock:
-        if _fw_align_model is None:
-            from faster_whisper import WhisperModel
-            threads = min(8, os.cpu_count() or 4)
-            _fw_align_model = WhisperModel(model_size, device="cpu", compute_type="int8", cpu_threads=threads)
-        return _fw_align_model
 
 
 def get_ffmpeg_bin() -> str:
@@ -324,7 +311,123 @@ def _get_obj_attr(obj: Any, attr: str, default: Any = None) -> Any:
     return getattr(obj, attr, default)
 
 
+def _match_script_lines_to_aligned_words(
+    all_words: List[Any],
+    script_lines: List[str],
+    audio_dur: float = 600.0
+) -> List[Dict[str, Any]]:
+    """
+    Precision acoustic alignment: Uses Global Anchor Matching with Monotonic DP
+    and Bounded Interpolation. Prevents time drift, preserves exact silence gaps,
+    and guarantees 100% of subtitles stay strictly within [0.0, audio_dur].
+    """
+    if not script_lines:
+        return []
+    if not all_words:
+        # Fallback: distribute evenly
+        chars = [max(1, len(l.strip())) for l in script_lines]
+        tot_c = max(1, sum(chars))
+        cur_t = 0.0
+        segs = []
+        for idx, (line, c) in enumerate(zip(script_lines, chars)):
+            dur = (c / tot_c) * audio_dur
+            st = min(audio_dur - 0.2, cur_t)
+            et = min(audio_dur, st + dur)
+            segs.append({'id': idx + 1, 'start': round(st, 3), 'end': round(max(st + 0.5, et), 3), 'text': line})
+            cur_t = et
+        return segs
 
+    w_tokens = [_clean_token(_get_obj_attr(w, 'word', '')) for w in all_words]
+    w_starts = [float(_get_obj_attr(w, 'start', 0.0)) for w in all_words]
+    w_ends = [float(_get_obj_attr(w, 'end', 0.0)) for w in all_words]
+    num_words = len(w_tokens)
+
+    line_tokens = [[_clean_token(w) for w in l.split() if _clean_token(w)] for l in script_lines]
+    num_lines = len(script_lines)
+
+    # 1. Monotonic Candidate Anchor Search
+    anchors = {}  # l_idx -> (start_time, end_time)
+    last_w = 0
+    for l_idx, toks in enumerate(line_tokens):
+        if not toks:
+            continue
+        first_t = toks[0]
+        last_t = toks[-1]
+        best_match = None
+
+        search_limit = min(num_words, last_w + max(40, len(toks) * 4))
+        for i in range(last_w, search_limit):
+            if w_tokens[i] == first_t or (len(first_t) > 1 and (first_t in w_tokens[i] or w_tokens[i] in first_t)):
+                # Search for last token downstream
+                end_search_start = i + max(0, len(toks) - 3)
+                end_search_limit = min(num_words, i + len(toks) + 15)
+                for j in range(end_search_limit - 1, max(i - 1, end_search_start - 1), -1):
+                    if w_tokens[j] == last_t or (len(last_t) > 1 and (last_t in w_tokens[j] or w_tokens[j] in last_t)):
+                        best_match = (i, j)
+                        break
+                if best_match:
+                    break
+
+        if best_match:
+            st_val = max(0.0, min(audio_dur, w_starts[best_match[0]]))
+            et_val = max(st_val + 0.3, min(audio_dur, w_ends[best_match[1]]))
+            anchors[l_idx] = (st_val, et_val)
+            last_w = best_match[1] + 1
+
+    # 2. Monotonic Bounded Interpolation
+    segments = []
+    anchor_indices = sorted(anchors.keys())
+    prev_l = -1
+    prev_end = 0.0
+
+    for a_idx in anchor_indices:
+        a_st, a_et = anchors[a_idx]
+        gap_lines = a_idx - prev_l - 1
+        if gap_lines > 0:
+            # Interpolate missing lines between prev_l and a_idx
+            chars = [max(1, len(script_lines[k].strip())) for k in range(prev_l + 1, a_idx)]
+            tot_c = max(1, sum(chars))
+            avail_dur = max(0.3 * gap_lines, a_st - prev_end)
+            cur_t = prev_end
+            for k_offset, k in enumerate(range(prev_l + 1, a_idx)):
+                dur = (chars[k_offset] / tot_c) * avail_dur
+                st = round(min(audio_dur - 0.2, cur_t), 3)
+                et = round(min(audio_dur, st + dur), 3)
+                if et <= st:
+                    et = round(min(audio_dur, st + 0.5), 3)
+                segments.append({'id': k + 1, 'start': st, 'end': et, 'text': script_lines[k]})
+                cur_t = et
+
+        # Add Anchor Segment
+        act_st = round(max(prev_end, a_st), 3)
+        act_et = round(min(audio_dur, max(act_st + 0.5, a_et)), 3)
+        segments.append({'id': a_idx + 1, 'start': act_st, 'end': act_et, 'text': script_lines[a_idx]})
+        prev_l = a_idx
+        prev_end = act_et
+
+    # 3. Trailing Lines (after last anchor)
+    if prev_l < num_lines - 1:
+        gap_lines = num_lines - 1 - prev_l
+        chars = [max(1, len(script_lines[k].strip())) for k in range(prev_l + 1, num_lines)]
+        tot_c = max(1, sum(chars))
+        avail_dur = max(0.3 * gap_lines, audio_dur - prev_end)
+        cur_t = prev_end
+        for k_offset, k in enumerate(range(prev_l + 1, num_lines)):
+            dur = (chars[k_offset] / tot_c) * avail_dur
+            st = round(min(audio_dur - 0.2, cur_t), 3)
+            et = round(min(audio_dur, st + dur), 3)
+            if et <= st:
+                et = round(min(audio_dur, st + 0.5), 3)
+            segments.append({'id': k + 1, 'start': st, 'end': et, 'text': script_lines[k]})
+            cur_t = et
+
+    # Final Guarantee: Sequential IDs and bounded clamp
+    for i, s in enumerate(segments):
+        s['id'] = i + 1
+        s['start'] = max(0.0, min(audio_dur, s['start']))
+        s['end'] = max(s['start'] + 0.2, min(audio_dur, s['end']))
+
+    return segments
 
 
 def align_with_acoustic_vad(
@@ -541,8 +644,7 @@ def normalize_audio_to_wav16k(input_path: str) -> str:
             '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le',
             norm_path
         ]
-        kwargs = {'creationflags': 0x08000000} if sys.platform == 'win32' else {}
-        res = subprocess.run(cmd, capture_output=True, text=True, **kwargs)
+        res = subprocess.run(cmd, capture_output=True, text=True)
         if res.returncode == 0 and os.path.isfile(norm_path) and os.path.getsize(norm_path) > 1000:
             return norm_path
     except Exception as e:
@@ -777,26 +879,16 @@ def align_with_whisperx(
             eff_lang = detected
 
     try:
-        # Probe total audio duration with multi-layer fallback
-        audio_dur = 0.0
+        # Probe total audio duration
+        ffprobe_bin = get_ffprobe_bin()
+        probe = subprocess.run([
+            ffprobe_bin, '-v', 'error', '-show_entries', 'format=duration',
+            '-of', 'default=noprint_wrappers=1:nokey=1', norm_audio
+        ], capture_output=True, text=True)
         try:
-            ffprobe_bin = get_ffprobe_bin()
-            kwargs = {'creationflags': 0x08000000} if sys.platform == 'win32' else {}
-            probe = subprocess.run([
-                ffprobe_bin, '-v', 'error', '-show_entries', 'format=duration',
-                '-of', 'default=noprint_wrappers=1:nokey=1', norm_audio
-            ], capture_output=True, text=True, **kwargs)
             audio_dur = float(probe.stdout.strip())
         except Exception:
-            pass
-
-        if audio_dur <= 0.0:
-            try:
-                import soundfile as sf
-                info = sf.info(norm_audio)
-                audio_dur = float(info.duration)
-            except Exception:
-                audio_dur = 600.0
+            audio_dur = 600.0
 
         # Step 1: Prepare script words & line boundaries
         script_words = []
@@ -812,7 +904,8 @@ def align_with_whisperx(
         # Step 2: Pass 1 - ASR Word Extraction
         asr_words = []
         try:
-            fw_model = get_faster_whisper_aligner('tiny')
+            from faster_whisper import WhisperModel
+            fw_model = WhisperModel('base', device='cpu', compute_type='int8')
             segments_gen, _ = fw_model.transcribe(
                 norm_audio,
                 language=eff_lang,
@@ -820,14 +913,7 @@ def align_with_whisperx(
                 vad_filter=True,
                 vad_parameters=dict(min_silence_duration_ms=250)
             )
-            last_p = 15
             for seg in segments_gen:
-                if audio_dur > 0 and progress_callback:
-                    p = min(68, int(15 + (seg.end / max(0.1, audio_dur)) * 50))
-                    if p > last_p + 5:
-                        last_p = p
-                        progress_callback(p, f"Pass 1/3: Đang quét sóng âm ({seg.end:.1f}s / {audio_dur:.1f}s)…")
-
                 if seg.words:
                     for w in seg.words:
                         cw = _clean_token(w.word)
@@ -840,7 +926,7 @@ def align_with_whisperx(
         except Exception as fw_err:
             print(f"⚠️ Faster-Whisper fallback to Stable-Whisper transcribe: {fw_err}")
             import stable_whisper
-            sw_model = stable_whisper.load_model('tiny')
+            sw_model = stable_whisper.load_model('base')
             res = sw_model.transcribe(norm_audio, language=eff_lang, vad=True)
             for seg in res.segments:
                 if hasattr(seg, 'words') and seg.words:

@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  srt-vps-engine:
+    build: .
+    container_name: srt_vps_engine_15users
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - MAX_CONCURRENT_INFERENCES=2
+      - CPU_THREADS_PER_WORKER=2
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2048M

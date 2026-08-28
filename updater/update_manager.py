@@ -157,9 +157,11 @@ class UpdateManager:
         staging_dir = os.path.join(self.temp_dir, "staging")
         if os.path.isdir(staging_dir):
             shutil.rmtree(staging_dir, ignore_errors=True)
-        os.makedirs(staging_dir, exist_ok=True)
-
         with zipfile.ZipFile(zip_path, "r") as zf:
+            for member in zf.infolist():
+                target_p = os.path.abspath(os.path.join(staging_dir, member.filename))
+                if not target_p.startswith(os.path.abspath(staging_dir)):
+                    raise ValueError(f"Malicious zip file entry detected: {member.filename}")
             zf.extractall(staging_dir)
 
         # Validate staging directory contains essential application entry points
@@ -172,6 +174,34 @@ class UpdateManager:
 
         return staging_dir
 
+    def _safe_copy_file(self, src: str, dst: str):
+        try:
+            shutil.copy2(src, dst)
+        except PermissionError:
+            # On Windows, if destination file is locked by the active process, rename it to .old, then write fresh copy
+            old_name = dst + f".old_{os.getpid()}"
+            try:
+                if os.path.exists(old_name):
+                    try:
+                        os.remove(old_name)
+                    except Exception:
+                        pass
+                os.rename(dst, old_name)
+                shutil.copy2(src, dst)
+            except Exception as e:
+                raise e
+
+    def _safe_copy_tree(self, src_dir: str, dst_dir: str):
+        os.makedirs(dst_dir, exist_ok=True)
+        for root, dirs, files in os.walk(src_dir):
+            rel_path = os.path.relpath(root, src_dir)
+            target_root = os.path.join(dst_dir, rel_path)
+            os.makedirs(target_root, exist_ok=True)
+            for file in files:
+                src_file = os.path.join(root, file)
+                dst_file = os.path.join(target_root, file)
+                self._safe_copy_file(src_file, dst_file)
+
     def apply_update_atomic(self, staging_dir: str) -> Dict[str, Any]:
         """
         Perform atomic copy from staging_dir into root_dir with rollback safeguard.
@@ -180,21 +210,29 @@ class UpdateManager:
         backup_path = create_backup(self.root_dir, current_v, self.backups_dir)
 
         try:
-            # Copy all files from staging into root
+            # If staging_dir contains a single wrapper folder, dive into it
+            check_app = os.path.join(staging_dir, "app.py")
+            check_ver = os.path.join(staging_dir, "version.py")
+            if not os.path.isfile(check_app) and not os.path.isfile(check_ver):
+                subdirs = [os.path.join(staging_dir, d) for d in os.listdir(staging_dir) if os.path.isdir(os.path.join(staging_dir, d))]
+                if len(subdirs) == 1 and (os.path.isfile(os.path.join(subdirs[0], "app.py")) or os.path.isfile(os.path.join(subdirs[0], "version.py"))):
+                    staging_dir = subdirs[0]
+
+            # Copy all files from staging into root using Windows-safe copying
             for item in os.listdir(staging_dir):
-                if item in ("__pycache__", ".git", ".venv", "backups", "temp", "uploads", "outputs"):
+                if item in ("__pycache__", ".git", ".venv", "backups", "temp", "uploads", "outputs", "projects", "license.json"):
                     continue
                 s_item = os.path.join(staging_dir, item)
                 d_item = os.path.join(self.root_dir, item)
 
                 if os.path.isdir(s_item):
-                    shutil.copytree(s_item, d_item, dirs_exist_ok=True)
+                    self._safe_copy_tree(s_item, d_item)
                 else:
-                    shutil.copy2(s_item, d_item)
+                    self._safe_copy_file(s_item, d_item)
 
             return {
                 "ok": True,
-                "message": "Cập nhật thành công! Vui lòng khởi động lại ứng dụng.",
+                "message": "Cập nhật thành công! Đang tự động khởi động lại ứng dụng...",
                 "backup_path": backup_path
             }
         except Exception as e:
