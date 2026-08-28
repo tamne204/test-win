@@ -236,15 +236,14 @@ def normalize_weights(weights: Dict[str, float]) -> Dict[str, float]:
 def _zoompan_params(effect: str, magnitude: float, total_frames: int) -> dict:
     """
     Return deterministic, absolute frame-based z / x / y expressions for FFmpeg's zoompan filter.
-    Eliminates micro-jitter using Hermite smoothstep easing: S(t) = t*t*(3 - 2*t).
+    Uses constant perceptual velocity (Linear) to prevent zero-velocity subpixel freeze quantization.
     """
     NF = max(1, total_frames - 1)
     M = max(0.01, min(float(magnitude), 1.0))
     z_max = f"{1.0 + M:.5f}"
     
-    # Normalized frame progress t in [0, 1] and Hermite smoothstep easing S(t)
+    # Normalized frame progress t in [0, 1] (deterministic absolute index)
     t_str = f"(on/{NF})"
-    s_str = f"({t_str}*{t_str}*(3-2*{t_str}))"
 
     if effect in ('none', 'static'):
         return dict(
@@ -254,39 +253,39 @@ def _zoompan_params(effect: str, magnitude: float, total_frames: int) -> dict:
         )
     elif effect == 'zoom_in':
         return dict(
-            z=f"1.0+{M:.5f}*{s_str}",
+            z=f"1.0+{M:.5f}*{t_str}",
             x="(iw-iw/zoom)/2",
             y="(ih-ih/zoom)/2"
         )
     elif effect == 'zoom_out':
         return dict(
-            z=f"1.0+{M:.5f}*(1.0-{s_str})",
+            z=f"1.0+{M:.5f}*(1.0-{t_str})",
             x="(iw-iw/zoom)/2",
             y="(ih-ih/zoom)/2"
         )
     elif effect == 'pan_lr':      # pan left → right
         return dict(
             z=z_max,
-            x=f"{s_str}*(iw-iw/zoom)",
+            x=f"{t_str}*(iw-iw/zoom)",
             y="(ih-ih/zoom)/2"
         )
     elif effect == 'pan_rl':      # pan right → left
         return dict(
             z=z_max,
-            x=f"(1.0-{s_str})*(iw-iw/zoom)",
+            x=f"(1.0-{t_str})*(iw-iw/zoom)",
             y="(ih-ih/zoom)/2"
         )
     elif effect == 'tilt_ud':     # tilt top → bottom
         return dict(
             z=z_max,
             x="(iw-iw/zoom)/2",
-            y=f"{s_str}*(ih-ih/zoom)"
+            y=f"{t_str}*(ih-ih/zoom)"
         )
     elif effect == 'tilt_du':     # tilt bottom → top
         return dict(
             z=z_max,
             x="(iw-iw/zoom)/2",
-            y=f"(1.0-{s_str})*(ih-ih/zoom)"
+            y=f"(1.0-{t_str})*(ih-ih/zoom)"
         )
 
     # Fallback: static
@@ -1072,10 +1071,19 @@ def build_command(
         td_i = min(td, dur_i / 2.0) if use_trans and n > 1 else 0.0
 
         mag = float(mag_for_effect.get(effect, zoom_mag))
-        scale_w = W * 2
-        scale_h = H * 2
+        
+        # Adaptive high-density supersampling (up to 7.6K canvas) to minimize subpixel quantization
+        if max(W, H) <= 1920:
+            scale_w = W * 4
+            scale_h = H * 4
+        elif max(W, H) <= 2560:
+            scale_w = W * 3
+            scale_h = H * 3
+        else:
+            scale_w = W * 2
+            scale_h = H * 2
 
-        # Get absolute Hermite smoothstep camera expressions (jitter-free)
+        # Get deterministic linear camera expressions (jitter-free constant perceptual velocity)
         zp = _zoompan_params(effect, mag, total_frames_i)
         z_expr = zp['z']
         x_expr = zp['x']

@@ -1,16 +1,11 @@
 """
 tests/test_zoom_trajectory.py
-Unit tests verifying deterministic Hermite smoothstep camera trajectory math,
+Unit tests verifying deterministic constant-velocity linear camera trajectory math,
 boundary exactness, center anchor stability, and multi-resolution compatibility.
 """
 
 import pytest
 from ffmpeg_utils import _zoompan_params, build_resolution
-
-
-def smoothstep_py(t: float) -> float:
-    t_clamped = max(0.0, min(1.0, t))
-    return t_clamped * t_clamped * (3.0 - 2.0 * t_clamped)
 
 
 @pytest.mark.parametrize("duration", [1.0, 3.0, 5.0, 10.0, 30.0])
@@ -27,20 +22,17 @@ def test_zoom_in_trajectory_bounds(duration: float, fps: int, mag: float):
 
     # Verify frame 0 (t=0)
     t_0 = 0.0 / NF
-    s_0 = smoothstep_py(t_0)
-    z_0 = 1.0 + mag * s_0
+    z_0 = 1.0 + mag * t_0
     assert abs(z_0 - 1.0) < 1e-6, "Zoom In first frame must be exactly 1.0"
 
     # Verify mid frame (t=0.5)
     t_mid = 0.5
-    s_mid = smoothstep_py(t_mid)
-    z_mid = 1.0 + mag * s_mid
+    z_mid = 1.0 + mag * t_mid
     assert abs(z_mid - (1.0 + mag * 0.5)) < 1e-6, "Zoom In mid frame must be at midpoint"
 
     # Verify last frame (t=1.0)
     t_last = float(NF) / NF
-    s_last = smoothstep_py(t_last)
-    z_last = 1.0 + mag * s_last
+    z_last = 1.0 + mag * t_last
     assert abs(z_last - (1.0 + mag)) < 1e-6, "Zoom In last frame must reach exactly 1.0 + mag"
 
 
@@ -56,14 +48,12 @@ def test_zoom_out_trajectory_bounds(duration: float, fps: int, mag: float):
 
     # Verify frame 0 (t=0)
     t_0 = 0.0 / NF
-    s_0 = smoothstep_py(t_0)
-    z_0 = 1.0 + mag * (1.0 - s_0)
+    z_0 = 1.0 + mag * (1.0 - t_0)
     assert abs(z_0 - (1.0 + mag)) < 1e-6, "Zoom Out first frame must be exactly 1.0 + mag"
 
     # Verify last frame (t=1.0)
     t_last = 1.0
-    s_last = smoothstep_py(t_last)
-    z_last = 1.0 + mag * (1.0 - s_last)
+    z_last = 1.0 + mag * (1.0 - t_last)
     assert abs(z_last - 1.0) < 1e-6, "Zoom Out last frame must be exactly 1.0"
 
 
