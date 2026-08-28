@@ -61,7 +61,7 @@ def warmup_whisper_in_background():
 
 
 def parse_srt_content(srt_text: str) -> List[Dict[str, Any]]:
-    """Universal robust SRT/VTT parser that handles all timecode and newline variations."""
+    """Universal robust SRT/VTT parser that handles all timecode and newline variations without leaking cue numbers."""
     if not srt_text:
         return []
     clean_text = srt_text.lstrip('\ufeff').replace('\r\n', '\n').replace('\r', '\n')
@@ -75,6 +75,23 @@ def parse_srt_content(srt_text: str) -> List[Dict[str, Any]]:
         s_val = int(s) if s else 0
         ms_val = float(f"0.{ms}") if ms else 0.0
         return h_val * 3600.0 + m_val * 60.0 + s_val + ms_val
+
+    def _is_next_cue_ahead(start_idx: int, lines_list: List[str], max_l: int) -> bool:
+        k = start_idx
+        while k < max_l and not lines_list[k].strip():
+            k += 1
+        if k >= max_l:
+            return False
+        first_non_empty = lines_list[k].strip()
+        if tc_pattern.search(first_non_empty):
+            return True
+        if first_non_empty.isdigit():
+            k2 = k + 1
+            while k2 < max_l and not lines_list[k2].strip():
+                k2 += 1
+            if k2 < max_l and tc_pattern.search(lines_list[k2].strip()):
+                return True
+        return False
 
     subs = []
     lines = clean_text.split('\n')
@@ -96,17 +113,21 @@ def parse_srt_content(srt_text: str) -> List[Dict[str, Any]]:
             while i < num_lines:
                 next_line = lines[i].strip()
                 if not next_line:
-                    if i + 1 < num_lines and (tc_pattern.search(lines[i+1]) or (lines[i+1].isdigit() and i + 2 < num_lines and tc_pattern.search(lines[i+2]))):
+                    if _is_next_cue_ahead(i + 1, lines, num_lines):
                         break
                     i += 1
                     continue
                 if tc_pattern.search(next_line):
                     break
-                if next_line.isdigit() and i + 1 < num_lines and tc_pattern.search(lines[i+1]):
+                if next_line.isdigit() and _is_next_cue_ahead(i, lines, num_lines):
                     break
                 text_parts.append(next_line)
                 i += 1
                 
+            # Filter out any accidentally captured lone digits at the end of text
+            while text_parts and text_parts[-1].strip().isdigit():
+                text_parts.pop()
+
             txt = " ".join(text_parts).strip()
             if txt:
                 subs.append({
@@ -117,7 +138,6 @@ def parse_srt_content(srt_text: str) -> List[Dict[str, Any]]:
                 })
         else:
             i += 1
-    return subs
     return subs
 
 

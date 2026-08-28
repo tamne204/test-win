@@ -1483,21 +1483,68 @@ function rebuildTimelineFromInputs() {
   const srtBlocks = [];
 
   if (srtRaw) {
-    const blocks = srtRaw.split(/\n\s*\n/).filter(Boolean);
-    blocks.forEach((b, idx) => {
-      const lines = b.trim().split('\n').filter(Boolean);
-      const timeLine = lines.find(l => l.includes('-->'));
-      if (timeLine) {
-        const m = timeLine.match(/(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{3})/);
-        if (m) {
-          const st = parseInt(m[1])*3600 + parseInt(m[2])*60 + parseInt(m[3]) + parseInt(m[4])/1000;
-          const et = parseInt(m[5])*3600 + parseInt(m[6])*60 + parseInt(m[7]) + parseInt(m[8])/1000;
-          const idxTime = lines.indexOf(timeLine);
-          const txt = lines.slice(idxTime + 1).join(' ');
-          srtBlocks.push({ id: idx + 1, start: st, end: et, text: txt });
-        }
+    const cleanText = srtRaw.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const lines = cleanText.split('\n');
+    const tcPattern = /(?:(?:(\d{1,2}):)?(\d{1,2}):(\d{1,2})(?:[,.](\d{1,4}))?)\s*-->\s*(?:(?:(\d{1,2}):)?(\d{1,2}):(\d{1,2})(?:[,.](\d{1,4}))?)/;
+    
+    function parseTime(h, m, s, ms) {
+      const hVal = h ? parseInt(h, 10) : 0;
+      const mVal = m ? parseInt(m, 10) : 0;
+      const sVal = s ? parseInt(s, 10) : 0;
+      const msVal = ms ? parseFloat('0.' + ms) : 0.0;
+      return hVal * 3600.0 + mVal * 60.0 + sVal + msVal;
+    }
+
+    function isNextCueAhead(startIdx) {
+      let k = startIdx;
+      while (k < lines.length && !lines[k].trim()) k++;
+      if (k >= lines.length) return false;
+      const firstNonEmpty = lines[k].trim();
+      if (tcPattern.test(firstNonEmpty)) return true;
+      if (/^\d+$/.test(firstNonEmpty)) {
+        let k2 = k + 1;
+        while (k2 < lines.length && !lines[k2].trim()) k2++;
+        if (k2 < lines.length && tcPattern.test(lines[k2].trim())) return true;
       }
-    });
+      return false;
+    }
+
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i].trim();
+      const m = line.match(tcPattern);
+      if (m) {
+        const st = parseTime(m[1], m[2], m[3], m[4]);
+        let et = parseTime(m[5], m[6], m[7], m[8]);
+        if (et <= st) et = st + 1.0;
+
+        const textParts = [];
+        i++;
+        while (i < lines.length) {
+          const nextLine = lines[i].trim();
+          if (!nextLine) {
+            if (isNextCueAhead(i + 1)) break;
+            i++;
+            continue;
+          }
+          if (tcPattern.test(nextLine)) break;
+          if (/^\d+$/.test(nextLine) && isNextCueAhead(i)) break;
+          textParts.push(nextLine);
+          i++;
+        }
+
+        while (textParts.length && /^\d+$/.test(textParts[textParts.length - 1].trim())) {
+          textParts.pop();
+        }
+
+        const txt = textParts.join(' ').trim();
+        if (txt) {
+          srtBlocks.push({ id: srtBlocks.length + 1, start: st, end: et, text: txt });
+        }
+      } else {
+        i++;
+      }
+    }
   }
 
   state.subtitles = srtBlocks;
