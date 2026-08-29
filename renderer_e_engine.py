@@ -164,7 +164,28 @@ def render_slide_subpixel(
         ] + enc_args + [output_mp4]
 
         proc = subprocess.Popen(ffmpeg_cmd, stdin=subprocess.PIPE, stderr=subprocess.DEVNULL)
-        out_size = (1, 3, height, width)
+        # RGSS Subpixel Sampling Pattern (Rotated Grid Super-Sampling)
+        if sampling_mode == "rgss_4x" or sampling_mode == "prefiltered_gpu":
+            num_samples = 4
+            offsets = [
+                (-0.375 / width, -0.125 / height),
+                (0.125 / width, -0.375 / height),
+                (-0.125 / width, 0.375 / height),
+                (0.375 / width, 0.125 / height)
+            ]
+        elif sampling_mode == "rgss_2x":
+            num_samples = 2
+            offsets = [
+                (-0.25 / width, -0.25 / height),
+                (0.25 / width, 0.25 / height)
+            ]
+        else:
+            num_samples = 1
+            offsets = [(0.0, 0.0)]
+
+        offsets_t = torch.tensor(offsets, dtype=torch.float32, device=device)
+        out_size = (num_samples, 3, height, width)
+        tensor_batch = tensor.expand(num_samples, -1, -1, -1)
 
         # Render frame sequence
         for on in range(total_frames):
@@ -180,17 +201,21 @@ def render_slide_subpixel(
             z = max(0.5, transform.zoom)
             inv_z = 0.5 / z
             
-            # Subpixel offset
-            tx = -transform.x * (0.5 - inv_z) if abs(transform.x) > 1e-6 else 0.0
-            ty = -transform.y * (0.5 - inv_z) if abs(transform.y) > 1e-6 else 0.0
+            # Subpixel base offset
+            base_tx = -transform.x * (0.5 - inv_z) if abs(transform.x) > 1e-6 else 0.0
+            base_ty = -transform.y * (0.5 - inv_z) if abs(transform.y) > 1e-6 else 0.0
+
+            thetas = torch.zeros((num_samples, 2, 3), dtype=torch.float32, device=device)
+            thetas[:, 0, 0] = inv_z
+            thetas[:, 1, 1] = inv_z
+            thetas[:, 0, 2] = base_tx + offsets_t[:, 0] * 2.0
+            thetas[:, 1, 2] = base_ty + offsets_t[:, 1] * 2.0
             
-            theta = torch.tensor([[[inv_z, 0.0, tx],
-                                   [0.0, inv_z, ty]]], dtype=torch.float32, device=device)
+            grid_batch = F.affine_grid(thetas, out_size, align_corners=True)
+            sampled_batch = F.grid_sample(tensor_batch, grid_batch, mode='bilinear', padding_mode='reflection', align_corners=True)
             
-            grid = F.affine_grid(theta, out_size, align_corners=True)
-            sampled = F.grid_sample(tensor, grid, mode='bilinear', padding_mode='reflection', align_corners=True)
-            
-            frame_bytes = (sampled[0].permute(1, 2, 0).clamp(0.0, 1.0).cpu().numpy() * 255.0).astype(np.uint8).tobytes()
+            accum = sampled_batch.mean(dim=0, keepdim=True)
+            frame_bytes = (accum[0].permute(1, 2, 0).clamp(0.0, 1.0).cpu().numpy() * 255.0).astype(np.uint8).tobytes()
             proc.stdin.write(frame_bytes)
 
         proc.stdin.close()
