@@ -294,6 +294,53 @@ if (isset($_GET['registered'])) {
         a:hover { color: #409cff; }
         .container { max-width: 1240px; margin: 0 auto; padding: 0 24px; }
         
+        
+        html {
+            scroll-behavior: smooth;
+        }
+
+        /* ── Floating Trial Badge Callout (Pointing to Đăng Ký) ── */
+        .register-btn-wrap {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+        }
+        .trial-badge-callout {
+            position: absolute;
+            bottom: calc(100% + 10px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #0a84ff, #5e5ce6);
+            color: #ffffff;
+            font-size: 11px;
+            font-weight: 800;
+            padding: 4px 12px;
+            border-radius: 9999px;
+            white-space: nowrap;
+            box-shadow: 0 4px 16px rgba(10, 132, 255, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+            animation: floatBadge 2.2s ease-in-out infinite;
+            pointer-events: none;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .trial-badge-callout .callout-arrow {
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top: 6px solid #5e5ce6;
+        }
+        @keyframes floatBadge {
+            0%, 100% { transform: translate(-50%, 0); }
+            50% { transform: translate(-50%, -6px); }
+        }
+
         /* ── Navbar ───────────────────────────────────────── */
         nav {
             display: flex; justify-content: space-between; align-items: center;
@@ -686,7 +733,13 @@ if (isset($_GET['registered'])) {
                     <a href="?logout=1" class="btn-outline" style="font-size:12px">Đăng Xuất (<?= htmlspecialchars($user_info['username']) ?>) 🚪</a>
                 <?php else: ?>
                     <button class="btn-outline" onclick="openModal('modal-login')">Đăng Nhập</button>
-                    <button class="btn-primary" onclick="openModal('modal-register')">🎁 Nhận Key 3 Ngày</button>
+                    <div class="register-btn-wrap">
+                        <div class="trial-badge-callout">
+                            🎁 Nhận Key 3 Ngày
+                            <span class="callout-arrow"></span>
+                        </div>
+                        <button class="btn-primary shimmer-button" onclick="openModal('modal-register')">✨ Đăng Ký</button>
+                    </div>
                 <?php endif; ?>
             </div>
         </div>
@@ -711,7 +764,7 @@ if (isset($_GET['registered'])) {
                 </div>
                 <div style="display:flex;gap:10px">
                     <button class="btn-primary" onclick="switchMainTab('tab-buy-key')">🛒 Mua / Thuê Key VIP</button>
-                    <a href="/downloads/SlideshowBuilder_Windows_v2.2.3.2.zip?v=2.2.3.2" class="btn-outline">📥 Tải Bản Cài Đặt (v2.1.4)</a>
+                    <a href="/downloads/SlideshowBuilder_Windows_latest.zip" class="btn-outline">📥 Tải Bản Cài Đặt (v2.2.3.17)</a>
                 </div>
             </div>
 
@@ -1088,7 +1141,7 @@ if (isset($_GET['registered'])) {
                 <!-- ── PRODUCT 1: SLIDESHOW BUILDER AI ── -->
                 <div id="ptab-video" class="prod-tab-content" style="display:block">
                     <!-- Features -->
-                    <div class="grid-3" style="margin-bottom:40px">
+                    <div id="features" class="grid-3" style="margin-bottom:40px;scroll-margin-top:90px">
                         <div class="feature-card">
                             <div class="feat-icon">🎥</div>
                             <div class="feat-title">Cú Máy Ken Burns 4K</div>
@@ -1109,19 +1162,19 @@ if (isset($_GET['registered'])) {
                     <!-- Video Tool Download Box (Windows & macOS Dedicated) -->
                     <div style="background:#101626;border:1px solid #6366f1;border-radius:18px;padding:28px;margin-bottom:40px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px">
                         <div>
-                            <span class="badge badge-active" style="margin-bottom:8px;display:inline-block">BẢN CHÍNH THỨC v2.1.4</span>
+                            <span class="badge badge-active" style="margin-bottom:8px;display:inline-block">BẢN CHÍNH THỨC v2.2.3.17</span>
                             <h3 style="font-size:20px;font-weight:900;color:#fff">Tải Bản Cài Đặt Slideshow Builder AI</h3>
                             <p style="font-size:13px;color:#94a3b8;margin-top:4px">Phiên bản tối ưu hóa riêng biệt cho Windows & macOS — Giải nén là chạy ngay lập tức.</p>
                         </div>
                         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-                            <a href="/downloads/SlideshowBuilder_Windows_v2.2.3.2.zip?v=2.2.3.2" class="btn-primary" style="padding:12px 20px;background:linear-gradient(135deg,#0284c7,#38bdf8)">🪟 Tải Cho Windows (.zip)</a>
-                            <a href="/downloads/SlideshowBuilder_macOS_v2.2.3.2.zip?v=2.2.3.2" class="btn-primary" style="padding:12px 20px;background:linear-gradient(135deg,#6366f1,#a855f7)">🍎 Tải Cho macOS (.zip)</a>
+                            <a href="/downloads/SlideshowBuilder_Windows_latest.zip" class="btn-primary" style="padding:12px 20px;background:linear-gradient(135deg,#0284c7,#38bdf8)">🪟 Tải Cho Windows (.zip)</a>
+                            <a href="/downloads/SlideshowBuilder_macOS_latest.zip" class="btn-primary" style="padding:12px 20px;background:linear-gradient(135deg,#6366f1,#a855f7)">🍎 Tải Cho macOS (.zip)</a>
                             <button class="btn-outline" style="padding:12px 18px" onclick="openModal('modal-register')">🎁 Dùng Thử 3 Ngày</button>
                         </div>
                     </div>
 
                     <!-- Pricing Video -->
-                    <h3 style="text-align:center;font-size:22px;font-weight:800;color:#fff;margin-bottom:24px">BẢNG GIÁ BẢN QUYỀN TOOL VIDEO</h3>
+                    <h3 id="pricing" style="text-align:center;font-size:24px;font-weight:800;color:#fff;margin-bottom:24px;scroll-margin-top:80px">💰 BẢNG GIÁ BẢN QUYỀN TOOL VIDEO</h3>
                     <div class="grid-3">
                         <div class="pricing-card">
                             <div>
@@ -1250,6 +1303,63 @@ if (isset($_GET['registered'])) {
                     </div>
                 </div>
             </section>
+
+            <!-- ═══ KHU VỰC TẢI VỀ PHẦN MỀM (DOWNLOADS SECTION) ═══ -->
+            <section id="download" style="padding:40px 0 60px;scroll-margin-top:80px">
+                <div style="text-align:center;margin-bottom:32px">
+                    <span style="background:rgba(10,132,255,0.15);border:1px solid #0a84ff;color:#64d2ff;padding:6px 18px;border-radius:20px;font-size:12px;font-weight:800;display:inline-block;margin-bottom:12px">📥 TẢI PHẦN MỀM & EXTENSION</span>
+                    <h2 class="sec-title" style="font-size:32px">TẢI VỀ PHIÊN BẢN MỚI NHẤT (v2.2.3.17)</h2>
+                    <p class="sec-subtitle">Tương thích hoàn hảo trên cả Windows 10/11 và macOS Apple Silicon / Intel</p>
+                </div>
+
+                <div class="grid-3" style="margin-bottom:30px">
+                    <!-- Download Card 1: Windows -->
+                    <div class="feature-card liquid-glass" style="display:flex;flex-direction:column;justify-content:space-between">
+                        <div>
+                            <div style="font-size:36px;margin-bottom:14px">🪟</div>
+                            <div class="feat-title">Bản Cài Windows (64-bit)</div>
+                            <p class="feat-desc" style="margin-bottom:16px">Tự động kích hoạt GPU NVIDIA NVENC, AMD AMF & Intel QSV. Khóa chuẩn xuất 60 FPS mượt mà.</p>
+                            <div style="font-size:12px;color:var(--text-muted);margin-bottom:18px">
+                                📌 Yêu cầu: Windows 10 / 11 (64-bit) · Dung lượng: ~6.28 MB
+                            </div>
+                        </div>
+                        <a href="/downloads/SlideshowBuilder_Windows_latest.zip" class="btn-primary shimmer-button" style="width:100%;padding:12px;font-weight:800;justify-content:center">
+                            📥 Tải Bản Windows (.zip)
+                        </a>
+                    </div>
+
+                    <!-- Download Card 2: macOS -->
+                    <div class="feature-card liquid-glass" style="display:flex;flex-direction:column;justify-content:space-between">
+                        <div>
+                            <div style="font-size:36px;margin-bottom:14px">🍎</div>
+                            <div class="feat-title">Bản Cài macOS (M1/M2/M3/M4 & Intel)</div>
+                            <p class="feat-desc" style="margin-bottom:16px">Tối ưu hóa GPU Apple VideoToolbox Metal, siêu tiết kiệm pin và render 60 FPS tốc độ cao.</p>
+                            <div style="font-size:12px;color:var(--text-muted);margin-bottom:18px">
+                                📌 Yêu cầu: macOS 12 Monterey trở lên · Dung lượng: ~6.28 MB
+                            </div>
+                        </div>
+                        <a href="/downloads/SlideshowBuilder_macOS_latest.zip" class="btn-primary shimmer-button" style="width:100%;padding:12px;font-weight:800;justify-content:center">
+                            📥 Tải Bản macOS (.zip)
+                        </a>
+                    </div>
+
+                    <!-- Download Card 3: Extension Google Labs -->
+                    <div class="feature-card liquid-glass" style="display:flex;flex-direction:column;justify-content:space-between">
+                        <div>
+                            <div style="font-size:36px;margin-bottom:14px">🧩</div>
+                            <div class="feat-title">Extension Google Labs Flow</div>
+                            <p class="feat-desc" style="margin-bottom:16px">Tiện ích tự động tải ảnh 2K/4K hàng loạt, đánh số 001→xxx cho Chrome và Microsoft Edge.</p>
+                            <div style="font-size:12px;color:var(--text-muted);margin-bottom:18px">
+                                📌 Trình duyệt: Google Chrome / Edge · Cài đặt 30s
+                            </div>
+                        </div>
+                        <a href="/downloads/2tamne_Labs_Extension_v1.5.0.2.zip?v=1.5.0.2" class="btn-outline" style="width:100%;padding:12px;font-weight:800;justify-content:center">
+                            📥 Tải Extension (.zip)
+                        </a>
+                    </div>
+                </div>
+            </section>
+
         <?php endif; ?>
     </div>
 
@@ -1599,6 +1709,38 @@ function confirmNoticeRead(noticeId) {
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+
+// ── Smooth Scroll & Tab Switch for Navbar Links ──────────────
+document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+    anchor.addEventListener('click', function(e) {
+        const targetId = this.getAttribute('href').substring(1);
+        if (!targetId) return;
+
+        // If user is logged in and clicks pricing -> switch to buy tab
+        if (targetId === 'pricing' && typeof switchMainTab === 'function') {
+            const buyTab = document.getElementById('tab-buy-key');
+            if (buyTab) {
+                e.preventDefault();
+                switchMainTab('tab-buy-key');
+                window.scrollTo({ top: buyTab.offsetTop - 80, behavior: 'smooth' });
+                return;
+            }
+        }
+
+        const targetEl = document.getElementById(targetId);
+        if (targetEl) {
+            e.preventDefault();
+            const navHeight = document.querySelector('nav')?.offsetHeight || 70;
+            const elementPosition = targetEl.getBoundingClientRect().top;
+            const offsetPosition = elementPosition + window.pageYOffset - navHeight - 10;
+            window.scrollTo({
+                top: offsetPosition,
+                behavior: 'smooth'
+            });
+        }
+    });
+});
+
     const spotlightCards = document.querySelectorAll('.feature-card, .pricing-card, .stat-card, .card, .liquid-glass, .dash-header');
     spotlightCards.forEach(card => {
         card.addEventListener('mousemove', e => {
