@@ -233,10 +233,10 @@ def normalize_weights(weights: Dict[str, float]) -> Dict[str, float]:
 # Ken Burns effect expressions (FFmpeg zoompan filter)
 # ---------------------------------------------------------------------------
 
-def _zoompan_params(effect: str, magnitude: float, total_frames: int) -> dict:
+def _zoompan_params(effect: str, magnitude: float, total_frames: int, trajectory: str = 'baseline') -> dict:
     """
     Return deterministic, absolute frame-based z / x / y expressions for FFmpeg's zoompan filter.
-    Uses constant perceptual velocity (Linear) to prevent zero-velocity subpixel freeze quantization.
+    Supports 'inverse_scale' (optimal visible crop linearity, minimal shimmer) and 'baseline' / 'linear'.
     """
     NF = max(1, total_frames - 1)
     M = max(0.01, min(float(magnitude), 1.0))
@@ -252,14 +252,27 @@ def _zoompan_params(effect: str, magnitude: float, total_frames: int) -> dict:
             y="(ih-ih/zoom)/2"
         )
     elif effect == 'zoom_in':
+        if trajectory in ('baseline', 'linear'):
+            z_val = f"1.0+{M:.5f}*{t_str}"
+        else:
+            # Inverse-Scale: Constant visible crop area rate of change
+            k = M / (1.0 + M)
+            z_val = f"1.0/(1.0-{k:.6f}*{t_str})"
         return dict(
-            z=f"1.0+{M:.5f}*{t_str}",
+            z=z_val,
             x="(iw-iw/zoom)/2",
             y="(ih-ih/zoom)/2"
         )
     elif effect == 'zoom_out':
+        if trajectory in ('baseline', 'linear'):
+            z_val = f"1.0+{M:.5f}*(1.0-{t_str})"
+        else:
+            # Inverse-Scale: S(t) = 1/(1+M) + (M/(1+M))*t
+            inv_z = 1.0 / (1.0 + M)
+            k = M / (1.0 + M)
+            z_val = f"1.0/({inv_z:.6f}+{k:.6f}*{t_str})"
         return dict(
-            z=f"1.0+{M:.5f}*(1.0-{t_str})",
+            z=z_val,
             x="(iw-iw/zoom)/2",
             y="(ih-ih/zoom)/2"
         )
