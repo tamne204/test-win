@@ -1,45 +1,60 @@
 /* =========================================================
-   iOS Dark Mode & Glassmorphism Design System
+   iOS Dark Mode Liquid Glass Design System
    ========================================================= */
 :root {
-  --bg:         #000000;
-  --bg2:        #0d0d0f;
-  --card:       rgba(28, 28, 30, 0.78);
-  --card-solid: #1c1c1e;
-  --card-elev:  rgba(44, 44, 46, 0.72);
-  --border:     rgba(255, 255, 255, 0.10);
-  --border-hi:  rgba(255, 255, 255, 0.18);
-  --primary:    #0a84ff;
-  --primary-lo: rgba(10, 132, 255, 0.15);
-  --primary-hi: #409cff;
-  --accent:     #5e5ce6;
-  --text:       #ffffff;
-  --text-dim:   rgba(235, 235, 245, 0.75);
-  --text-muted: rgba(235, 235, 245, 0.50);
-  --success:    #30d158;
-  --error:      #ff453a;
-  --warning:    #ffd60a;
-  --tts:        #64d2ff;
-  --tts-lo:     rgba(100, 210, 255, 0.12);
-  --hdr:        54px;
-  --ftr:        110px;
-  --r:          16px;
-  --r-sm:       10px;
-  --r-pill:     9999px;
-  --glass-blur: blur(25px) saturate(180%);
-  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.45);
+  --bg:          #000000;
+  --bg-surface:  #0a0a0c;
+  --bg-gradient: radial-gradient(circle at 50% 0%, rgba(30, 58, 110, 0.25) 0%, #000000 75%);
+  --bg2:         rgba(13, 13, 15, 0.75);
+  --card:        rgba(28, 28, 30, 0.65);
+  --card-solid:  #1c1c1e;
+  --card-elev:   rgba(44, 44, 46, 0.55);
+  --border:      rgba(255, 255, 255, 0.12);
+  --border-hi:   rgba(255, 255, 255, 0.24);
+  --primary:     #0a84ff;
+  --primary-lo:  rgba(10, 132, 255, 0.16);
+  --primary-hi:  #0077ed;
+  --primary-act: #0062c4;
+  --accent:      #5e5ce6;
+  --text:        #ffffff;
+  --text-dim:    rgba(235, 235, 245, 0.75);
+  --text-muted:  rgba(235, 235, 245, 0.48);
+  --success:     #30d158;
+  --success-bg:  rgba(48, 209, 88, 0.16);
+  --success-brd: rgba(48, 209, 88, 0.35);
+  --error:       #ff453a;
+  --error-bg:    rgba(255, 69, 58, 0.16);
+  --error-brd:   rgba(255, 69, 58, 0.35);
+  --warning:     #ffd60a;
+  --warning-bg:  rgba(255, 214, 10, 0.16);
+  --warning-brd: rgba(255, 214, 10, 0.35);
+  --tts:         #64d2ff;
+  --tts-lo:      rgba(100, 210, 255, 0.14);
+  --hdr:         56px;
+  --ftr:         112px;
+  --r-card:      20px;
+  --r-modal:     24px;
+  --r-btn:       12px;
+  --r-input:     12px;
+  --r-pill:      9999px;
+  --glass-blur:  blur(28px) saturate(190%);
+  --glass-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.15), 0 20px 40px rgba(0, 0, 0, 0.60);
+  --glass-btn-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.20), 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; overflow: hidden; }
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", system-ui, sans-serif;
   background: var(--bg);
+  background-image: var(--bg-gradient);
+  background-attachment: fixed;
   color: var(--text);
   display: flex;
   flex-direction: column;
   font-size: 13px;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
+  -webkit-font-smoothing: antialiased;
 }
 
 ::-webkit-scrollbar { width: 5px; height: 5px; }
@@ -124,14 +139,14 @@ body {
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid var(--border);
-  border-radius: var(--r);
+  border-radius: var(--r-card);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   height: 100%;
   min-height: 0;
   box-shadow: var(--glass-shadow);
-  transition: border-color 0.2s ease;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
 }
 .dash-card:hover {
   border-color: var(--border-hi);
@@ -141,8 +156,10 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 16px;
-  background: rgba(28, 28, 30, 0.90);
+  padding: 13px 18px;
+  background: rgba(28, 28, 30, 0.70);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -152,6 +169,53 @@ body {
   font-weight: 700;
   letter-spacing: -0.01em;
   color: #ffffff;
+}
+
+/* =========================================================
+   BUTTON AUDIT & 4-STATE INTERACTIVE ENGINE
+   ========================================================= */
+button, .btn, .btn-primary-action, .btn-sub-action, .bopt, .tab-btn, .btn-proj-action, .mc-btn, .insp-tab-btn, .btn-render, .btn-download, .btn-download-srt {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              background 0.2s ease,
+              border-color 0.2s ease,
+              box-shadow 0.2s ease,
+              opacity 0.2s ease !important;
+}
+
+button:hover:not(:disabled),
+.btn:hover:not(:disabled),
+.btn-primary-action:hover:not(:disabled),
+.btn-sub-action:hover:not(:disabled),
+.bopt:hover:not(:disabled),
+.btn-render:hover:not(:disabled),
+.btn-download:hover:not(:disabled),
+.btn-download-srt:hover:not(:disabled),
+.btn-proj-action:hover:not(:disabled) {
+  transform: scale(1.02);
+  filter: brightness(1.08);
+}
+
+button:active:not(:disabled),
+.btn:active:not(:disabled),
+.btn-primary-action:active:not(:disabled),
+.btn-sub-action:active:not(:disabled),
+.bopt:active:not(:disabled),
+.btn-render:active:not(:disabled),
+.btn-download:active:not(:disabled),
+.btn-download-srt:active:not(:disabled),
+.btn-proj-action:active:not(:disabled) {
+  transform: scale(0.98);
+  filter: brightness(0.95);
+}
+
+button:disabled,
+.btn:disabled,
+.btn-primary-action:disabled,
+.btn-sub-action:disabled,
+.btn-render:disabled {
+  opacity: 0.50 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
 }
 
 .dash-card-body {
@@ -1610,30 +1674,33 @@ input[type=range]::-webkit-slider-thumb:hover {
   100% { transform: scale(0.95); opacity: 0.8; }
 }
 
-/* ─── Diagnostic Error Modal ─── */
+/* ─── Diagnostic Error & System Modals ─── */
 .diag-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.82);
-  backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
   z-index: 100000;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 16px;
-  animation: modalFadeIn 0.2s ease-out;
+  animation: modalFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 @keyframes modalFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
 }
 .diag-modal-card {
-  background: #0f172a;
-  border: 1px solid #ef4444;
-  border-radius: 12px;
+  background: rgba(28, 28, 30, 0.85);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border-hi);
+  border-radius: var(--r-modal);
   width: 100%;
   max-width: 620px;
-  box-shadow: 0 20px 45px rgba(239, 68, 68, 0.25);
+  box-shadow: var(--glass-shadow);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1642,103 +1709,111 @@ input[type=range]::-webkit-slider-thumb:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 18px;
-  background: rgba(239, 68, 68, 0.1);
-  border-bottom: 1px solid rgba(239, 68, 68, 0.2);
+  padding: 16px 20px;
+  background: rgba(44, 44, 46, 0.60);
+  border-bottom: 1px solid var(--border);
 }
 .diag-close-btn {
-  background: transparent;
-  border: none;
-  color: #94a3b8;
-  font-size: 24px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
   line-height: 1;
   cursor: pointer;
-  padding: 0 4px;
+  transition: all 0.2s ease;
 }
-.diag-close-btn:hover { color: #fff; }
+.diag-close-btn:hover { color: #fff; background: rgba(255, 255, 255, 0.15); transform: scale(1.05); }
 .diag-modal-body {
-  padding: 18px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   max-height: 70vh;
   overflow-y: auto;
 }
-.diag-item-row { display: flex; flex-direction: column; gap: 4px; }
+.diag-item-row { display: flex; flex-direction: column; gap: 6px; }
 .diag-label {
   font-size: 11px;
   font-weight: 700;
-  color: #94a3b8;
+  color: var(--text-muted);
   letter-spacing: 0.5px;
 }
 .diag-code-badge {
   display: inline-block;
   align-self: flex-start;
-  background: rgba(239, 68, 68, 0.2);
-  border: 1px solid #ef4444;
-  color: #fca5a5;
-  font-family: monospace;
+  background: var(--error-bg);
+  border: 1px solid var(--error-brd);
+  color: #ff9f97;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Mono", monospace;
   font-size: 13px;
   font-weight: 800;
-  padding: 3px 8px;
-  border-radius: 4px;
+  padding: 4px 10px;
+  border-radius: var(--r-btn);
 }
 .diag-msg-text {
   font-size: 14px;
   font-weight: 600;
-  color: #f1f5f9;
+  color: #ffffff;
   line-height: 1.4;
 }
 .diag-details-box {
-  background: #020617;
-  border: 1px solid #334155;
-  border-radius: 6px;
-  padding: 10px 12px;
-  font-family: monospace;
+  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid var(--border);
+  border-radius: var(--r-input);
+  padding: 12px 14px;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Mono", monospace;
   font-size: 11.5px;
-  color: #f87171;
+  color: #ff9f97;
   white-space: pre-wrap;
   word-break: break-all;
   max-height: 160px;
   overflow-y: auto;
 }
 .diag-sugg-box {
-  background: rgba(56, 189, 248, 0.08);
-  border: 1px solid #0284c7;
-  border-radius: 6px;
-  padding: 10px 12px;
+  background: rgba(10, 132, 255, 0.12);
+  border: 1px solid rgba(10, 132, 255, 0.30);
+  border-radius: var(--r-input);
+  padding: 12px 14px;
   font-size: 12.5px;
-  color: #38bdf8;
+  color: var(--primary-hi);
   line-height: 1.4;
 }
 .diag-modal-footer {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
-  padding: 12px 18px;
-  background: #090d16;
-  border-top: 1px solid #1e293b;
+  gap: 12px;
+  padding: 14px 20px;
+  background: rgba(28, 28, 30, 0.90);
+  border-top: 1px solid var(--border);
 }
 .btn-diag-action {
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 12px;
+  padding: 9px 18px;
+  border-radius: var(--r-btn);
+  font-size: 12.5px;
   font-weight: 700;
   cursor: pointer;
-  border: none;
-  transition: all 0.15s;
+  border: 1px solid transparent;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .btn-diag-copy {
-  background: #38bdf8;
-  color: #0f172a;
+  background: rgba(10, 132, 255, 0.20);
+  border-color: rgba(10, 132, 255, 0.40);
+  color: #ffffff;
 }
-.btn-diag-copy:hover { background: #7dd3fc; }
+.btn-diag-copy:hover { background: var(--primary); }
 .btn-diag-dismiss {
-  background: #334155;
-  color: #f1f5f9;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--border);
+  color: var(--text-dim);
 }
-.btn-diag-dismiss:hover { background: #475569; }
+.btn-diag-dismiss:hover { background: rgba(255, 255, 255, 0.15); color: #fff; }
 
 /* ─── Card 2 Switcher & Loading Spinner ─── */
 .card-mode-toggle .c2-tab-btn:hover {

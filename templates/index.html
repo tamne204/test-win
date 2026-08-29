@@ -30,22 +30,22 @@
     </div>
 
     <!-- Project Studio Toolbar -->
-    <div class="project-toolbar" style="display:flex;align-items:center;gap:8px;background:rgba(15,23,42,.8);padding:4px 10px;border-radius:8px;border:1px solid #334155">
-      <span style="font-size:12px;font-weight:700;color:#94a3b8">📂 Dự Án:</span>
-      <select id="sel-project-list" class="proj-select" style="background:#0f172a;color:#38bdf8;border:1px solid #475569;border-radius:4px;padding:3px 8px;font-size:12px;font-weight:600;max-width:220px">
+    <div class="project-toolbar" style="display:flex;align-items:center;gap:8px;background:rgba(28,28,30,0.65);padding:4px 12px;border-radius:12px;border:1px solid rgba(255,255,255,0.12);backdrop-filter:blur(15px);box-shadow:inset 0 1px 0 rgba(255,255,255,0.12)">
+      <span style="font-size:12px;font-weight:700;color:var(--text-dim)">📂 Dự Án:</span>
+      <select id="sel-project-list" class="proj-select" style="background:rgba(44,44,46,0.65);color:#ffffff;border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:4px 10px;font-size:12px;font-weight:600;max-width:220px;outline:none">
         <option value="">(Chưa chọn dự án)</option>
       </select>
-      <button type="button" id="btn-proj-new" class="btn-proj-action" style="background:#4f46e5;color:#fff;border:none;border-radius:4px;padding:4px 9px;font-size:11px;font-weight:700;cursor:pointer" title="Tạo dự án mới">➕ Mới</button>
-      <button type="button" id="btn-proj-save" class="btn-proj-action" style="background:#059669;color:#fff;border:none;border-radius:4px;padding:4px 9px;font-size:11px;font-weight:700;cursor:pointer" title="Lưu toàn bộ dữ liệu dự án">💾 Lưu</button>
-      <span id="autosave-status" style="font-size:10.5px;color:#10b981;font-weight:600;white-space:nowrap">🟢 Đã lưu</span>
+      <button type="button" id="btn-proj-new" class="btn-proj-action" style="background:rgba(10,132,255,0.20);color:#409cff;border:1px solid rgba(10,132,255,0.40);border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:700;cursor:pointer" title="Tạo dự án mới">➕ Mới</button>
+      <button type="button" id="btn-proj-save" class="btn-proj-action" style="background:rgba(48,209,88,0.20);color:#30d158;border:1px solid rgba(48,209,88,0.40);border-radius:8px;padding:5px 10px;font-size:11.5px;font-weight:700;cursor:pointer" title="Lưu toàn bộ dữ liệu dự án">💾 Lưu</button>
+      <span id="autosave-status" style="font-size:10.5px;color:#30d158;font-weight:600;white-space:nowrap">🟢 Đã lưu</span>
     </div>
 
     <div class="header-badges">
-      <div id="update-badge" class="badge" style="display:none;cursor:pointer;background:linear-gradient(135deg,rgba(99,102,241,0.25),rgba(244,63,94,0.25));border:1px solid #818cf8;color:#f43f5e;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:800;align-items:center;gap:5px" title="Có phiên bản mới (Bấm để xem và cập nhật)">
+      <div id="update-badge" class="badge" style="display:none;cursor:pointer;background:linear-gradient(135deg,rgba(10,132,255,0.25),rgba(255,69,58,0.25));border:1px solid rgba(10,132,255,0.5);color:#ff453a;padding:4px 12px;border-radius:9999px;font-size:11px;font-weight:800;align-items:center;gap:5px" title="Có phiên bản mới (Bấm để xem và cập nhật)">
         <span>🚀</span>
         <span id="update-badge-text">Có bản mới!</span>
       </div>
-      <div id="license-badge" class="badge" style="cursor:pointer;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#818cf8;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:5px" title="Bản quyền phần mềm (Bấm để xem/kích hoạt)">
+      <div id="license-badge" class="badge" style="cursor:pointer;background:rgba(10,132,255,0.15);border:1px solid rgba(10,132,255,0.35);color:#409cff;padding:4px 12px;border-radius:9999px;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:5px" title="Bản quyền phần mềm (Bấm để xem/kích hoạt)">
         <span id="lic-badge-icon">💎</span>
         <span id="lic-badge-text">Đang kiểm tra...</span>
       </div>
@@ -56,7 +56,7 @@
       {% if not ffmpeg_available %}
       <div class="badge badge-warn">⚠️ FFmpeg missing</div>
       {% endif %}
-      <button type="button" id="btn-shutdown-app" class="badge" style="cursor:pointer;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:#f87171;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:5px;transition:all .2s" title="Tắt ứng dụng và dừng toàn bộ tiến trình máy chủ">
+      <button type="button" id="btn-shutdown-app" class="badge" style="cursor:pointer;background:rgba(255,69,58,0.15);border:1px solid rgba(255,69,58,0.40);color:#ff453a;padding:4px 12px;border-radius:9999px;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:5px;transition:all .2s" title="Tắt ứng dụng và dừng toàn bộ tiến trình máy chủ">
         <span>🛑</span>
         <span>Tắt Tool</span>
       </button>
@@ -162,7 +162,7 @@
                 </div>
 
                 <div>
-                  <button type="button" id="tts-gen-btn" class="btn-primary-action" style="width:100%;background:linear-gradient(135deg,#6366f1,#38bdf8);color:#fff;font-weight:700;padding:6px;font-size:12px;box-shadow:0 2px 8px rgba(99,102,241,.3)">
+                  <button type="button" id="tts-gen-btn" class="btn-primary-action" style="width:100%;background:linear-gradient(135deg,var(--primary),#5e5ce6);color:#fff;font-weight:700;padding:8px 12px;font-size:12.5px;border-radius:var(--r-btn);box-shadow:0 4px 14px rgba(10,132,255,0.35);border:none;cursor:pointer">
                     🎤 TẠO GIỌNG ĐỌC AI (Edge-TTS 2s)
                   </button>
                 </div>
@@ -213,11 +213,11 @@
           <div class="dash-card-body">
 
             <!-- 🔀 Card 2 Mode Switcher (2 Distinct Workflows) -->
-            <div class="card-mode-toggle" id="card2-mode-toggle" style="display:flex;gap:4px;background:#090d16;padding:3px;border-radius:6px;border:1px solid #334155;margin-bottom:8px">
-              <button type="button" class="c2-tab-btn active" data-mode="forced-align" id="c2-tab-fa" style="flex:1;padding:6px 4px;font-size:11px;font-weight:700;border:none;border-radius:4px;cursor:pointer;background:#0284c7;color:#fff;transition:all .2s ease">
+            <div class="card-mode-toggle" id="card2-mode-toggle" style="display:flex;gap:4px;background:rgba(28,28,30,0.65);padding:4px;border-radius:12px;border:1px solid rgba(255,255,255,0.12);margin-bottom:8px">
+              <button type="button" class="c2-tab-btn active" data-mode="forced-align" id="c2-tab-fa" style="flex:1;padding:6px 4px;font-size:11px;font-weight:700;border:none;border-radius:8px;cursor:pointer;background:var(--primary);color:#fff;transition:all .2s ease">
                 🎯 1. So Khớp Kịch Bản (FA)
               </button>
-              <button type="button" class="c2-tab-btn" data-mode="autosub" id="c2-tab-stt" style="flex:1;padding:6px 4px;font-size:11px;font-weight:700;border:none;border-radius:4px;cursor:pointer;background:transparent;color:#94a3b8;transition:all .2s ease">
+              <button type="button" class="c2-tab-btn" data-mode="autosub" id="c2-tab-stt" style="flex:1;padding:6px 4px;font-size:11px;font-weight:700;border:none;border-radius:8px;cursor:pointer;background:transparent;color:var(--text-dim);transition:all .2s ease">
                 🎙️ 2. Tự Động Tạo Sub (STT)
               </button>
             </div>
@@ -226,16 +226,16 @@
             <div id="c2-block-forced-align" class="c2-mode-block">
               <div class="setting-row">
                 <div class="dash-sec-header" style="margin-bottom:3px">
-                  <label class="setting-label" style="font-weight:700;color:#38bdf8">📜 Kịch Bản Gốc (.txt):</label>
+                  <label class="setting-label" style="font-weight:700;color:var(--primary-hi)">📜 Kịch Bản Gốc (.txt):</label>
                   <div style="display:flex;gap:5px">
                     <button type="button" id="btn-sync-script-card1" class="btn-clear" style="color:#a78bfa;font-size:10.5px;font-weight:600" title="Trích xuất nhanh văn bản từ Card 1 (TTS)">⚡ Lấy từ Card 1</button>
-                    <label class="btn-clear" style="color:#38bdf8;font-size:10.5px;font-weight:600;cursor:pointer" title="Tải file .txt kịch bản">
+                    <label class="btn-clear" style="color:var(--primary-hi);font-size:10.5px;font-weight:600;cursor:pointer" title="Tải file .txt kịch bản">
                       📁 Nạp File .txt
                       <input type="file" id="file-ground-truth-script" accept=".txt,.md,.json" style="display:none" />
                     </label>
                   </div>
                 </div>
-                <textarea id="inp-ground-truth-voice" class="insp-textarea" style="height:76px;font-size:11px;background:#090d16" placeholder="Nhập hoặc dán nội dung kịch bản gốc vào đây (mỗi dòng = 1 câu phụ đề chuẩn xác 100%)..."></textarea>
+                <textarea id="inp-ground-truth-voice" class="insp-textarea" style="height:76px;font-size:11px" placeholder="Nhập hoặc dán nội dung kịch bản gốc vào đây (mỗi dòng = 1 câu phụ đề chuẩn xác 100%)..."></textarea>
               </div>
 
               <div class="setting-row" style="margin-top:4px">
@@ -266,7 +266,7 @@
               </div>
 
               <div style="margin-top:6px">
-                <button type="button" id="btn-forced-alignment" class="btn-primary-action" style="width:100%;background:linear-gradient(135deg,#0284c7,#38bdf8);color:#fff;font-weight:700;padding:10px;font-size:12.5px;box-shadow:0 3px 12px rgba(2,132,199,.35);border-radius:6px" title="So khớp âm học từng từ từ file kịch bản .txt với file audio">
+                <button type="button" id="btn-forced-alignment" class="btn-primary-action" style="width:100%;background:linear-gradient(135deg,var(--primary),#0077ed);color:#fff;font-weight:700;padding:10px;font-size:12.5px;box-shadow:0 4px 14px rgba(10,132,255,0.35);border-radius:var(--r-btn);border:none;cursor:pointer" title="So khớp âm học từng từ từ file kịch bản .txt với file audio">
                   🎯 BẮT ĐẦU SO KHỚP KỊCH BẢN (Forced Alignment)
                 </button>
               </div>
@@ -285,7 +285,7 @@
 
               <div class="setting-row">
                 <label class="setting-label">🌟 Động Cơ AutoSub:</label>
-                <select id="sel-autosub-engine" class="sel-input" style="background:#0f172a;border:1px solid #38bdf8;color:#38bdf8;font-weight:700">
+                <select id="sel-autosub-engine" class="sel-input" style="color:var(--primary-hi);font-weight:700">
                   <option value="gemini-cloud-multimodal" selected>☁️ Gemini Cloud (3.6 Flash / 2.5 Flash Auto-Fallback)</option>
                 </select>
               </div>
@@ -293,9 +293,9 @@
               <div class="setting-row" id="row-gemini-key">
                 <div class="row-inline">
                   <label class="setting-label">🔑 Gemini API Key:</label>
-                  <span class="hint" style="font-size:10px;color:#38bdf8">Free Tier</span>
+                  <span class="hint" style="font-size:10px;color:var(--primary-hi)">Free Tier</span>
                 </div>
-                <input type="password" id="inp-gemini-key" class="insp-input" placeholder="Dán Gemini API Key (hoặc để trống nếu đã set ENV)..." style="font-size:11px;background:#090d16" />
+                <input type="password" id="inp-gemini-key" class="insp-input" placeholder="Dán Gemini API Key (hoặc để trống nếu đã set ENV)..." style="font-size:11px" />
               </div>
 
               <div class="setting-row">
@@ -304,23 +304,23 @@
               </div>
 
               <div style="margin-top:6px">
-                <button type="button" id="btn-auto-write-srt" class="btn-primary-action" style="width:100%;background:linear-gradient(135deg,#7c3aed,#6366f1);color:#fff;font-weight:700;padding:10px;font-size:12.5px;box-shadow:0 3px 12px rgba(124,58,237,.35);border-radius:6px" title="Tự động nghe audio và viết phụ đề">
+                <button type="button" id="btn-auto-write-srt" class="btn-primary-action" style="width:100%;background:linear-gradient(135deg,#5e5ce6,var(--primary));color:#fff;font-weight:700;padding:10px;font-size:12.5px;box-shadow:0 4px 14px rgba(94,92,230,0.35);border-radius:var(--r-btn);border:none;cursor:pointer" title="Tự động nghe audio và viết phụ đề">
                   🎙️ TỰ ĐỘNG TẠO PHỤ ĐỀ (Speech-to-Text)
                 </button>
               </div>
             </div>
 
             <!-- ─── REAL-TIME PROGRESS & LOADING BAR ─── -->
-            <div id="card-autosub-prog-wrap" class="prog-wrap" style="display:none;flex-direction:column;gap:5px;padding:9px 12px;background:rgba(15,23,42,.95);border:1.5px solid #0284c7;border-radius:6px;margin-top:8px;box-shadow:0 0 14px rgba(2,132,199,.25)">
+            <div id="card-autosub-prog-wrap" class="prog-wrap" style="display:none;flex-direction:column;gap:6px;padding:10px 14px;background:rgba(28,28,30,0.85);border:1px solid rgba(10,132,255,0.40);border-radius:var(--r-btn);margin-top:8px;box-shadow:0 0 16px rgba(10,132,255,0.25)">
               <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px">
                 <div style="display:flex;align-items:center;gap:6px">
                   <span class="spinner-inline">⏳</span>
-                  <span id="card-autosub-prog-msg" style="color:#38bdf8;font-weight:700">Đang xử lý...</span>
+                  <span id="card-autosub-prog-msg" style="color:var(--primary-hi);font-weight:700">Đang xử lý...</span>
                 </div>
-                <span id="card-autosub-prog-pct" style="color:#38bdf8;font-weight:800;font-family:monospace">0%</span>
+                <span id="card-autosub-prog-pct" style="color:var(--primary-hi);font-weight:800;font-family:monospace">0%</span>
               </div>
-              <div class="prog-track" style="height:7px;background:#090d16;border-radius:4px;overflow:hidden">
-                <div id="card-autosub-prog-fill" class="prog-fill" style="background:linear-gradient(90deg,#0284c7,#38bdf8,#a855f7);width:0%;height:100%;transition:width 0.25s ease"></div>
+              <div class="prog-track" style="height:8px;background:rgba(255,255,255,0.08);border-radius:var(--r-pill);overflow:hidden">
+                <div id="card-autosub-prog-fill" class="prog-fill" style="background:linear-gradient(90deg,var(--primary),#5e5ce6,#64d2ff);width:0%;height:100%;transition:width 0.25s ease"></div>
               </div>
             </div>
 
@@ -329,7 +329,7 @@
               <div class="dash-sec-header">
                 <span class="dash-sec-title">📝 Phụ Đề .SRT Hoàn Thiện:</span>
                 <div style="display:flex;gap:6px">
-                  <button type="button" id="btn-download-srt-file" class="btn-clear" style="color:#38bdf8;font-weight:600" title="Tải file .SRT về máy để kéo vào Premiere / CapCut">📥 Tải .SRT</button>
+                  <button type="button" id="btn-download-srt-file" class="btn-clear" style="color:var(--primary-hi);font-weight:600" title="Tải file .SRT về máy để kéo vào Premiere / CapCut">📥 Tải .SRT</button>
                   <button type="button" id="btn-clear-sub" class="btn-clear" title="Xóa toàn bộ phụ đề">✕ Xóa</button>
                 </div>
               </div>
@@ -340,11 +340,11 @@
               </div>
             </div>
 
-            <div style="display:flex;gap:6px;margin-top:6px">
-              <button type="button" id="btn-parse-script" class="btn-sub-action" style="flex:1;background:linear-gradient(135deg,#6366f1,#06b6d4);color:#fff;font-weight:700;padding:7px;font-size:11.5px" title="Nạp và đồng bộ mốc thời gian phụ đề lên Timeline">
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <button type="button" id="btn-parse-script" class="btn-sub-action" style="flex:1;background:linear-gradient(135deg,var(--primary),#5e5ce6);color:#fff;font-weight:700;padding:8px 12px;font-size:11.5px;border-radius:var(--r-btn);border:none;cursor:pointer" title="Nạp và đồng bộ mốc thời gian phụ đề lên Timeline">
                 ⚡ Đẩy Sang Timeline
               </button>
-              <button type="button" id="btn-dash-translate" class="btn-sub-action" style="flex:1;background:linear-gradient(135deg,#0284c7,#38bdf8);color:#fff;font-weight:700;padding:7px;font-size:11.5px" title="Dịch phụ đề sang Tiếng Việt">
+              <button type="button" id="btn-dash-translate" class="btn-sub-action" style="flex:1;background:linear-gradient(135deg,var(--primary-hi),var(--primary));color:#fff;font-weight:700;padding:8px 12px;font-size:11.5px;border-radius:var(--r-btn);border:none;cursor:pointer" title="Dịch phụ đề sang Tiếng Việt">
                 🌐 Dịch sang Tiếng Việt
               </button>
             </div>
@@ -499,7 +499,7 @@
             </div>
 
             <!-- Direct Jump to Timeline Button -->
-            <button type="button" id="btn-jump-timeline" class="btn-jump-timeline" style="margin-top:auto;background:linear-gradient(135deg,#6366f1,#38bdf8);color:#fff;font-weight:700;padding:10px;border-radius:6px;border:none;cursor:pointer;box-shadow:0 4px 14px rgba(99,102,241,.4)">
+            <button type="button" id="btn-jump-timeline" class="btn-jump-timeline" style="margin-top:auto;background:linear-gradient(135deg,var(--primary),#5e5ce6);color:#fff;font-weight:700;padding:12px;border-radius:var(--r-btn);border:none;cursor:pointer;box-shadow:0 4px 16px rgba(10,132,255,0.40)">
               🎞️ Mở Tab Timeline &amp; Xem Preview ➔
             </button>
 
@@ -589,10 +589,10 @@
                   <span>🎙️ Voice Studio</span>
                 </div>
                 <div class="dpane-actions-list">
-                  <button type="button" id="btn-drawer-tts" class="btn-sub-action" style="background:linear-gradient(135deg,#6366f1,#38bdf8);color:#fff;font-weight:700;padding:8px">
+                  <button type="button" id="btn-drawer-tts" class="btn-sub-action" style="background:linear-gradient(135deg,var(--primary),#5e5ce6);color:#fff;font-weight:700;padding:10px;border-radius:var(--r-btn);border:none;cursor:pointer">
                     ⚡ Sinh Giọng AI VoxCPM
                   </button>
-                  <button type="button" id="btn-drawer-autosub" class="btn-sub-action" style="background:linear-gradient(135deg,#0284c7,#38bdf8);color:#fff;font-weight:700;padding:8px">
+                  <button type="button" id="btn-drawer-autosub" class="btn-sub-action" style="background:linear-gradient(135deg,var(--primary-hi),var(--primary));color:#fff;font-weight:700;padding:10px;border-radius:var(--r-btn);border:none;cursor:pointer">
                     🌟 AutoSub Stable-Whisper
                   </button>
                 </div>
@@ -604,7 +604,7 @@
                   <span>🌐 Dịch Thuật Phụ Đề</span>
                 </div>
                 <div class="dpane-actions-list">
-                  <button type="button" id="btn-drawer-translate" class="btn-sub-action" style="background:linear-gradient(135deg,#0284c7,#38bdf8);color:#fff;font-weight:700;padding:8px">
+                  <button type="button" id="btn-drawer-translate" class="btn-sub-action" style="background:linear-gradient(135deg,var(--primary-hi),var(--primary));color:#fff;font-weight:700;padding:10px;border-radius:var(--r-btn);border:none;cursor:pointer">
                     🌐 Dịch Toàn Bộ Sang Tiếng Việt
                   </button>
                 </div>
@@ -638,7 +638,7 @@
                 <span id="mc-time-current" class="mc-timecode">00:00.00</span>
                 <span class="mc-time-sep">/</span>
                 <span id="mc-time-total" class="mc-timecode">00:00.00</span>
-                <select id="sel-monitor-ratio" class="sel-ratio-mini" style="background:#0f172a;border:1px solid #334155;color:#38bdf8;font-size:11px;padding:2px 6px;border-radius:4px;cursor:pointer">
+                <select id="sel-monitor-ratio" class="sel-ratio-mini" style="background:rgba(44,44,46,0.65);border:1px solid rgba(255,255,255,0.15);color:#ffffff;font-size:11px;padding:3px 8px;border-radius:8px;cursor:pointer;outline:none">
                   <option value="16:9" selected>16:9 (YouTube)</option>
                   <option value="9:16">9:16 (TikTok)</option>
                   <option value="1:1">1:1 (Square)</option>
@@ -654,9 +654,9 @@
 
           <!-- ⚙️ 3. RIGHT INSPECTOR (PROPERTIES & BILINGUAL SUITE) -->
           <div class="inspector-card">
-            <div class="insp-tab-header" style="display:flex;gap:4px;margin-bottom:10px;border-bottom:1px solid #334155;padding-bottom:6px">
-              <button type="button" class="insp-tab-btn active" id="insp-tab-props-btn" style="flex:1;padding:6px;font-size:11.5px;font-weight:700;background:#334155;color:#38bdf8;border:none;border-radius:4px;cursor:pointer">⚙️ Thuộc tính</button>
-              <button type="button" class="insp-tab-btn" id="insp-tab-sublist-btn" style="flex:1;padding:6px;font-size:11.5px;font-weight:700;background:transparent;color:#94a3b8;border:none;border-radius:4px;cursor:pointer">📋 Danh sách Phụ đề (<span id="insp-sub-count">0</span>)</button>
+            <div class="insp-tab-header" style="display:flex;gap:4px;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.10);padding-bottom:6px">
+              <button type="button" class="insp-tab-btn active" id="insp-tab-props-btn" style="flex:1;padding:6px;font-size:11.5px;font-weight:700;background:var(--primary);color:#ffffff;border:none;border-radius:8px;cursor:pointer">⚙️ Thuộc tính</button>
+              <button type="button" class="insp-tab-btn" id="insp-tab-sublist-btn" style="flex:1;padding:6px;font-size:11.5px;font-weight:700;background:transparent;color:var(--text-dim);border:none;border-radius:8px;cursor:pointer">📋 Danh sách Phụ đề (<span id="insp-sub-count">0</span>)</button>
             </div>
 
             <!-- Tab Pane 1: Properties Inspector -->
@@ -1205,11 +1205,11 @@
         ⚠️ <b>Môi trường phát triển (Dev Mode):</b> Tự động cập nhật file nguồn bị vô hiệu hóa để bảo vệ mã nguồn làm việc của bạn.
       </div>
     </div>
-    <div class="diag-modal-footer" style="display:flex;justify-content:space-between;align-items:center;background:#0b1120">
-      <button type="button" id="btn-update-skip" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:11.5px;text-decoration:underline">Bỏ qua bản này</button>
-      <div style="display:flex;gap:8px">
+    <div class="diag-modal-footer" style="display:flex;justify-content:space-between;align-items:center">
+      <button type="button" id="btn-update-skip" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:11.5px;text-decoration:underline">Bỏ qua bản này</button>
+      <div style="display:flex;gap:10px">
         <button type="button" id="btn-update-later" class="btn-diag-action btn-diag-dismiss">Để Sau</button>
-        <button type="button" id="btn-update-now" class="btn-diag-action" style="background:linear-gradient(135deg,#6366f1,#38bdf8);color:#fff;font-weight:700">🚀 Cập Nhật Ngay</button>
+        <button type="button" id="btn-update-now" class="btn-diag-action" style="background:var(--primary);color:#fff;font-weight:700">🚀 Cập Nhật Ngay</button>
       </div>
     </div>
   </div>
@@ -1217,67 +1217,69 @@
 
 <!-- License Activation Modal -->
 <div id="license-modal" class="diag-modal-backdrop" style="display:none;z-index:99999">
-  <div class="diag-modal-card" style="max-width:520px;border:1px solid #6366f1;box-shadow:0 20px 50px rgba(0,0,0,0.8), 0 0 30px rgba(99,102,241,0.25)">
-    <div class="diag-modal-header" style="background:linear-gradient(135deg,rgba(99,102,241,0.2),rgba(56,189,248,0.1))">
+  <div class="diag-modal-card" style="max-width:520px;border:1px solid var(--border-hi);box-shadow:var(--glass-shadow)">
+    <div class="diag-modal-header" style="background:rgba(44,44,46,0.60)">
       <div style="display:flex;align-items:center;gap:10px">
         <span style="font-size:22px">🔐</span>
-        <span style="font-weight:800;font-size:16px;color:#818cf8">KÍCH HOẠT BẢN QUYỀN PHẦN MỀM</span>
+        <span style="font-weight:800;font-size:16px;color:#ffffff">KÍCH HOẠT BẢN QUYỀN PHẦN MỀM</span>
       </div>
       <button type="button" id="btn-license-close" class="diag-close-btn">&times;</button>
     </div>
-    <div class="diag-modal-body" style="padding:16px">
-      <div style="font-size:13px;color:#94a3b8;line-height:1.5;margin-bottom:14px">
-        Vui lòng nhập <b style="color:#f8fafc">License Key</b> được cấp từ hệ thống <b style="color:#38bdf8">2tamne.site</b> để mở khóa toàn bộ tính năng Render Video, TTS AI và AutoSub.
+    <div class="diag-modal-body" style="padding:20px">
+      <div style="font-size:13px;color:var(--text-dim);line-height:1.5;margin-bottom:14px">
+        Vui lòng nhập <b style="color:#ffffff">License Key</b> được cấp từ hệ thống <b style="color:var(--primary-hi)">2tamne.site</b> để mở khóa toàn bộ tính năng Render Video, TTS AI và AutoSub.
       </div>
 
       <!-- HWID Row -->
-      <div class="diag-item-row" style="background:#0f172a;padding:10px 12px;border-radius:8px;border:1px solid #1e293b;margin-bottom:14px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-          <span class="diag-label" style="font-size:11px;color:#64748b">MÃ PHẦN CỨNG MÁY (HWID):</span>
-          <button type="button" id="btn-copy-hwid" style="background:none;border:none;color:#38bdf8;cursor:pointer;font-size:11px;font-weight:700;display:flex;align-items:center;gap:4px">
+      <div class="diag-item-row" style="background:rgba(0,0,0,0.50);padding:12px 14px;border-radius:var(--r-input);border:1px solid var(--border);margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span class="diag-label" style="font-size:11px;color:var(--text-muted)">MÃ PHẦN CỨNG MÁY (HWID):</span>
+          <button type="button" id="btn-copy-hwid" style="background:none;border:none;color:var(--primary-hi);cursor:pointer;font-size:11px;font-weight:700;display:flex;align-items:center;gap:4px">
             📋 Sao Chép HWID
           </button>
         </div>
-        <div id="lic-hwid-text" style="font-family:monospace;font-size:11px;color:#a5f3fc;word-break:break-all">Đang đọc HWID...</div>
+        <div id="lic-hwid-text" style="font-family:monospace;font-size:11.5px;color:#a5f3fc;word-break:break-all">Đang đọc HWID...</div>
       </div>
 
       <!-- License Key Input -->
       <div class="diag-item-row">
-        <label class="diag-label" style="display:block;margin-bottom:6px;font-weight:700;color:#f8fafc">NHẬP LICENSE KEY:</label>
-        <input type="text" id="inp-license-key" placeholder="Ví dụ: 2TAMNE-PREMIUM-XXXX-YYYY" style="width:100%;padding:10px 12px;border-radius:8px;background:#0f172a;border:1px solid #334155;color:#f8fafc;font-family:monospace;font-size:13px;outline:none" />
+        <label class="diag-label" style="display:block;margin-bottom:6px;font-weight:700;color:#ffffff">NHẬP LICENSE KEY:</label>
+        <input type="text" id="inp-license-key" placeholder="Ví dụ: 2TAMNE-PREMIUM-XXXX-YYYY" class="sel-input" style="width:100%;padding:10px 14px;font-family:monospace;font-size:13px" />
       </div>
 
       <!-- Status Msg -->
       <div id="lic-status-msg" style="margin-top:10px;font-size:12px;display:none"></div>
     </div>
-    <div class="diag-modal-footer" style="display:flex;justify-content:space-between;align-items:center;background:#0b1120">
-      <a href="https://www.2tamne.site/" target="_blank" style="color:#64748b;font-size:12px;text-decoration:none">🌐 2tamne.site</a>
-      <div style="display:flex;gap:8px">
+    <div class="diag-modal-footer" style="display:flex;justify-content:space-between;align-items:center">
+      <a href="https://www.2tamne.site/" target="_blank" style="color:var(--text-muted);font-size:12px;text-decoration:none">🌐 2tamne.site</a>
+      <div style="display:flex;gap:10px">
         <button type="button" id="btn-license-cancel" class="btn-diag-action btn-diag-dismiss">Đóng</button>
-        <button type="button" id="btn-license-submit" class="btn-diag-action" style="background:linear-gradient(135deg,#6366f1,#38bdf8);color:#fff;font-weight:700">⚡ Kích Hoạt Ngay</button>
+        <button type="button" id="btn-license-submit" class="btn-diag-action" style="background:var(--primary);color:#fff;font-weight:700">⚡ Kích Hoạt Ngay</button>
       </div>
     </div>
   </div>
+</div>
+
 <!-- Server Shutdown Confirmation Modal -->
 <div id="shutdown-modal" class="diag-modal-backdrop" style="display:none;z-index:999999">
-  <div class="diag-modal-card" style="max-width:440px;border:1px solid #ef4444;box-shadow:0 20px 50px rgba(0,0,0,0.8), 0 0 30px rgba(239,68,68,0.25)">
-    <div class="diag-modal-header" style="background:linear-gradient(135deg,rgba(239,68,68,0.2),rgba(15,23,42,0.8))">
+  <div class="diag-modal-card" style="max-width:440px;border:1px solid var(--error-brd);box-shadow:var(--glass-shadow)">
+    <div class="diag-modal-header" style="background:rgba(255,69,58,0.15)">
       <div style="display:flex;align-items:center;gap:10px">
         <span style="font-size:22px">🛑</span>
-        <span style="font-weight:800;font-size:15px;color:#f87171">XÁC NHẬN TẮT ỨNG DỤNG</span>
+        <span style="font-weight:800;font-size:15px;color:var(--error)">XÁC NHẬN TẮT ỨNG DỤNG</span>
       </div>
       <button type="button" id="btn-shutdown-close" class="diag-close-btn">&times;</button>
     </div>
-    <div class="diag-modal-body" style="padding:20px 16px;text-align:center">
+    <div class="diag-modal-body" style="padding:22px 18px;text-align:center">
       <div style="font-size:38px;margin-bottom:10px">🔌</div>
-      <div style="font-size:14.5px;font-weight:700;color:#f8fafc;margin-bottom:8px">Bạn có chắc chắn muốn tắt hoàn toàn tool?</div>
-      <div style="font-size:12.5px;color:#94a3b8;line-height:1.5">
+      <div style="font-size:15px;font-weight:700;color:#ffffff;margin-bottom:8px">Bạn có chắc chắn muốn tắt hoàn toàn tool?</div>
+      <div style="font-size:12.5px;color:var(--text-dim);line-height:1.5">
         Máy chủ cục bộ và toàn bộ tiến trình ngầm sẽ dừng lại ngay lập tức. Sau khi tắt, bạn có thể đóng tab trình duyệt này.
       </div>
     </div>
-    <div class="diag-modal-footer" style="display:flex;justify-content:flex-end;gap:10px;background:#0b1120">
+    <div class="diag-modal-footer" style="display:flex;justify-content:flex-end;gap:10px">
       <button type="button" id="btn-shutdown-cancel" class="btn-diag-action btn-diag-dismiss">Không, Quay Lại</button>
-      <button type="button" id="btn-shutdown-confirm" class="btn-diag-action" style="background:linear-gradient(135deg,#dc2626,#ef4444);color:#fff;font-weight:700">🛑 Tắt Ngay</button>
+      <button type="button" id="btn-shutdown-confirm" class="btn-diag-action" style="background:var(--error);color:#fff;font-weight:700">🛑 Tắt Ngay</button>
     </div>
   </div>
 </div>
