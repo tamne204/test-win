@@ -307,7 +307,7 @@ if (isset($_GET['registered'])) {
         }
         .trial-badge-callout {
             position: absolute;
-            bottom: calc(100% + 10px);
+            top: calc(100% + 10px);
             left: 50%;
             transform: translateX(-50%);
             background: linear-gradient(135deg, #0a84ff, #5e5ce6);
@@ -327,18 +327,18 @@ if (isset($_GET['registered'])) {
         }
         .trial-badge-callout .callout-arrow {
             position: absolute;
-            top: 100%;
+            bottom: 100%;
             left: 50%;
             transform: translateX(-50%);
             width: 0;
             height: 0;
             border-left: 6px solid transparent;
             border-right: 6px solid transparent;
-            border-top: 6px solid #5e5ce6;
+            border-bottom: 6px solid #0a84ff;
         }
         @keyframes floatBadge {
             0%, 100% { transform: translate(-50%, 0); }
-            50% { transform: translate(-50%, -6px); }
+            50% { transform: translate(-50%, 5px); }
         }
 
         /* ── Navbar ───────────────────────────────────────── */
