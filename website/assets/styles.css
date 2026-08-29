@@ -1,0 +1,214 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   2TAMNE.SITE — iOS Dark Mode Liquid Glass Design System
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root {
+  color-scheme: dark;
+  --bg: #000000;
+  --bg-card: rgba(28, 28, 30, 0.68);
+  --bg-card-elev: rgba(44, 44, 46, 0.58);
+  --border-subtle: rgba(255, 255, 255, 0.12);
+  --border-hi: rgba(255, 255, 255, 0.22);
+  --primary: #0a84ff;
+  --primary-hover: #0077ed;
+  --primary-active: #0062c4;
+  --accent: #5e5ce6;
+  --success: #30d158;
+  --warning: #ffd60a;
+  --danger: #ff453a;
+  --text-main: #ffffff;
+  --text-sub: rgba(235, 235, 245, 0.65);
+  --text-muted: rgba(235, 235, 245, 0.45);
+  --glass-blur: blur(28px) saturate(190%);
+  --glass-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.15), 0 20px 40px rgba(0, 0, 0, 0.65);
+  --btn-radius: 12px;
+  --card-radius: 20px;
+  --modal-radius: 24px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Montserrat", "Segoe UI", sans-serif;
+  background: var(--bg);
+  background-image: radial-gradient(circle at 50% 0%, rgba(10, 132, 255, 0.15) 0%, rgba(0, 0, 0, 0.98) 75%);
+  background-attachment: fixed;
+  color: var(--text-main);
+  line-height: 1.6;
+  letter-spacing: -0.015em;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  min-height: 100vh;
+}
+
+@media (max-width: 768px) {
+  .app-layout { grid-template-columns: 1fr; }
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────────────── */
+
+.sidebar {
+  background: rgba(28, 28, 30, 0.75);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-right: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1.5rem;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.field-group { display: flex; flex-direction: column; gap: .5rem; }
+
+.field-label {
+  color: var(--text-muted);
+  font-size: .75rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+/* ── Buttons (4-State Interactive Engine) ────────────────────────────── */
+
+.action-btn, button, .btn {
+  align-items: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--btn-radius);
+  color: #ffffff;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: .85rem;
+  font-weight: 700;
+  gap: .5rem;
+  justify-content: center;
+  min-height: 2.4rem;
+  padding: .5rem 1rem;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              background 0.2s ease,
+              border-color 0.2s ease,
+              box-shadow 0.2s ease,
+              opacity 0.2s ease;
+  font-family: inherit;
+  outline: none;
+}
+.action-btn:hover:not(:disabled), button:hover:not(:disabled), .btn:hover:not(:disabled) {
+  transform: scale(1.02); filter: brightness(1.08);
+}
+.action-btn:active:not(:disabled), button:active:not(:disabled), .btn:active:not(:disabled) {
+  transform: scale(0.98); filter: brightness(0.95);
+}
+.action-btn:disabled, button:disabled, .btn:disabled {
+  opacity: .45 !important; cursor: not-allowed !important; transform: none !important;
+}
+.icon { height: 1.1rem; width: 1.1rem; flex-shrink: 0; }
+
+/* ── Status badge ────────────────────────────────────────────────────── */
+
+.status-badge {
+  border-radius: 9999px;
+  font-size: .7rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  padding: .25rem .75rem;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.status-idle     { background: rgba(235,235,245,.10); color: var(--text-muted); border: 1px solid var(--border-subtle); }
+.status-running  { background: rgba(10,132,255,.20);  color: #64d2ff; border: 1px solid rgba(10,132,255,.4); }
+.status-completed{ background: rgba(48,209,88,.20);   color: #30d158; border: 1px solid rgba(48,209,88,.4); }
+.status-failed   { background: rgba(255,69,58,.20);   color: #ff453a; border: 1px solid rgba(255,69,58,.4); }
+.status-stopped  { background: rgba(255,214,10,.15);  color: #ffd60a; border: 1px solid rgba(255,214,10,.4); }
+
+/* ── Main content ────────────────────────────────────────────────────── */
+
+.main-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 100vh;
+}
+
+.main-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 1rem 1.75rem;
+  position: sticky;
+  top: 0;
+  background: rgba(13, 13, 15, 0.78);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  z-index: 10;
+}
+
+/* ── Quest list & Cards ──────────────────────────────────────────────── */
+
+.quest-list {
+  flex: 1;
+  padding: 1.5rem 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3.5rem;
+  text-align: center;
+  flex: 1;
+  color: var(--text-muted);
+}
+
+.quest-card {
+  background: var(--bg-card);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--card-radius);
+  display: grid;
+  grid-template-columns: 2.5rem 1fr auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  box-shadow: var(--glass-shadow);
+  transition: all 0.2s ease;
+}
+.quest-card:hover {
+  border-color: var(--border-hi);
+  transform: translateY(-2px);
+}
+.quest-card--processing {
+  border-color: rgba(10,132,255,.5);
+  background: rgba(10,132,255,.08);
+}
+.quest-card--completed  { border-color: rgba(48,209,88,.4); }
+.quest-card--failed     { border-color: rgba(255,69,58,.4); }
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.30); }
