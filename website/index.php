@@ -375,6 +375,71 @@ if (isset($_GET['registered'])) {
         }
         .btn-lg { padding: 14px 32px; font-size: 15px; border-radius: 14px; }
 
+        
+        /* ── Magic UI: Shimmer Button & Border Beam ───────── */
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        .btn-primary, .shimmer-button {
+            background: linear-gradient(110deg, #0a84ff 0%, #0a84ff 35%, #64d2ff 50%, #0a84ff 65%, #0a84ff 100%) !important;
+            background-size: 200% 100% !important;
+            animation: shimmer 3.5s infinite linear !important;
+            border: 1px solid rgba(255, 255, 255, 0.20) !important;
+            box-shadow: 0 4px 16px rgba(10, 132, 255, 0.40) !important;
+        }
+        .btn-primary:hover, .shimmer-button:hover {
+            box-shadow: 0 6px 24px rgba(10, 132, 255, 0.60) !important;
+        }
+
+        /* ── Aceternity UI: Card Spotlight ────────────────── */
+        .feature-card, .pricing-card, .stat-card, .card, .liquid-glass {
+            position: relative;
+            overflow: hidden;
+        }
+        .feature-card::before, .pricing-card::before, .stat-card::before, .card::before, .liquid-glass::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(10, 132, 255, 0.15), transparent 40%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+            border-radius: inherit;
+        }
+        .feature-card:hover::before, .pricing-card:hover::before, .stat-card:hover::before, .card:hover::before, .liquid-glass:hover::before {
+            opacity: 1;
+        }
+
+        /* ── Magic UI: Border Beam on VIP / Active Key ────── */
+        .pricing-vip {
+            position: relative;
+            border: 1.5px solid rgba(10, 132, 255, 0.50) !important;
+            box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.25), 0 20px 50px rgba(10, 132, 255, 0.30) !important;
+        }
+        .pricing-vip::after {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 2px;
+            background: linear-gradient(90deg, transparent, #64d2ff, #0a84ff, transparent);
+            animation: borderBeamAnim 3s infinite linear;
+        }
+        @keyframes borderBeamAnim {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        /* ── Deep Ambient Depth Table Wrapper ─────────────── */
+        .table-responsive {
+            background: rgba(20, 20, 22, 0.65);
+            backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--card-radius);
+            box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.15), 0 20px 40px rgba(0, 0, 0, 0.65);
+            overflow-x: auto;
+            padding: 4px;
+        }
+
         /* ── Hero Section ─────────────────────────────────── */
         .hero { padding: 90px 0 70px; text-align: center; }
         .hero-badge {
@@ -1531,5 +1596,21 @@ function confirmNoticeRead(noticeId) {
 }
 </script>
 <?php endif; ?>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const spotlightCards = document.querySelectorAll('.feature-card, .pricing-card, .stat-card, .card, .liquid-glass, .dash-header');
+    spotlightCards.forEach(card => {
+        card.addEventListener('mousemove', e => {
+            const rect = card.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            card.style.setProperty('--mouse-x', `${x}px`);
+            card.style.setProperty('--mouse-y', `${y}px`);
+        });
+    });
+});
+</script>
+
 </body>
 </html>

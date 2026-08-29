@@ -371,6 +371,39 @@ $pending_orders = array_filter($orders_db, fn($x) => ($x['status'] ?? '') === 'p
         .btn-outline { background: rgba(255, 255, 255, 0.08); border: 1px solid var(--border-subtle); color: var(--text-main); }
         .btn-outline:hover { background: rgba(255, 255, 255, 0.15); border-color: var(--border-hi); }
 
+        
+        /* ── Magic UI: Shimmer Button & Border Beam ───────── */
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        .btn-primary, .shimmer-button {
+            background: linear-gradient(110deg, #0a84ff 0%, #0a84ff 35%, #64d2ff 50%, #0a84ff 65%, #0a84ff 100%) !important;
+            background-size: 200% 100% !important;
+            animation: shimmer 3.5s infinite linear !important;
+            border: 1px solid rgba(255, 255, 255, 0.20) !important;
+            box-shadow: 0 4px 16px rgba(10, 132, 255, 0.40) !important;
+        }
+
+        /* ── Aceternity UI: Card Spotlight ────────────────── */
+        .stat-card, .card, .liquid-glass, .login-card {
+            position: relative;
+            overflow: hidden;
+        }
+        .stat-card::before, .card::before, .liquid-glass::before, .login-card::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(10, 132, 255, 0.15), transparent 40%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+            border-radius: inherit;
+        }
+        .stat-card:hover::before, .card:hover::before, .liquid-glass:hover::before, .login-card:hover::before {
+            opacity: 1;
+        }
+
         /* ── Stats Grid ───────────────────────────────────── */
         .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; margin-bottom: 28px; }
         .stat-card {
@@ -471,6 +504,22 @@ $pending_orders = array_filter($orders_db, fn($x) => ($x['status'] ?? '') === 'p
             <button type="submit" name="admin_login">ĐĂNG NHẬP HỆ THỐNG</button>
         </form>
     </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const spotlightCards = document.querySelectorAll('.stat-card, .card, .liquid-glass, .login-card');
+    spotlightCards.forEach(card => {
+        card.addEventListener('mousemove', e => {
+            const rect = card.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            card.style.setProperty('--mouse-x', `${x}px`);
+            card.style.setProperty('--mouse-y', `${y}px`);
+        });
+    });
+});
+</script>
+
 </body>
 </html>
 <?php exit; endif; ?>
@@ -1621,5 +1670,21 @@ $pending_orders = array_filter($orders_db, fn($x) => ($x['status'] ?? '') === 'p
             document.getElementById('modal-preview-notice').style.display = 'none';
         }
     </script>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const spotlightCards = document.querySelectorAll('.stat-card, .card, .liquid-glass, .login-card');
+    spotlightCards.forEach(card => {
+        card.addEventListener('mousemove', e => {
+            const rect = card.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            card.style.setProperty('--mouse-x', `${x}px`);
+            card.style.setProperty('--mouse-y', `${y}px`);
+        });
+    });
+});
+</script>
+
 </body>
 </html>
