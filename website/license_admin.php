@@ -317,181 +317,132 @@ $pending_orders = array_filter($orders_db, fn($x) => ($x['status'] ?? '') === 'p
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #000000;
-            --bg-card: rgba(28, 28, 30, 0.68);
-            --bg-card-elev: rgba(44, 44, 46, 0.58);
-            --border-subtle: rgba(255, 255, 255, 0.12);
-            --border-hi: rgba(255, 255, 255, 0.22);
-            --primary: #0a84ff;
-            --primary-hover: #0077ed;
-            --accent: #5e5ce6;
-            --success: #30d158;
-            --warning: #ffd60a;
-            --danger: #ff453a;
-            --text-main: #ffffff;
-            --text-sub: rgba(235, 235, 245, 0.65);
-            --text-muted: rgba(235, 235, 245, 0.45);
-            --glass-blur: blur(28px) saturate(190%);
-            --glass-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.15), 0 20px 40px rgba(0, 0, 0, 0.65);
-            --btn-radius: 12px;
-            --card-radius: 20px;
-            --modal-radius: 24px;
+            --bg: #0b0c0e;
+            --bg-subtle: #111215;
+            --bg-card: #141518;
+            --bg-card-hover: #181a1e;
+            --bg-card-elev: #1c1d22;
+            --border: rgba(255, 255, 255, 0.07);
+            --border-subtle: rgba(255, 255, 255, 0.04);
+            --border-hover: rgba(255, 255, 255, 0.14);
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --success: #34d399;
+            --success-bg: rgba(52, 211, 153, 0.08);
+            --warning: #fbbf24;
+            --warning-bg: rgba(251, 191, 36, 0.08);
+            --danger: #f87171;
+            --danger-bg: rgba(248, 113, 113, 0.08);
+            --text-main: #f0f0f2;
+            --text-sub: #8b8d98;
+            --text-muted: #565866;
+            --btn-radius: 8px;
+            --card-radius: 12px;
+            --modal-radius: 14px;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Montserrat", "Segoe UI", sans-serif;
-            background: var(--bg);
-            background-image: radial-gradient(circle at 50% 0%, rgba(10, 132, 255, 0.15) 0%, rgba(0, 0, 0, 0.98) 75%);
-            background-attachment: fixed;
-            color: var(--text-main); line-height: 1.5; padding: 24px 0;
-            letter-spacing: -0.015em; -webkit-font-smoothing: antialiased;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg); color: var(--text-main);
+            line-height: 1.5; padding: 20px 0;
+            letter-spacing: -0.011em; -webkit-font-smoothing: antialiased;
         }
-        .container { max-width: 1340px; margin: 0 auto; padding: 0 24px; }
+        .container { max-width: 1280px; margin: 0 auto; padding: 0 20px; }
         
         .header {
             display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 28px; padding-bottom: 18px; border-bottom: 1px solid var(--border-subtle);
+            margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border);
         }
-        .header h1 { font-size: 22px; font-weight: 800; color: #ffffff; display: flex; align-items: center; gap: 10px; letter-spacing: -0.02em; }
+        .header h1 { font-size: 18px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px; letter-spacing: -0.02em; }
         
-        /* ── Buttons ──────────────────────────────────────── */
         button, .btn {
-            transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease !important;
-            display: inline-flex; align-items: center; justify-content: center; gap: 6px; outline: none; font-family: inherit;
+            font-family: inherit; outline: none; border: none;
+            display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+            cursor: pointer; transition: all 0.15s ease;
         }
-        button:hover:not(:disabled), .btn:hover:not(:disabled) { transform: scale(1.02); filter: brightness(1.08); }
-        button:active:not(:disabled), .btn:active:not(:disabled) { transform: scale(0.98); filter: brightness(0.95); }
-        button:disabled, .btn:disabled { opacity: 0.50 !important; cursor: not-allowed !important; transform: none !important; }
+        .btn { padding: 0 14px; height: 34px; border-radius: var(--btn-radius); font-weight: 600; font-size: 12.5px; text-decoration: none; }
+        .btn-primary { background: #f0f0f2; color: #0b0c0e; border: 1px solid rgba(255,255,255,0.2); }
+        .btn-primary:hover { background: #ffffff; }
+        .btn-success { background: var(--success); color: #0b0c0e; font-weight: 600; }
+        .btn-danger { background: var(--danger-bg); border: 1px solid rgba(248, 113, 113, 0.2); color: var(--danger); }
+        .btn-outline { background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); color: var(--text-main); }
+        .btn-outline:hover { background: rgba(255, 255, 255, 0.07); border-color: var(--border-hover); }
 
-        .btn { padding: 9px 18px; border-radius: var(--btn-radius); font-weight: 700; font-size: 12.5px; cursor: pointer; border: 1px solid transparent; text-decoration: none; }
-        .btn-primary { background: var(--primary); color: #fff; box-shadow: 0 4px 14px rgba(10, 132, 255, 0.35); }
-        .btn-success { background: var(--success); color: #fff; box-shadow: 0 4px 14px rgba(48, 209, 88, 0.35); }
-        .btn-danger { background: var(--danger); color: #fff; box-shadow: 0 4px 14px rgba(255, 69, 58, 0.35); }
-        .btn-outline { background: rgba(255, 255, 255, 0.08); border: 1px solid var(--border-subtle); color: var(--text-main); }
-        .btn-outline:hover { background: rgba(255, 255, 255, 0.15); border-color: var(--border-hi); }
-
-        
-        /* ── Magic UI: Shimmer Button & Border Beam ───────── */
-        @keyframes shimmer {
-            0% { background-position: 200% 0; }
-            100% { background-position: -200% 0; }
-        }
-        .btn-primary, .shimmer-button {
-            background: linear-gradient(110deg, #0a84ff 0%, #0a84ff 35%, #64d2ff 50%, #0a84ff 65%, #0a84ff 100%) !important;
-            background-size: 200% 100% !important;
-            animation: shimmer 3.5s infinite linear !important;
-            border: 1px solid rgba(255, 255, 255, 0.20) !important;
-            box-shadow: 0 4px 16px rgba(10, 132, 255, 0.40) !important;
-        }
-
-        /* ── Aceternity UI: Card Spotlight ────────────────── */
-        .stat-card, .card, .liquid-glass, .login-card {
-            position: relative;
-            overflow: hidden;
-        }
-        .stat-card::before, .card::before, .liquid-glass::before, .login-card::before {
-            content: "";
-            position: absolute;
-            inset: 0;
-            background: radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(10, 132, 255, 0.15), transparent 40%);
-            opacity: 0;
-            transition: opacity 0.3s ease;
-            pointer-events: none;
-            border-radius: inherit;
-        }
-        .stat-card:hover::before, .card:hover::before, .liquid-glass:hover::before, .login-card:hover::before {
-            opacity: 1;
-        }
-
-        /* ── Stats Grid ───────────────────────────────────── */
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; margin-bottom: 28px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 24px; }
         .stat-card {
-            background: var(--bg-card); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
-            border: 1px solid var(--border-subtle); border-radius: 16px; padding: 22px 24px;
-            box-shadow: var(--glass-shadow); transition: all 0.2s ease;
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: var(--card-radius); padding: 18px 20px;
+            transition: all 0.15s ease;
         }
-        .stat-card:hover { border-color: var(--border-hi); transform: translateY(-2px); }
-        .stat-val { font-size: 32px; font-weight: 900; color: #ffffff; margin-top: 6px; letter-spacing: -0.02em; }
-        .stat-label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        .stat-card:hover { border-color: var(--border-hover); }
+        .stat-val {
+            font-size: 26px; font-weight: 700; color: var(--text-main);
+            margin-top: 4px; letter-spacing: -0.02em; font-family: 'Inter', sans-serif;
+        }
+        .stat-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
 
-        /* ── Cards & Tables ───────────────────────────────── */
         .card {
-            background: var(--bg-card); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
-            border: 1px solid var(--border-subtle); border-radius: var(--card-radius); padding: 26px 28px;
-            margin-bottom: 28px; box-shadow: var(--glass-shadow);
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: var(--card-radius); padding: 22px 24px; margin-bottom: 24px;
         }
-        .card-title { font-size: 17px; font-weight: 800; color: #ffffff; margin-bottom: 18px; letter-spacing: -0.01em; }
-        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
-        .form-group { margin-bottom: 12px; }
-        label { display: block; font-size: 11.5px; font-weight: 700; color: var(--text-sub); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .card-title { font-size: 15px; font-weight: 600; color: var(--text-main); margin-bottom: 16px; letter-spacing: -0.01em; }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+        .form-group { margin-bottom: 10px; }
+        label { display: block; font-size: 11px; font-weight: 600; color: var(--text-sub); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.05em; }
         input, select {
-            width: 100%; padding: 10px 14px; background: rgba(44, 44, 46, 0.60);
-            border: 1px solid var(--border-subtle); border-radius: 10px; color: #fff;
-            font-size: 13px; outline: none; transition: all 0.2s ease;
+            width: 100%; padding: 8px 12px; background: var(--bg-card-elev);
+            border: 1px solid var(--border); border-radius: 6px; color: #fff;
+            font-size: 12.5px; outline: none; font-family: inherit;
         }
-        input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.25); }
+        input:focus, select:focus { border-color: var(--border-hover); }
 
-        table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 14px; }
+        table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 12px; }
         th {
-            text-align: left; padding: 12px 14px; background: rgba(28, 28, 30, 0.85);
-            color: var(--text-muted); font-size: 11px; text-transform: uppercase; font-weight: 700;
-            border-bottom: 1px solid var(--border-subtle);
+            text-align: left; padding: 10px 12px; background: var(--bg-subtle);
+            color: var(--text-muted); font-size: 10.5px; text-transform: uppercase; font-weight: 600;
+            letter-spacing: 0.05em; border-bottom: 1px solid var(--border);
         }
-        td { padding: 14px; border-bottom: 1px solid var(--border-subtle); vertical-align: middle; }
-        tr:hover td { background: rgba(255, 255, 255, 0.03); }
-        .badge { padding: 4px 10px; border-radius: 9999px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; }
+        td { padding: 12px; border-bottom: 1px solid var(--border-subtle); vertical-align: middle; }
+        tr:hover td { background: rgba(255, 255, 255, 0.02); }
+        .badge { padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; font-family: 'JetBrains Mono', monospace; }
 
-        /* ── Admin Tabs ───────────────────────────────────── */
-        .admin-tab-bar { display: flex; gap: 8px; border-bottom: 1px solid var(--border-subtle); margin-bottom: 26px; flex-wrap: wrap; }
+        .admin-tab-bar { display: flex; gap: 6px; border-bottom: 1px solid var(--border); margin-bottom: 22px; flex-wrap: wrap; }
         .admin-tab-btn {
-            background: transparent; border: none; padding: 10px 18px; color: var(--text-sub);
-            font-weight: 700; font-size: 13.5px; cursor: pointer; border-radius: var(--btn-radius);
-            font-family: inherit; position: relative; transition: all 0.2s ease;
+            background: transparent; border: none; padding: 8px 14px; color: var(--text-sub);
+            font-weight: 500; font-size: 13px; cursor: pointer; border-radius: var(--btn-radius);
+            font-family: inherit; position: relative; transition: all 0.15s ease;
         }
-        .admin-tab-btn:hover { color: #ffffff; background: rgba(255, 255, 255, 0.08); }
-        .admin-tab-btn.active { color: #ffffff; background: var(--primary); box-shadow: 0 4px 14px rgba(10, 132, 255, 0.35); }
+        .admin-tab-btn:hover { color: var(--text-main); background: var(--bg-card-elev); }
+        .admin-tab-btn.active { color: var(--text-main); background: var(--bg-card-elev); font-weight: 600; }
         .admin-tab-content { display: none; }
         .admin-tab-content.active { display: block; }
-        .badge-count { position: absolute; top: -4px; right: -4px; background: var(--danger); color: #fff; border-radius: 10px; font-size: 10px; font-weight: 900; padding: 2px 6px; min-width: 18px; text-align: center; }
-        .badge-active { background: rgba(48, 209, 88, 0.15); border: 1px solid rgba(48, 209, 88, 0.35); color: var(--success); }
-        .badge-banned { background: rgba(255, 69, 58, 0.15); border: 1px solid rgba(255, 69, 58, 0.35); color: var(--danger); }
-        .badge-trial { background: rgba(255, 214, 10, 0.15); border: 1px solid rgba(255, 214, 10, 0.35); color: var(--warning); }
-        .badge-user { background: rgba(10, 132, 255, 0.15); border: 1px solid rgba(10, 132, 255, 0.35); color: #64d2ff; padding: 3px 10px; border-radius: 8px; font-size: 11.5px; }
+        .badge-count { position: absolute; top: -2px; right: -2px; background: var(--danger); color: #fff; border-radius: 10px; font-size: 10px; font-weight: 700; padding: 1px 5px; min-width: 16px; text-align: center; }
+        .badge-active { background: var(--success-bg); border: 1px solid rgba(52, 211, 153, 0.2); color: var(--success); }
+        .badge-banned { background: var(--danger-bg); border: 1px solid rgba(248, 113, 113, 0.2); color: var(--danger); }
+        .badge-trial { background: var(--warning-bg); border: 1px solid rgba(251, 191, 36, 0.2); color: var(--warning); }
+        .badge-user { background: var(--bg-card-elev); border: 1px solid var(--border); color: #a1a1aa; padding: 2px 7px; border-radius: 4px; font-size: 11.5px; font-family: 'JetBrains Mono', monospace; }
 
-        .alert { padding: 14px 18px; border-radius: var(--btn-radius); font-size: 13px; font-weight: 600; margin-bottom: 22px; backdrop-filter: blur(15px); }
-        .alert-success { background: rgba(48, 209, 88, 0.15); border: 1px solid rgba(48, 209, 88, 0.35); color: var(--success); }
+        .alert { padding: 12px 16px; border-radius: var(--btn-radius); font-size: 13px; font-weight: 500; margin-bottom: 20px; }
+        .alert-success { background: var(--success-bg); border: 1px solid rgba(52, 211, 153, 0.2); color: var(--success); }
         
         .modal {
             display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75);
-            backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%);
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
             z-index: 9999; align-items: center; justify-content: center; padding: 20px;
         }
         .modal-card {
-            background: rgba(28, 28, 30, 0.88); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
-            border: 1px solid var(--border-hi); border-radius: var(--modal-radius); max-width: 440px; width: 100%; padding: 28px; position: relative;
-            box-shadow: var(--glass-shadow);
+            background: var(--bg-card); border: 1px solid var(--border-hover);
+            border-radius: var(--modal-radius); max-width: 420px; width: 100%; padding: 24px;
+            position: relative; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7);
         }
         .modal-close {
-            position: absolute; top: 16px; right: 16px; background: rgba(255, 255, 255, 0.08); border: 1px solid var(--border-subtle);
-            width: 30px; height: 30px; border-radius: 50%; color: var(--text-sub); font-size: 16px; cursor: pointer;
-            display: flex; align-items: center; justify-content: center; transition: all 0.2s ease;
+            position: absolute; top: 14px; right: 14px; background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border); width: 26px; height: 26px; border-radius: 6px;
+            color: var(--text-sub); font-size: 15px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
         }
-        .modal-close:hover { color: #fff; background: rgba(255, 255, 255, 0.16); }
-
-        /* ── 📱 Admin Mobile Responsive ───────────────────── */
-        @media (max-width: 768px) {
-            * { max-width: 100% !important; box-sizing: border-box !important; }
-            html, body { overflow-x: hidden !important; width: 100% !important; }
-            .container { padding: 0 14px !important; width: 100% !important; }
-            .header { flex-direction: column !important; gap: 12px !important; align-items: stretch !important; text-align: center !important; }
-            .header h1 { font-size: 16px !important; justify-content: center !important; }
-            .header > div { justify-content: center !important; display: flex !important; gap: 8px !important; }
-            .stats-grid { grid-template-columns: 1fr 1fr !important; gap: 10px !important; margin-bottom: 18px !important; }
-            .stat-card { padding: 12px 14px !important; }
-            .stat-val { font-size: 22px !important; }
-            .stat-label { font-size: 10.5px !important; }
-        }
+        .modal-close:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
     </style>
 </head>
 <body>
@@ -529,7 +480,9 @@ document.addEventListener('DOMContentLoaded', () => {
     <meta charset="UTF-8">
     <title>Hệ Thống Quản Trị Bản Quyền — 2tamne.site</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800;900&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Montserrat', sans-serif; background: #070a13; color: #f8fafc; line-height: 1.5; padding: 24px 0; }

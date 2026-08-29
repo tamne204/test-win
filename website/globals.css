@@ -3,138 +3,131 @@
 @tailwind utilities;
 
 :root {
-  --bg: #000000;
-  --bg-card: rgba(28, 28, 30, 0.68);
-  --bg-card-elev: rgba(44, 44, 46, 0.58);
-  --border-subtle: rgba(255, 255, 255, 0.12);
-  --border-hi: rgba(255, 255, 255, 0.22);
-  --primary: #0a84ff;
-  --primary-hover: #0077ed;
-  --primary-active: #0062c4;
-  --accent: #5e5ce6;
-  --success: #30d158;
-  --warning: #ffd60a;
-  --danger: #ff453a;
-  --text-main: #ffffff;
-  --text-sub: rgba(235, 235, 245, 0.65);
-  --text-muted: rgba(235, 235, 245, 0.45);
-  --glass-blur: blur(28px) saturate(190%);
-  --glass-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.20), 0 20px 40px rgba(0, 0, 0, 0.65);
-  --btn-radius: 12px;
-  --card-radius: 20px;
-  --modal-radius: 24px;
+  --bg: #0b0c0e;
+  --bg-subtle: #111215;
+  --bg-card: #141518;
+  --bg-card-hover: #181a1e;
+  --bg-card-elev: #1c1d22;
+  --border: rgba(255, 255, 255, 0.07);
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --border-hover: rgba(255, 255, 255, 0.14);
+  --primary: #3b82f6;
+  --primary-hover: #2563eb;
+  --primary-subtle: rgba(59, 130, 246, 0.12);
+  --success: #34d399;
+  --success-bg: rgba(52, 211, 153, 0.10);
+  --warning: #fbbf24;
+  --warning-bg: rgba(251, 191, 36, 0.10);
+  --danger: #f87171;
+  --danger-bg: rgba(248, 113, 113, 0.10);
+  --text-main: #f0f0f2;
+  --text-sub: #8b8d98;
+  --text-muted: #565866;
+  --btn-radius: 8px;
+  --card-radius: 12px;
+  --modal-radius: 14px;
 }
 
-/* ── Utility: liquid-glass ───────────────────────────────────────────── */
-.liquid-glass {
-  background: var(--bg-card);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--card-radius);
-  box-shadow: var(--glass-shadow);
-  position: relative;
-  overflow: hidden;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+body {
+  margin: 0;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: var(--bg);
+  color: var(--text-main);
+  line-height: 1.6;
+  letter-spacing: -0.011em;
+  -webkit-font-smoothing: antialiased;
 }
 
-.liquid-glass:hover {
-  border-color: var(--border-hi);
-  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.30), 0 24px 48px rgba(0, 0, 0, 0.75);
-}
-
-/* ── Utility: Shimmer Button ─────────────────────────────────────────── */
-@keyframes shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
-}
-
-.shimmer-button {
-  background: linear-gradient(
-    110deg,
-    #0a84ff 0%,
-    #0a84ff 35%,
-    #64d2ff 50%,
-    #0a84ff 65%,
-    #0a84ff 100%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 3s infinite linear;
-  border: 1px solid rgba(255, 255, 255, 0.20);
-  box-shadow: 0 4px 16px rgba(10, 132, 255, 0.40);
+/* ── Linear / Raycast Style Buttons ──────────────────────────────────── */
+.btn-primary, .btn-solid-white {
+  background: #f0f0f2;
+  color: #0b0c0e;
+  font-weight: 600;
+  font-size: 13px;
+  height: 38px;
+  padding: 0 16px;
   border-radius: var(--btn-radius);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  outline: none;
+}
+.btn-primary:hover, .btn-solid-white:hover {
+  background: #ffffff;
+  transform: translateY(-1px);
+}
+.btn-primary:active, .btn-solid-white:active {
+  transform: translateY(0);
+}
+
+.btn-accent {
+  background: var(--primary);
   color: #ffffff;
-  font-weight: 700;
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), filter 0.2s ease;
+  font-weight: 600;
+  font-size: 13px;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: var(--btn-radius);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-accent:hover {
+  background: var(--primary-hover);
 }
 
-.shimmer-button:hover:not(:disabled) {
-  transform: scale(1.02);
-  filter: brightness(1.08);
-  box-shadow: 0 6px 24px rgba(10, 132, 255, 0.55);
+.btn-outline, .btn-secondary {
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-main);
+  font-weight: 500;
+  font-size: 13px;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: var(--btn-radius);
+  border: 1px solid var(--border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-outline:hover, .btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: var(--border-hover);
 }
 
-.shimmer-button:active:not(:disabled) {
-  transform: scale(0.98);
+/* ── Minimalist Cards ────────────────────────────────────────────────── */
+.craft-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--card-radius);
+  padding: 24px;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+.craft-card:hover {
+  border-color: var(--border-hover);
+  background: var(--bg-card-hover);
 }
 
-/* ── Utility: Border Beam (Magic UI) ─────────────────────────────────── */
-@keyframes border-beam {
-  0% {
-    offset-distance: 0%;
-  }
-  100% {
-    offset-distance: 100%;
-  }
+/* ── Code & Technical Badges ─────────────────────────────────────────── */
+.font-mono {
+  font-family: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
 }
-
-.border-beam {
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  border: 1.5px solid transparent;
-  mask: linear-gradient(transparent, transparent), linear-gradient(#000, #000);
-  mask-clip: padding-box, border-box;
-  mask-composite: intersect;
-  -webkit-mask-composite: source-out;
-}
-
-.border-beam::after {
-  content: "";
-  position: absolute;
-  aspect-ratio: 1;
-  width: 120px;
-  background: linear-gradient(to right, #0a84ff, #64d2ff, transparent);
-  offset-path: rect(0 auto auto 0 round var(--card-radius));
-  animation: border-beam 6s infinite linear;
-}
-
-/* ── Utility: Spotlight Card (Aceternity UI) ─────────────────────────── */
-.card-spotlight {
-  position: relative;
-  overflow: hidden;
-}
-
-.card-spotlight::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(
-    600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
-    rgba(10, 132, 255, 0.15),
-    transparent 40%
-  );
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  pointer-events: none;
-  border-radius: inherit;
-}
-
-.card-spotlight:hover::before {
-  opacity: 1;
+.tech-badge {
+  font-family: "JetBrains Mono", monospace;
+  background: var(--bg-card-elev);
+  color: #a1a1aa;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 12px;
 }
