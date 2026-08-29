@@ -72,6 +72,37 @@ def get_gpu_capabilities() -> Dict[str, Any]:
     }
 
 
+class RGSSQualityController:
+    """
+    Manages quality presets and dynamic sample allocations for Renderer E.
+    """
+    PRESETS = {
+        "fast": {"num_samples": 2, "batch_size": 20},
+        "balanced": {"num_samples": 4, "batch_size": 15},
+        "ultra": {"num_samples": 8, "batch_size": 10}
+    }
+
+    @classmethod
+    def get_offsets(cls, mode: str, width: int, height: int):
+        preset = cls.PRESETS.get(mode, cls.PRESETS["balanced"])
+        num_samples = preset["num_samples"]
+        if num_samples == 2:
+            offsets = [(-0.25 / width, -0.25 / height), (0.25 / width, 0.25 / height)]
+        elif num_samples == 8:
+            offsets = [
+                (-0.375 / width, -0.375 / height), (-0.125 / width, -0.375 / height),
+                (0.125 / width, -0.375 / height), (0.375 / width, -0.375 / height),
+                (-0.375 / width, 0.375 / height), (-0.125 / width, 0.375 / height),
+                (0.125 / width, 0.375 / height), (0.375 / width, 0.375 / height)
+            ]
+        else: # 4 samples (balanced)
+            offsets = [
+                (-0.375 / width, -0.125 / height), (0.125 / width, -0.375 / height),
+                (-0.125 / width, 0.375 / height), (0.375 / width, 0.125 / height)
+            ]
+        return offsets, preset["batch_size"], num_samples
+
+
 def render_slide_subpixel(
     image_path: str,
     output_mp4: str,
@@ -82,13 +113,12 @@ def render_slide_subpixel(
     effect: str = "zoom_in",
     magnitude: float = 0.20,
     curve: str = "linear",
-    sampling_mode: str = "prefiltered_gpu",
+    sampling_mode: str = "balanced",
     codec: Optional[str] = None,
     crf: int = 18
 ) -> bool:
     """
-    Render a single slide with subpixel GPU transformation.
-    Falls back gracefully if GPU or PyTorch is unavailable.
+    Render a single slide with high-speed batched GPU subpixel transformation.
     """
     if not _HAS_TORCH:
         logger.warning("PyTorch not installed, falling back to standard renderer.")
@@ -96,7 +126,6 @@ def render_slide_subpixel(
 
     caps = get_gpu_capabilities()
     if not codec:
-        # Prefer fast native encoder if available
         if caps["is_mac"] and "h264_videotoolbox" in caps["encoders"]:
             encoder = "h264_videotoolbox"
             enc_args = ["-c:v", encoder, "-b:v", "12M", "-pix_fmt", "yuv420p"]
@@ -117,15 +146,12 @@ def render_slide_subpixel(
     NF = total_frames - 1
 
     try:
-        # Load source image
         orig_img = Image.open(image_path).convert("RGB")
         img_w, img_h = orig_img.size
         
-        # Determine aspect ratio fit / fill
         target_aspect = width / height
         img_aspect = img_w / img_h
         
-        # Base scale to fill destination window
         if img_aspect > target_aspect:
             base_h = height * 2
             base_w = int(base_h * img_aspect)
@@ -133,25 +159,19 @@ def render_slide_subpixel(
             base_w = width * 2
             base_h = int(base_w / img_aspect)
         
-        # Ensure even dimensions
         base_w += base_w % 2
         base_h += base_h % 2
         
-        # Pre-scale 2X for anti-aliased Lanczos boundary
         pre_img = orig_img.resize((base_w, base_h), Image.Resampling.LANCZOS)
-        
-        # Center crop to 2X destination aspect ratio
         crop_w = width * 2
         crop_h = height * 2
         left = (base_w - crop_w) // 2
         top = (base_h - crop_h) // 2
         cropped = pre_img.crop((left, top, left + crop_w, top + crop_h))
         
-        # Convert to float32 tensor [1, 3, H, W] in [0, 1]
         arr = np.array(cropped).astype(np.float32) / 255.0
-        tensor = torch.from_numpy(arr).permute(2, 0, 1).unsqueeze(0).to(device)
+        tensor_base = torch.from_numpy(arr).permute(2, 0, 1).unsqueeze(0).to(device)
 
-        # Launch FFmpeg pipe
         os.makedirs(os.path.dirname(os.path.abspath(output_mp4)), exist_ok=True)
         ffmpeg_cmd = [
             "ffmpeg", "-y",
@@ -164,59 +184,54 @@ def render_slide_subpixel(
         ] + enc_args + [output_mp4]
 
         proc = subprocess.Popen(ffmpeg_cmd, stdin=subprocess.PIPE, stderr=subprocess.DEVNULL)
-        # RGSS Subpixel Sampling Pattern (Rotated Grid Super-Sampling)
-        if sampling_mode == "rgss_4x" or sampling_mode == "prefiltered_gpu":
-            num_samples = 4
-            offsets = [
-                (-0.375 / width, -0.125 / height),
-                (0.125 / width, -0.375 / height),
-                (-0.125 / width, 0.375 / height),
-                (0.375 / width, 0.125 / height)
-            ]
-        elif sampling_mode == "rgss_2x":
-            num_samples = 2
-            offsets = [
-                (-0.25 / width, -0.25 / height),
-                (0.25 / width, 0.25 / height)
-            ]
-        else:
-            num_samples = 1
-            offsets = [(0.0, 0.0)]
-
+        
+        # Configure Quality Mode Offsets
+        mode_key = sampling_mode.lower() if sampling_mode.lower() in RGSSQualityController.PRESETS else "balanced"
+        offsets, batch_size, num_samples = RGSSQualityController.get_offsets(mode_key, width, height)
         offsets_t = torch.tensor(offsets, dtype=torch.float32, device=device)
-        out_size = (num_samples, 3, height, width)
-        tensor_batch = tensor.expand(num_samples, -1, -1, -1)
 
-        # Render frame sequence
+        # Precompute camera trajectory
+        transforms = []
         for on in range(total_frames):
             prog = float(on) / float(NF)
-            transform = CameraMotionEngine.get_transform(
-                progress=prog,
-                effect=effect,
-                magnitude=magnitude,
-                curve=curve
-            )
+            tr = CameraMotionEngine.get_transform(prog, effect=effect, magnitude=magnitude, curve=curve)
+            transforms.append(tr)
 
-            # Map zoom and displacement to 2X canvas [-0.5, 0.5]
-            z = max(0.5, transform.zoom)
-            inv_z = 0.5 / z
+        # Vectorized batch processing
+        for start_idx in range(0, total_frames, batch_size):
+            end_idx = min(total_frames, start_idx + batch_size)
+            curr_batch_len = end_idx - start_idx
             
-            # Subpixel base offset
-            base_tx = -transform.x * (0.5 - inv_z) if abs(transform.x) > 1e-6 else 0.0
-            base_ty = -transform.y * (0.5 - inv_z) if abs(transform.y) > 1e-6 else 0.0
+            total_sub_batch = curr_batch_len * num_samples
+            thetas_chunk = torch.zeros((total_sub_batch, 2, 3), dtype=torch.float32, device=device)
+            
+            for i in range(curr_batch_len):
+                f_idx = start_idx + i
+                tr = transforms[f_idx]
+                z = max(0.5, tr.zoom)
+                inv_z = 0.5 / z
+                
+                base_tx = -tr.x * (0.5 - inv_z) if abs(tr.x) > 1e-6 else 0.0
+                base_ty = -tr.y * (0.5 - inv_z) if abs(tr.y) > 1e-6 else 0.0
+                
+                for s in range(num_samples):
+                    sub_i = i * num_samples + s
+                    thetas_chunk[sub_i, 0, 0] = inv_z
+                    thetas_chunk[sub_i, 1, 1] = inv_z
+                    thetas_chunk[sub_i, 0, 2] = base_tx + offsets_t[s, 0] * 2.0
+                    thetas_chunk[sub_i, 1, 2] = base_ty + offsets_t[s, 1] * 2.0
 
-            thetas = torch.zeros((num_samples, 2, 3), dtype=torch.float32, device=device)
-            thetas[:, 0, 0] = inv_z
-            thetas[:, 1, 1] = inv_z
-            thetas[:, 0, 2] = base_tx + offsets_t[:, 0] * 2.0
-            thetas[:, 1, 2] = base_ty + offsets_t[:, 1] * 2.0
+            out_size = (total_sub_batch, 3, height, width)
+            tensor_expanded = tensor_base.expand(total_sub_batch, -1, -1, -1)
             
-            grid_batch = F.affine_grid(thetas, out_size, align_corners=True)
-            sampled_batch = F.grid_sample(tensor_batch, grid_batch, mode='bilinear', padding_mode='reflection', align_corners=True)
+            grid_chunk = F.affine_grid(thetas_chunk, out_size, align_corners=True)
+            sampled_chunk = F.grid_sample(tensor_expanded, grid_chunk, mode='bilinear', padding_mode='reflection', align_corners=True)
             
-            accum = sampled_batch.mean(dim=0, keepdim=True)
-            frame_bytes = (accum[0].permute(1, 2, 0).clamp(0.0, 1.0).cpu().numpy() * 255.0).astype(np.uint8).tobytes()
-            proc.stdin.write(frame_bytes)
+            sampled_reshaped = sampled_chunk.view(curr_batch_len, num_samples, 3, height, width)
+            frames_reduced = sampled_reshaped.mean(dim=1)
+            
+            frames_uint8 = torch.clamp(frames_reduced * 255.0, 0, 255).to(torch.uint8).permute(0, 2, 3, 1).cpu().numpy()
+            proc.stdin.write(frames_uint8.tobytes())
 
         proc.stdin.close()
         proc.wait()
