@@ -3561,7 +3561,7 @@ async function executeRenderVideo(e) {
     const defaultVals = {
       aspect_ratio: '16:9',
       resolution: '1080p',
-      fps: '25',
+      fps: '60',
       duration_per_image: '5.0',
       transition_duration: '1.0',
       weight_zoom_in: '25',
@@ -3899,7 +3899,7 @@ async function saveCurrentProject(isAuto = false) {
     settings: {
       aspect_ratio: $('hid-aspect-ratio') ? $('hid-aspect-ratio').value : '16:9',
       resolution: document.querySelector('input[name="resolution"]') ? document.querySelector('input[name="resolution"]').value : '1080p',
-      fps: document.querySelector('input[name="fps"]') ? document.querySelector('input[name="fps"]').value : '25'
+      fps: document.querySelector('input[name="fps"]') ? document.querySelector('input[name="fps"]').value : '60'
     }
   };
 

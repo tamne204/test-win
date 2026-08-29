@@ -233,7 +233,7 @@ def render():
         settings = {
             'aspect_ratio':        request.form.get('aspect_ratio', '16:9'),
             'resolution':          request.form.get('resolution', '1080p'),
-            'fps':                 int(request.form.get('fps', 25)),
+            'fps':                 max(30, int(request.form.get('fps', 60))),
             'duration_per_image':  float(request.form.get('duration_per_image', 5.0)),
             'use_transition':      request.form.get('use_transition', 'true').lower() == 'true',
             'transition_duration': float(request.form.get('transition_duration', 1.0)),

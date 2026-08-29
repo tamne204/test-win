@@ -814,7 +814,7 @@ def build_command(
     """
 
     # --- Parse settings ---
-    fps          = int(settings.get('fps', 25))
+    fps          = max(30, int(settings.get('fps', 60)))
     duration     = float(settings.get('duration_per_image', 5.0))
     aspect       = settings.get('aspect_ratio', '16:9')
     res          = settings.get('resolution', '1080p')
