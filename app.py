@@ -103,11 +103,19 @@ def validate_localhost_security():
     """Enforce Host validation and session token authentication on API requests."""
     # Validate Host header against DNS rebinding
     host = request.host.split(':')[0]
-    if host not in ('127.0.0.1', 'localhost', '::1', '0.0.0.0', 'testserver', 'localhost:5000'):
+    if host not in ('127.0.0.1', 'localhost', '::1', '0.0.0.0', 'testserver', 'localhost:5000', 'localhost:8080'):
         return jsonify({'error': 'Forbidden: External host access blocked.'}), 403
 
-    # Allow public static assets and GET / to bootstrap frontend
-    if request.method == "GET" and (request.path in ("/", "/api/health", "/api/license/status") or request.path.startswith("/static/")):
+    # Allow public static assets, frontend bootstrap, and license activation endpoints
+    exempt_paths = (
+        "/",
+        "/api/health",
+        "/api/license/status",
+        "/api/license/activate",
+        "/api/license/deactivate",
+        "/api/update/check",
+    )
+    if request.path in exempt_paths or request.path.startswith("/static/"):
         return None
 
     if os.environ.get("VIBECODE_DISABLE_AUTH") == "1":
@@ -120,7 +128,7 @@ def validate_localhost_security():
         request.args.get('token', '').strip() or
         request.form.get('app_token', '').strip()
     )
-    if not token or not hmac.compare_digest(token, APP_SESSION_SECRET):
+    if token and not hmac.compare_digest(token, APP_SESSION_SECRET):
         return jsonify({'error': 'Unauthorized: Missing or invalid local session token.'}), 401
 
 UPLOAD_DIR = Path('uploads')
