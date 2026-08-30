@@ -651,7 +651,7 @@ if (isset($_GET['registered'])) {
                 </div>
                 <div style="display:flex;gap:10px">
                     <button class="btn-primary" onclick="switchMainTab('tab-buy-key')">🛒 Mua / Thuê Key VIP</button>
-                    <a href="/downloads/SlideshowBuilder_Windows_latest.zip" class="btn-outline">📥 Tải Bản Cài Đặt (v2.2.3.19)</a>
+                    <a href="/downloads/SlideshowBuilder_Windows_latest.zip" class="btn-outline">📥 Tải Bản Cài Đặt (v2.3.0)</a>
                 </div>
             </div>
 
@@ -1006,7 +1006,7 @@ if (isset($_GET['registered'])) {
                 </p>
                 <div class="hero-cta">
                     <a href="#products" class="btn-solid-white btn-lg">Khám Phá Công Cụ →</a>
-                    <a href="#download" class="btn-secondary btn-lg">📥 Tải Bản Cài Đặt (v2.2.3.19)</a>
+                    <a href="#download" class="btn-secondary btn-lg">📥 Tải Bản Cài Đặt (v2.3.0)</a>
                 </div>
 
                 <!-- ── Realistic Studio UI Mockup (Linear / Raycast Craft) ── -->
@@ -1153,7 +1153,7 @@ if (isset($_GET['registered'])) {
                     <!-- Video Tool Download Box (Windows & macOS Dedicated) -->
                     <div style="background:#101626;border:1px solid #6366f1;border-radius:18px;padding:28px;margin-bottom:40px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px">
                         <div>
-                            <span class="badge badge-active" style="margin-bottom:8px;display:inline-block">BẢN CHÍNH THỨC v2.2.3.19</span>
+                            <span class="badge badge-active" style="margin-bottom:8px;display:inline-block">BẢN CHÍNH THỨC v2.3.0</span>
                             <h3 style="font-size:20px;font-weight:900;color:#fff">Tải Bản Cài Đặt Slideshow Builder AI</h3>
                             <p style="font-size:13px;color:#94a3b8;margin-top:4px">Phiên bản tối ưu hóa riêng biệt cho Windows & macOS — Giải nén là chạy ngay lập tức.</p>
                         </div>
@@ -1299,7 +1299,7 @@ if (isset($_GET['registered'])) {
             <section id="download" style="padding:40px 0 60px;scroll-margin-top:80px">
                 <div style="text-align:center;margin-bottom:32px">
                     <span style="background:rgba(10,132,255,0.15);border:1px solid #0a84ff;color:#64d2ff;padding:6px 18px;border-radius:20px;font-size:12px;font-weight:800;display:inline-block;margin-bottom:12px">📥 TẢI PHẦN MỀM & EXTENSION</span>
-                    <h2 class="sec-title" style="font-size:32px">TẢI VỀ PHIÊN BẢN MỚI NHẤT (v2.2.3.19)</h2>
+                    <h2 class="sec-title" style="font-size:32px">TẢI VỀ PHIÊN BẢN MỚI NHẤT (v2.3.0)</h2>
                     <p class="sec-subtitle">Tương thích hoàn hảo trên cả Windows 10/11 và macOS Apple Silicon / Intel</p>
                 </div>
 

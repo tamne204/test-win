@@ -121,7 +121,7 @@ def test_license_log_redaction():
 # ── 5. Digital Signature & SHA-256 Update Integrity ──────────────────────
 def test_update_integrity_verification():
     with tempfile.NamedTemporaryFile(delete=False) as tf:
-        tf.write(b"SlideshowBuilder Binary Content v2.2.3.19")
+        tf.write(b"SlideshowBuilder Binary Content v2.3.0")
         tf_path = tf.name
 
     try:
@@ -131,12 +131,12 @@ def test_update_integrity_verification():
         assert verify_sha256(tf_path, "", mandatory=True) is False
 
         # Digital signature test
-        payload = b'{"version":"2.2.3.19","hash":"' + real_hash.encode() + b'"}'
+        payload = b'{"version":"2.3.0","hash":"' + real_hash.encode() + b'"}'
         valid_sig = hmac.new(TRUSTED_UPDATE_ROOT_KEY.encode(), payload, hashlib.sha256).hexdigest()
 
         assert verify_package_signature(payload, valid_sig) is True
         assert verify_package_signature(payload, "forged_signature_00000") is False
-        assert verify_package_signature(b'{"version":"2.2.3.19_tampered"}', valid_sig) is False
+        assert verify_package_signature(b'{"version":"2.3.0_tampered"}', valid_sig) is False
     finally:
         if os.path.isfile(tf_path):
             os.remove(tf_path)
@@ -144,14 +144,14 @@ def test_update_integrity_verification():
 
 # ── 6. Authoritative Version Consistency ─────────────────────────────────
 def test_authoritative_version_consistency():
-    assert APP_VERSION == "2.2.3.19"
+    assert APP_VERSION == "2.3.0"
 
     # Verify website/index.php references the authoritative version
     web_index = Path("/Users/2tamne/tool ffmpeg/website/index.php")
     if web_index.is_file():
         with open(web_index, "r", encoding="utf-8") as f:
             content = f.read()
-        assert "v2.2.3.19" in content
+        assert "v2.3.0" in content
         assert "v2.2.3.17" not in content
 
 

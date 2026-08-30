@@ -2,7 +2,7 @@
 ; VibeCode Slideshow Studio AI Production Installer
 
 #define MyAppName "VibeCode Studio"
-#define MyAppVersion "2.2.3.19"
+#define MyAppVersion "2.3.0"
 #define MyAppPublisher "2tamne.site"
 #define MyAppURL "https://www.2tamne.site/"
 #define MyAppExeName "SlideshowStudio.vbs"
@@ -20,7 +20,7 @@ DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 LicenseFile=..\LICENSE_INFO.txt
 OutputDir=..\dist
-OutputBaseFilename=VibeCode_Setup_v2.2.3.19
+OutputBaseFilename=VibeCode_Setup_v2.3.0
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern

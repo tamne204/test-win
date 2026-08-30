@@ -1,11 +1,11 @@
 @echo off
-title VibeCode Studio - Windows Installer v2.2.3.19
+title VibeCode Studio - Windows Installer v2.3.0
 chcp 65001 >nul 2>nul
 cd /d "%~dp0"
 
 echo ========================================================
 echo       VIBECODE STUDIO - CÀI ĐẶT TỰ ĐỘNG CHO WINDOWS
-echo       Phiên bản: v2.2.3.19 (64-bit Production)
+echo       Phiên bản: v2.3.0 (64-bit Production)
 echo ========================================================
 echo.
 
@@ -53,8 +53,8 @@ if not exist "%TARGET_DIR%\uploads" mkdir "%TARGET_DIR%\uploads"
 if not exist "%TARGET_DIR%\diagnostics" mkdir "%TARGET_DIR%\diagnostics"
 
 echo [*] Tạo shortcut trên Desktop và Start Menu...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut([System.Environment]::GetFolderPath('Desktop') + '\VibeCode Studio.lnk'); $s.TargetPath = '%TARGET_DIR%\SlideshowStudio.vbs'; $s.WorkingDirectory = '%TARGET_DIR%'; $s.Description = 'VibeCode Slideshow Studio AI v2.2.3.19'; $s.Save()" >nul 2>nul
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $sm = [System.Environment]::GetFolderPath('StartMenu') + '\Programs'; $s = $ws.CreateShortcut($sm + '\VibeCode Studio.lnk'); $s.TargetPath = '%TARGET_DIR%\SlideshowStudio.vbs'; $s.WorkingDirectory = '%TARGET_DIR%'; $s.Description = 'VibeCode Slideshow Studio AI v2.2.3.19'; $s.Save()" >nul 2>nul
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut([System.Environment]::GetFolderPath('Desktop') + '\VibeCode Studio.lnk'); $s.TargetPath = '%TARGET_DIR%\SlideshowStudio.vbs'; $s.WorkingDirectory = '%TARGET_DIR%'; $s.Description = 'VibeCode Slideshow Studio AI v2.3.0'; $s.Save()" >nul 2>nul
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $sm = [System.Environment]::GetFolderPath('StartMenu') + '\Programs'; $s = $ws.CreateShortcut($sm + '\VibeCode Studio.lnk'); $s.TargetPath = '%TARGET_DIR%\SlideshowStudio.vbs'; $s.WorkingDirectory = '%TARGET_DIR%'; $s.Description = 'VibeCode Slideshow Studio AI v2.3.0'; $s.Save()" >nul 2>nul
 
 echo [*] Tạo tệp gỡ cài đặt (Uninstaller)...
 copy /Y "uninstall_windows.bat" "%TARGET_DIR%\uninstall.bat" >nul 2>nul
