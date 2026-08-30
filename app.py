@@ -1,10 +1,17 @@
+from __future__ import annotations
+import traceback
+import diagnostic_collector
+from diagnostic_collector import (
+    collect_diagnostic_report,
+    save_diagnostic_report_locally,
+    submit_diagnostic_report
+)
 """
 app.py
 Flask web server for the FFmpeg Slideshow Builder.
 Handles file uploads, background rendering, SSE progress, download,
 VoxCPM2 Text-to-Speech generation, and AutoSub subtitle recognition & embedding.
 """
-from __future__ import annotations
 from typing import List, Tuple, Dict, Any, Optional, Union, Callable, Set
 
 import os
@@ -127,6 +134,10 @@ PROJECTS_DIR.mkdir(exist_ok=True)
 
 # In-memory job store: job_id → job dict
 jobs: dict = {}
+# Global store for recent render error diagnostics
+_LAST_RENDER_ERROR: dict = {}
+_LAST_RENDER_JOB_CONTEXT: dict = {}
+
 
 FFMPEG_AVAILABLE  = check_ffmpeg()
 EDGE_TTS_AVAILABLE = check_edge_tts()
@@ -555,10 +566,23 @@ def render():
                     'has_srt': sub_path is not None
                 })
             except Exception as exc:
+                global _LAST_RENDER_ERROR, _LAST_RENDER_JOB_CONTEXT
                 err_msg = str(exc)
+                tb_str = traceback.format_exc()
                 print(f"❌ [Render Lỗi Nghiêm Trọng]: {err_msg}")
                 jobs[job_id]['status'] = 'error'
                 jobs[job_id]['error']  = err_msg
+                _LAST_RENDER_ERROR = {
+                    "timestamp": datetime.datetime.now().isoformat(),
+                    "error_message": err_msg,
+                    "traceback": tb_str
+                }
+                _LAST_RENDER_JOB_CONTEXT = {
+                    "settings": settings,
+                    "image_count": len(image_paths),
+                    "has_audio": audio_path is not None,
+                    "has_subtitles": sub_path is not None
+                }
                 q.put({'progress': 0, 'error': err_msg})
 
         threading.Thread(target=run, daemon=True).start()
@@ -1362,3 +1386,57 @@ if __name__ == '__main__':
     print("🎬  Slideshow Builder  →  http://localhost:8080")
     print("=" * 55)
     app.run(host='0.0.0.0', port=8080, debug=False, threaded=True)
+
+# ---------------------------------------------------------------------------
+# Client Diagnostic Routes
+# ---------------------------------------------------------------------------
+
+@app.route('/api/diagnostics/generate', methods=['POST'])
+def api_diagnostics_generate():
+    """Generate a sanitized client diagnostic report."""
+    try:
+        report = collect_diagnostic_report(
+            recent_error=_LAST_RENDER_ERROR,
+            job_context=_LAST_RENDER_JOB_CONTEXT
+        )
+        return jsonify({'ok': True, 'report': report})
+    except Exception as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 500
+
+
+@app.route('/api/diagnostics/send', methods=['POST'])
+def api_diagnostics_send():
+    """Send client diagnostic report to the support server."""
+    try:
+        req_data = request.get_json(silent=True) or {}
+        report = req_data.get('report')
+        if not report:
+            report = collect_diagnostic_report(
+                recent_error=_LAST_RENDER_ERROR,
+                job_context=_LAST_RENDER_JOB_CONTEXT
+            )
+        res = submit_diagnostic_report(report)
+        return jsonify(res)
+    except Exception as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 500
+
+
+@app.route('/api/diagnostics/save_local', methods=['POST'])
+def api_diagnostics_save_local():
+    """Save client diagnostic report to the local machine."""
+    try:
+        req_data = request.get_json(silent=True) or {}
+        report = req_data.get('report')
+        if not report:
+            report = collect_diagnostic_report(
+                recent_error=_LAST_RENDER_ERROR,
+                job_context=_LAST_RENDER_JOB_CONTEXT
+            )
+        local_path = save_diagnostic_report_locally(report)
+        return jsonify({
+            'ok': True,
+            'diagnostic_id': report.get('diagnostic_id'),
+            'local_path': diagnostic_collector.redact_path(local_path)
+        })
+    except Exception as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 500

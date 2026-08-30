@@ -4778,3 +4778,148 @@ checkForAppUpdates();
 
 
 
+
+
+// ─── Client Diagnostics & Support Reporting ─────────────────────────────────
+
+let currentDiagnosticReport = null;
+
+async function openClientDiagnosticModal() {
+  const modal = $('client-diagnostic-modal');
+  const previewBox = $('diag-preview-content');
+  const statusBox = $('diag-result-status');
+  if (!modal) return;
+
+  if (statusBox) {
+    statusBox.style.display = 'none';
+    statusBox.textContent = '';
+  }
+  if (previewBox) {
+    previewBox.textContent = '⏳ Đang thu thập và chuẩn hóa dữ liệu chẩn đoán kỹ thuật...';
+  }
+
+  modal.style.display = 'flex';
+  await loadDiagnosticPreview();
+}
+
+async function loadDiagnosticPreview() {
+  const previewBox = $('diag-preview-content');
+  try {
+    const res = await fetch('/api/diagnostics/generate', { method: 'POST' });
+    const data = await res.json();
+    if (data.ok && data.report) {
+      currentDiagnosticReport = data.report;
+      if (previewBox) {
+        previewBox.textContent = JSON.stringify(data.report, null, 2);
+      }
+    } else {
+      if (previewBox) previewBox.textContent = '❌ Không thể tạo báo cáo: ' + (data.error || 'Unknown error');
+    }
+  } catch (err) {
+    if (previewBox) previewBox.textContent = '❌ Lỗi kết nối khi tạo báo cáo: ' + err.message;
+  }
+}
+
+async function handleSendDiagnosticRemote() {
+  const sendBtn = $('btn-diag-send-remote');
+  const statusBox = $('diag-result-status');
+  if (sendBtn) sendBtn.disabled = true;
+
+  if (statusBox) {
+    statusBox.style.display = 'block';
+    statusBox.style.background = 'rgba(10,132,255,0.15)';
+    statusBox.style.border = '1px solid #0a84ff';
+    statusBox.style.color = '#38bdf8';
+    statusBox.textContent = '🚀 Đang gửi báo cáo chẩn đoán đến máy chủ hỗ trợ...';
+  }
+
+  try {
+    const res = await fetch('/api/diagnostics/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ report: currentDiagnosticReport })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      if (statusBox) {
+        statusBox.style.background = 'rgba(48,209,88,0.15)';
+        statusBox.style.border = '1px solid #30d158';
+        statusBox.style.color = '#30d158';
+        statusBox.innerHTML = `✅ Báo cáo đã gửi thành công!<br><strong>Mã Chẩn Đoán (Diagnostic ID):</strong> <span style="color:#fff;font-family:monospace;font-size:14px">${data.diagnostic_id}</span><br><small style="color:#d1fae5">Vui lòng cung cấp mã này cho đội ngũ hỗ trợ.</small>`;
+      }
+      showToast(`✅ Đã gửi báo cáo chẩn đoán (${data.diagnostic_id})!`, 'success', 6000);
+    } else {
+      if (data.offline_saved) {
+        if (statusBox) {
+          statusBox.style.background = 'rgba(234,179,8,0.15)';
+          statusBox.style.border = '1px solid #eab308';
+          statusBox.style.color = '#fde047';
+          statusBox.innerHTML = `⚠️ Máy chủ hỗ trợ hiện đang bận/offline.<br><strong>Đã lưu báo cáo cục bộ tại:</strong> <code style="color:#fff">${data.local_path}</code><br><strong>Mã:</strong> ${data.diagnostic_id}`;
+        }
+      } else {
+        if (statusBox) {
+          statusBox.style.background = 'rgba(239,68,68,0.15)';
+          statusBox.style.border = '1px solid #ef4444';
+          statusBox.style.color = '#f87171';
+          statusBox.textContent = '❌ Không thể gửi báo cáo: ' + (data.message || data.error || 'Unknown error');
+        }
+      }
+    }
+  } catch (err) {
+    if (statusBox) {
+      statusBox.style.background = 'rgba(239,68,68,0.15)';
+      statusBox.style.border = '1px solid #ef4444';
+      statusBox.style.color = '#f87171';
+      statusBox.textContent = '❌ Lỗi kết nối: ' + err.message;
+    }
+  } finally {
+    if (sendBtn) sendBtn.disabled = false;
+  }
+}
+
+async function handleSaveDiagnosticLocal() {
+  const statusBox = $('diag-result-status');
+  try {
+    const res = await fetch('/api/diagnostics/save_local', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ report: currentDiagnosticReport })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      if (statusBox) {
+        statusBox.style.display = 'block';
+        statusBox.style.background = 'rgba(48,209,88,0.15)';
+        statusBox.style.border = '1px solid #30d158';
+        statusBox.style.color = '#30d158';
+        statusBox.innerHTML = `💾 Đã lưu tệp báo cáo an toàn tại:<br><code style="color:#fff;font-size:11px">${data.local_path}</code>`;
+      }
+      showToast('💾 Đã lưu báo cáo chẩn đoán tại máy!', 'success', 4000);
+    }
+  } catch (err) {
+    showToast('❌ Lỗi khi lưu báo cáo: ' + err.message, 'error', 4000);
+  }
+}
+
+// Bind Diagnostic Modal Events
+document.addEventListener('DOMContentLoaded', () => {
+  const btnClose = $('btn-client-diag-close');
+  const btnDismiss = $('btn-client-diag-dismiss');
+  const btnRefresh = $('btn-refresh-diag-preview');
+  const btnSend = $('btn-diag-send-remote');
+  const btnSave = $('btn-diag-save-local');
+  const btnFromError = $('btn-diag-send-support');
+
+  if (btnClose) btnClose.addEventListener('click', () => { $('client-diagnostic-modal').style.display = 'none'; });
+  if (btnDismiss) btnDismiss.addEventListener('click', () => { $('client-diagnostic-modal').style.display = 'none'; });
+  if (btnRefresh) btnRefresh.addEventListener('click', loadDiagnosticPreview);
+  if (btnSend) btnSend.addEventListener('click', handleSendDiagnosticRemote);
+  if (btnSave) btnSave.addEventListener('click', handleSaveDiagnosticLocal);
+  if (btnFromError) {
+    btnFromError.addEventListener('click', () => {
+      const errModal = $('diag-error-modal');
+      if (errModal) errModal.style.display = 'none';
+      openClientDiagnosticModal();
+    });
+  }
+});

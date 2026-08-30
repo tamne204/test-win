@@ -1313,9 +1313,45 @@
         <div id="diag-error-sugg" class="diag-sugg-box">Kiểm tra kết nối và thử lại.</div>
       </div>
     </div>
-    <div class="diag-modal-footer">
+    <div class="diag-modal-footer" style="display:flex;gap:8px;justify-content:flex-end">
+      <button type="button" id="btn-diag-send-support" class="btn-diag-action" style="background:#0a84ff;color:#fff;font-weight:700">📤 Gửi Báo Cáo Kỹ Thuật</button>
       <button type="button" id="btn-diag-copy" class="btn-diag-action btn-diag-copy">📋 Sao Chép Mã Lỗi</button>
       <button type="button" id="btn-diag-dismiss" class="btn-diag-action btn-diag-dismiss">Đóng</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- Client Diagnostic Reporting Modal -->
+<div id="client-diagnostic-modal" class="diag-modal-backdrop" style="display:none">
+  <div class="diag-modal-card" style="max-width:650px">
+    <div class="diag-modal-header">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:20px">🩺</span>
+        <span style="font-weight:800;font-size:15px;color:#38bdf8">BÁO CÁO CHẨN ĐOÁN KỸ THUẬT (CLIENT DIAGNOSTICS)</span>
+      </div>
+      <button type="button" id="btn-client-diag-close" class="diag-close-btn">&times;</button>
+    </div>
+    <div class="diag-modal-body">
+      <div style="background:rgba(56,189,248,0.1);border:1px solid rgba(56,189,248,0.3);padding:10px 14px;border-radius:8px;font-size:12px;color:#bae6fd;line-height:1.5">
+        🔒 <strong>Cam Kết Bảo Mật:</strong> Báo cáo này chỉ thu thập các thông số kỹ thuật (GPU, CUDA, Driver NVIDIA, FFmpeg, RAM, Lỗi render gần nhất). 
+        <br><strong>TUYỆT ĐỐI KHÔNG</strong> thu thập hình ảnh, video, âm thanh, kịch bản, phụ đề hay mã bản quyền của bạn.
+      </div>
+      
+      <div style="margin-top:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span class="diag-label">DỮ LIỆU KỸ THUẬT SẼ ĐƯỢC GỬI (ĐÃ CHE THÔNG TIN NHẠY CẢM):</span>
+          <button type="button" id="btn-refresh-diag-preview" style="background:transparent;border:none;color:#38bdf8;cursor:pointer;font-size:11px;font-weight:700">🔄 Làm mới</button>
+        </div>
+        <pre id="diag-preview-content" style="max-height:220px;overflow-y:auto;background:rgba(0,0,0,0.5);padding:10px;border-radius:8px;font-size:11px;font-family:monospace;color:#a5f3fc;border:1px solid rgba(255,255,255,0.1)">Đang nạp dữ liệu chẩn đoán...</pre>
+      </div>
+
+      <div id="diag-result-status" style="display:none;padding:10px 14px;border-radius:8px;margin-top:12px;font-size:13px;font-weight:700"></div>
+    </div>
+    <div class="diag-modal-footer" style="display:flex;gap:8px;justify-content:flex-end">
+      <button type="button" id="btn-diag-save-local" class="btn-diag-action" style="background:rgba(255,255,255,0.1);color:#fff;font-weight:600">💾 Lưu Tại Máy (Offline)</button>
+      <button type="button" id="btn-diag-send-remote" class="btn-diag-action" style="background:#0a84ff;color:#fff;font-weight:700">🚀 Gửi Báo Cáo Kỹ Thuật</button>
+      <button type="button" id="btn-client-diag-dismiss" class="btn-diag-action btn-diag-dismiss">Đóng</button>
     </div>
   </div>
 </div>
