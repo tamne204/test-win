@@ -60,6 +60,26 @@ update_mgr = UpdateManager()
 # App setup
 # ---------------------------------------------------------------------------
 
+def check_license_gate():
+    """
+    Mandatory License Entitlement Gate:
+    Strictly verifies that the client has an ACTIVE / valid / valid offline_grace entitlement.
+    Returns HTTP 403 LICENSE_REQUIRED if unlicensed.
+    """
+    if os.environ.get("VIBECODE_DISABLE_LICENSE_GATE") == "1":
+        return None
+
+    if not license_manager.is_licensed():
+        status_info = license_manager.get_status()
+        return jsonify({
+            'ok': False,
+            'error': 'LICENSE_REQUIRED',
+            'error_code': status_info.get('status', 'LICENSE_REQUIRED'),
+            'message': status_info.get('message', 'Vui lòng kích hoạt bản quyền phần mềm để sử dụng chức năng này.'),
+            'hwid': status_info.get('hwid', '')
+        }), 403
+    return None
+
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 4 * 1024 * 1024 * 1024  # 4 GB max upload
 
@@ -262,6 +282,9 @@ def index():
 
 @app.route('/render', methods=['POST'])
 def render():
+    gate_err = check_license_gate()
+    if gate_err:
+        return gate_err
     if not FFMPEG_AVAILABLE:
         return jsonify({'error': 'FFmpeg is not installed or not found in PATH.'}), 500
 
@@ -619,6 +642,9 @@ def download_srt(job_id):
 
 @app.route('/subtitles/preview', methods=['POST'])
 def subtitles_preview():
+    gate_err = check_license_gate()
+    if gate_err:
+        return gate_err
     """Generate and return subtitles text asynchronously with real-time SSE progress."""
     try:
         lang = request.form.get('language', 'auto')
@@ -766,6 +792,9 @@ def subtitles_preview():
 
 @app.route('/api/forced-align', methods=['POST'])
 def api_forced_align():
+    gate_err = check_license_gate()
+    if gate_err:
+        return gate_err
     """100% Exact Forced Alignment of Ground Truth Script (.txt) with Audio Waveform."""
     try:
         import forced_alignment_engine
@@ -876,6 +905,9 @@ def api_forced_align():
 
 @app.route('/subtitles/align', methods=['POST'])
 def forced_align():
+    gate_err = check_license_gate()
+    if gate_err:
+        return gate_err
     """100% Accurate Forced Alignment with real-time SSE progress streaming."""
     try:
         script_text        = request.form.get('script_text', '').strip()
@@ -1019,6 +1051,9 @@ def forced_align():
 
 @app.route('/api/subtitles/translate', methods=['POST'])
 def api_translate_subtitles():
+    gate_err = check_license_gate()
+    if gate_err:
+        return gate_err
     """Translate subtitles or script text to target language (default 'vi')."""
     try:
         req_data = request.get_json(silent=True) or {}
@@ -1073,6 +1108,9 @@ def tts_voices():
 
 @app.route('/tts/generate', methods=['POST'])
 def tts_generate():
+    gate_err = check_license_gate()
+    if gate_err:
+        return gate_err
     """Start a TTS generation job with Edge-TTS. Returns job_id for SSE progress tracking."""
     if not check_edge_tts():
         return jsonify({'error': 'edge-tts chưa được cài đặt. Chạy: pip install edge-tts'}), 500

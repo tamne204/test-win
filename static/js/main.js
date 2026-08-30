@@ -1,3 +1,4 @@
+window.isAppLicensed = false;
 // Global Security Interceptor: Attach Session Token to all localhost API requests
 const appTokenMeta = document.querySelector('meta[name="app-session-token"]');
 const APP_SESSION_TOKEN = appTokenMeta ? appTokenMeta.getAttribute('content') : '';
@@ -3494,6 +3495,12 @@ let isExecutingRender = false;
 
 async function executeRenderVideo(e) {
   if (e && e.preventDefault) e.preventDefault();
+  if (!window.isAppLicensed) {
+    showToast('⚠️ Vui lòng kích hoạt bản quyền phần mềm để Render Video!', 'warning', 5000);
+    const licModal = $('license-modal');
+    if (licModal) licModal.style.display = 'flex';
+    return;
+  }
   if (isExecutingRender) {
     console.warn('⚠️ Render đang được tiến hành, vui lòng đợi...');
     return;
@@ -4418,6 +4425,7 @@ async function checkLicenseStatus(showAlertIfInvalid = false) {
     currentHWID = data.hwid || '';
     if (hwidDisplay) hwidDisplay.textContent = currentHWID || 'Không xác định';
 
+    window.isAppLicensed = !!data.ok;
     if (data.ok) {
       if (badge) {
         badge.style.background = 'rgba(16, 185, 129, 0.15)';
@@ -4430,6 +4438,7 @@ async function checkLicenseStatus(showAlertIfInvalid = false) {
       if (licModal) licModal.style.display = 'none';
       return true;
     } else {
+      window.isAppLicensed = false;
       if (badge) {
         badge.style.background = 'rgba(239, 68, 68, 0.15)';
         badge.style.borderColor = 'rgba(239, 68, 68, 0.35)';
