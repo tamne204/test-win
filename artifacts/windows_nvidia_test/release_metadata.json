@@ -1,0 +1,15 @@
+{
+  "version": "2.2.3.19",
+  "release_tag": "v2.2.3.19",
+  "build_target": "Windows 10/11 x64 (Compatible with macOS Darwin)",
+  "package_filename": "SlideshowBuilder_Windows_v2.2.3.19.zip",
+  "sha256": "14da944abd1e657c7549a6243708b02f73a2e872483a8a432c71d65a551bcf45",
+  "size_mb": 6.22,
+  "code_signing_status": "UNSIGNED (PLANNED FUTURE ACTION)",
+  "nvidia_cuda_status": "IMPLEMENTED / NOT HARDWARE VERIFIED",
+  "renderer_default": "Renderer G (Glide GPU Subpixel)",
+  "renderer_fallback": "Renderer D (Golden Baseline 4X)",
+  "mandatory_license_gate": "ENABLED",
+  "security_hardened": "ENABLED",
+  "client_diagnostics": "ENABLED"
+}
