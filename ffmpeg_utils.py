@@ -121,6 +121,79 @@ def get_filter_complex_file_arg(ffmpeg_bin: str, script_file: str) -> List[str]:
         pass
     return ['-filter_complex_script', script_file]
 
+
+from pathlib import Path
+import hashlib
+
+def validate_canonical_path(base_dir: Union[str, Path], user_path: Union[str, Path], allow_nonexistent: bool = False) -> Path:
+    """
+    Canonical path validation to strictly prevent Path Traversal, Symlink Escapes,
+    Absolute Path Injection, UNC Paths, and Null Byte Injections.
+    """
+    raw_str = str(user_path).strip()
+    if not raw_str:
+        raise ValueError("Path cannot be empty.")
+    if "\0" in raw_str:
+        raise ValueError("Null byte injection detected in path.")
+    if raw_str.startswith("\\\\") or raw_str.startswith("//"):
+        raise ValueError("UNC remote network paths are forbidden.")
+    if raw_str.startswith("/") or raw_str.startswith("\\"):
+        raise ValueError("Absolute root paths not permitted in relative path context.")
+    if re.match(r'^[A-Za-z]:', raw_str):
+        raise ValueError("Absolute Windows drive letters not permitted in relative path context.")
+
+    base = Path(base_dir).resolve()
+    # Check for direct traversal patterns
+    if ".." in raw_str.replace("\\", "/").split("/"):
+        raise ValueError("Path traversal '..' pattern detected.")
+
+    candidate = (base / raw_str.replace("\\", "/")).resolve()
+
+    try:
+        is_rel = candidate.is_relative_to(base)
+    except AttributeError:
+        is_rel = str(candidate).startswith(str(base))
+
+    if not is_rel:
+        raise ValueError(f"Path traversal attempt blocked: '{raw_str}' resolves outside base directory.")
+
+    if not allow_nonexistent and not candidate.exists():
+        raise FileNotFoundError(f"Validated target path not found: '{candidate}'")
+
+    return candidate
+
+
+def get_ffmpeg_security_info() -> Dict[str, Any]:
+    """Return validated FFmpeg binary path, version, and SHA-256 hash."""
+    bin_path = get_ffmpeg_bin()
+    sha256_hash = "N/A"
+    version_str = "Unknown"
+    
+    if os.path.isabs(bin_path) and os.path.isfile(bin_path):
+        try:
+            h = hashlib.sha256()
+            with open(bin_path, "rb") as f:
+                while chunk := f.read(65536):
+                    h.update(chunk)
+            sha256_hash = h.hexdigest()
+        except Exception:
+            pass
+            
+    try:
+        kwargs = {'creationflags': 0x08000000} if sys.platform == 'win32' else {}
+        res = subprocess.run([bin_path, '-version'], capture_output=True, text=True, timeout=3, **kwargs)
+        if res.returncode == 0:
+            version_str = res.stdout.splitlines()[0] if res.stdout else "FFmpeg OK"
+    except Exception:
+        pass
+
+    return {
+        "binary_path": bin_path,
+        "version": version_str,
+        "sha256": sha256_hash,
+        "is_trusted": os.path.isabs(bin_path) or bin_path in ('ffmpeg', 'ffmpeg.exe')
+    }
+
 def get_ffmpeg_bin() -> str:
     """Return best available ffmpeg binary, supporting Windows, macOS, and Linux."""
     local_dir = os.path.dirname(os.path.abspath(__file__))

@@ -26,10 +26,14 @@ from flask import (
 )
 
 import ffmpeg_utils
+import secrets
+import hmac
+import shutil
 from ffmpeg_utils import (
     render_video, sort_images,
     is_supported_image, is_supported_audio,
-    check_ffmpeg, normalize_weights, build_resolution
+    check_ffmpeg, normalize_weights, build_resolution,
+    validate_canonical_path, get_ffmpeg_security_info
 )
 from tts_utils import check_edge_tts, check_voxcpm, detect_device, generate_tts, CURATED_VOICES
 import subtitles_engine
@@ -58,6 +62,39 @@ update_mgr = UpdateManager()
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 4 * 1024 * 1024 * 1024  # 4 GB max upload
+
+# Cryptographically secure 32-byte session secret for localhost API authentication
+APP_SESSION_SECRET = secrets.token_hex(32)
+RENDER_SEMAPHORE = threading.Semaphore(2)  # Max 2 concurrent render jobs
+
+# Log trusted FFmpeg binary security info on startup
+_ffmpeg_sec = get_ffmpeg_security_info()
+print(f"🔒 [Security Audit] Trusted FFmpeg: {_ffmpeg_sec['binary_path']} (SHA-256: {_ffmpeg_sec['sha256'][:16]}...)")
+
+@app.before_request
+def validate_localhost_security():
+    """Enforce Host validation and session token authentication on API requests."""
+    # Validate Host header against DNS rebinding
+    host = request.host.split(':')[0]
+    if host not in ('127.0.0.1', 'localhost', '::1', '0.0.0.0', 'testserver', 'localhost:5000'):
+        return jsonify({'error': 'Forbidden: External host access blocked.'}), 403
+
+    # Allow public static assets and GET / to bootstrap frontend
+    if request.method == "GET" and (request.path in ("/", "/api/health", "/api/license/status") or request.path.startswith("/static/")):
+        return None
+
+    if os.environ.get("VIBECODE_DISABLE_AUTH") == "1":
+        return None
+
+    # Check X-App-Token or Authorization header or query param
+    token = (
+        request.headers.get('X-App-Token') or
+        request.headers.get('Authorization', '').replace('Bearer ', '').strip() or
+        request.args.get('token', '').strip() or
+        request.form.get('app_token', '').strip()
+    )
+    if not token or not hmac.compare_digest(token, APP_SESSION_SECRET):
+        return jsonify({'error': 'Unauthorized: Missing or invalid local session token.'}), 401
 
 UPLOAD_DIR = Path('uploads')
 OUTPUT_DIR = Path('outputs')

@@ -2,8 +2,10 @@
 license_manager.py
 Handles Hardware ID (HWID) extraction, license activation, and verification
 against the license server at https://www.2tamne.site/
+Hardened for Windows 11 24H2+ (WMIC-free), log redaction, and multi-factor hardware identity.
 """
 from __future__ import annotations
+from typing import List, Tuple, Dict, Any, Optional, Union, Callable, Set
 
 import os
 import sys
@@ -13,9 +15,9 @@ import hashlib
 import platform
 import threading
 import subprocess
-from typing import List, Tuple, Dict, Any, Optional, Union, Callable, Set
 import requests
 from version import __version__ as TOOL_VERSION
+
 LICENSE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "license.json")
 ACTIVATE_API = "https://www.2tamne.site/api/license/activate.php"
 VERIFY_API = "https://www.2tamne.site/api/license/verify.php"
@@ -32,52 +34,104 @@ _current_status = {
 }
 
 
+def redact_license_key(key: str) -> str:
+    """Safely redact sensitive license key for logging (e.g. 2TAMNE-****-****-YYYY)."""
+    if not key or len(key) < 8:
+        return "****"
+    parts = key.strip().split("-")
+    if len(parts) >= 3:
+        return f"{parts[0]}-****-****-{parts[-1]}"
+    return f"{key[:4]}****{key[-4:]}"
+
+
+def redact_token(token: str) -> str:
+    """Safely redact session tokens for logging."""
+    if not token or len(token) < 8:
+        return "****"
+    return f"{token[:4]}...{token[-4:]}"
+
+
 def get_hwid() -> str:
-    """Extract a unique hardware identifier (HWID) across Windows, macOS, and Linux."""
+    """
+    Extract a stable, multi-signal hardware identifier (HWID) across Windows, macOS, and Linux.
+    Completely eliminates deprecated WMIC dependencies (compatible with Windows 11 24H2+).
+    """
     system = platform.system()
-    raw_id = ""
+    raw_signals: List[str] = []
+
     try:
         if system == "Windows":
+            # 1. Primary Signal: Windows Registry MachineGuid (Universal, Stable)
             try:
                 import winreg
                 key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Cryptography")
                 guid, _ = winreg.QueryValueEx(key, "MachineGuid")
                 if guid:
-                    raw_id = str(guid).strip()
+                    raw_signals.append(f"guid:{str(guid).strip()}")
             except Exception:
                 pass
 
-            if not raw_id:
+            # 2. Secondary Signal: PowerShell Get-CimInstance (Modern Windows 11 / 10 API, no WMIC)
+            if not raw_signals:
                 try:
                     kwargs = {'creationflags': 0x08000000} if sys.platform == 'win32' else {}
-                    cmd = "wmic csproduct get uuid"
-                    out = subprocess.check_output(cmd, shell=True, timeout=3, **kwargs).decode(errors="ignore").splitlines()
-                    if len(out) > 1:
-                        raw_id = out[1].strip()
-                    if not raw_id or "UUID" in raw_id:
-                        cmd2 = "vol c:"
-                        raw_id = subprocess.check_output(cmd2, shell=True, timeout=3, **kwargs).decode(errors="ignore").strip()
+                    ps_cmd = ["powershell", "-NoProfile", "-NonInteractive", "-Command",
+                              "(Get-CimInstance Win32_ComputerSystemProduct).UUID"]
+                    res = subprocess.run(ps_cmd, capture_output=True, text=True, timeout=3, **kwargs)
+                    if res.returncode == 0 and res.stdout.strip():
+                        raw_signals.append(f"cim:{res.stdout.strip()}")
                 except Exception:
                     pass
+
+            # 3. Tertiary Signal: Volume Serial Number of C:
+            try:
+                kwargs = {'creationflags': 0x08000000} if sys.platform == 'win32' else {}
+                vol_cmd = ["cmd", "/c", "vol", "c:"]
+                res = subprocess.run(vol_cmd, capture_output=True, text=True, timeout=3, **kwargs)
+                if res.returncode == 0 and res.stdout.strip():
+                    raw_signals.append(f"vol:{res.stdout.strip()}")
+            except Exception:
+                pass
+
         elif system == "Darwin":  # macOS
-            cmd = "ioreg -rd1 -c IOPlatformExpertDevice | grep IOPlatformUUID"
-            out = subprocess.check_output(cmd, shell=True, timeout=3).decode(errors="ignore").strip()
-            if '"' in out:
-                raw_id = out.split('"')[-2].strip()
+            try:
+                cmd = ["ioreg", "-rd1", "-c", "IOPlatformExpertDevice"]
+                res = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
+                if res.returncode == 0 and "IOPlatformUUID" in res.stdout:
+                    for line in res.stdout.splitlines():
+                        if "IOPlatformUUID" in line and '"' in line:
+                            raw_signals.append(f"mac_uuid:{line.split('\"')[-2].strip()}")
+                            break
+            except Exception:
+                pass
+
         else:  # Linux
-            if os.path.exists("/etc/machine-id"):
-                with open("/etc/machine-id", "r") as f:
-                    raw_id = f.read().strip()
-            elif os.path.exists("/var/lib/dbus/machine-id"):
-                with open("/var/lib/dbus/machine-id", "r") as f:
-                    raw_id = f.read().strip()
+            for path in ("/etc/machine-id", "/var/lib/dbus/machine-id"):
+                if os.path.exists(path):
+                    try:
+                        with open(path, "r") as f:
+                            raw_signals.append(f"linux_id:{f.read().strip()}")
+                        break
+                    except Exception:
+                        pass
+
     except Exception:
         pass
 
-    if not raw_id:
-        raw_id = f"{platform.node()}_{platform.processor()}_{platform.machine()}"
+    # Universal Fallback Signals (Node hostname, CPU Processor, Machine Architecture)
+    try:
+        import uuid
+        mac_addr = hex(uuid.getnode())
+        raw_signals.append(f"mac:{mac_addr}")
+    except Exception:
+        pass
 
-    return hashlib.sha256(raw_id.strip().encode("utf-8")).hexdigest().upper()
+    raw_signals.append(f"node:{platform.node()}")
+    raw_signals.append(f"proc:{platform.processor()}")
+    raw_signals.append(f"arch:{platform.machine()}")
+
+    combined = "|".join(raw_signals)
+    return hashlib.sha256(combined.encode("utf-8")).hexdigest().upper()
 
 
 def get_device_name() -> str:
@@ -228,18 +282,21 @@ def verify_license() -> Dict[str, Any]:
             "tier": saved.get("tier", "VIP"),
             "days_left": 30,
             "expires_at": saved.get("expires_at", ""),
-            "message": f"Chế độ ngoại tuyến (Không kết nối được server 2tamne.site: {e})",
+            "message": f"Chế độ ngoại tuyến (Không kết nối được server 2tamne.site)",
             "features": ["all"]
         }
         return _current_status
 
 
 def get_status() -> Dict[str, Any]:
-    """Return cached status with HWID."""
+    """Return cached status with HWID and redacted license info."""
     status = dict(_current_status)
     status["hwid"] = get_hwid()
     status["device_name"] = get_device_name()
     status["tool_version"] = TOOL_VERSION
+    saved = get_saved_license()
+    if saved and saved.get("license_key"):
+        status["redacted_key"] = redact_license_key(saved["license_key"])
     return status
 
 

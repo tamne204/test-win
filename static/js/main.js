@@ -1,3 +1,24 @@
+// Global Security Interceptor: Attach Session Token to all localhost API requests
+const appTokenMeta = document.querySelector('meta[name="app-session-token"]');
+const APP_SESSION_TOKEN = appTokenMeta ? appTokenMeta.getAttribute('content') : '';
+
+const _originalFetch = window.fetch;
+window.fetch = function(url, options = {}) {
+  options.headers = options.headers || {};
+  if (APP_SESSION_TOKEN) {
+    if (options.headers instanceof Headers) {
+      if (!options.headers.has('X-App-Token')) {
+        options.headers.set('X-App-Token', APP_SESSION_TOKEN);
+      }
+    } else if (Array.isArray(options.headers)) {
+      options.headers.push(['X-App-Token', APP_SESSION_TOKEN]);
+    } else {
+      options.headers['X-App-Token'] = APP_SESSION_TOKEN;
+    }
+  }
+  return _originalFetch.apply(this, [url, options]);
+};
+
 /**
  * main.js — Slideshow Builder + Independent Multi-Track Studio + Live Preview Monitor
  * Features:
