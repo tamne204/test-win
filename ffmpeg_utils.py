@@ -1,3 +1,4 @@
+from __future__ import annotations
 import tempfile
 import uuid
 """
@@ -11,7 +12,7 @@ import sys
 import re
 import random
 import subprocess
-from typing import List, Tuple, Dict, Any, Callable, Optional
+from typing import List, Tuple, Dict, Any, Optional, Union, Callable, Set
 try:
     from PIL import Image, ImageDraw, ImageFont
 except ImportError:

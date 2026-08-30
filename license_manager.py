@@ -3,6 +3,7 @@ license_manager.py
 Handles Hardware ID (HWID) extraction, license activation, and verification
 against the license server at https://www.2tamne.site/
 """
+from __future__ import annotations
 
 import os
 import sys
@@ -12,7 +13,7 @@ import hashlib
 import platform
 import threading
 import subprocess
-from typing import Dict, Any, Optional
+from typing import List, Tuple, Dict, Any, Optional, Union, Callable, Set
 import requests
 from version import __version__ as TOOL_VERSION
 LICENSE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "license.json")

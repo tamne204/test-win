@@ -1,3 +1,5 @@
+from __future__ import annotations
+from typing import List, Tuple, Dict, Any, Optional, Union, Callable, Set
 import asyncio
 import edge_tts
 import os

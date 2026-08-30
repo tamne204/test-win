@@ -3,6 +3,8 @@ version.py
 Single source of truth for application versioning.
 Follows Semantic Versioning (MAJOR.MINOR.PATCH).
 """
+from __future__ import annotations
+from typing import List, Tuple, Dict, Any, Optional, Union, Callable, Set
 
 __version__ = "2.2.3.18"
 APP_NAME = "Slideshow Builder AI"

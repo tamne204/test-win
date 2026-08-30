@@ -6,6 +6,7 @@ Features:
 2. 100% verbatim script text preservation with real-time acoustic timestamps.
 3. Completely decoupled Subtitle Track and Image Track.
 """
+from __future__ import annotations
 
 import os
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
@@ -16,7 +17,7 @@ import time
 import threading
 import subprocess
 from pathlib import Path
-from typing import List, Dict, Tuple, Optional, Any
+from typing import List, Tuple, Dict, Any, Optional, Union, Callable, Set
 import numpy as np
 
 def get_ffmpeg_bin() -> str:
@@ -1080,5 +1081,4 @@ QUY TẮC PHÁT HIỆN TIẾNG NÓI & KHOẢNG LẶNG (CRITICAL):
         progress_callback(100, f"✅ Đã tạo {len(sanitized_subs)} câu phụ đề trực tiếp bằng {model_label}!")
 
     return final_srt, sanitized_subs, report
-
 

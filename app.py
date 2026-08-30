@@ -4,6 +4,8 @@ Flask web server for the FFmpeg Slideshow Builder.
 Handles file uploads, background rendering, SSE progress, download,
 VoxCPM2 Text-to-Speech generation, and AutoSub subtitle recognition & embedding.
 """
+from __future__ import annotations
+from typing import List, Tuple, Dict, Any, Optional, Union, Callable, Set
 
 import os
 import sys

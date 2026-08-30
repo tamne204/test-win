@@ -4,10 +4,11 @@ Modular, Renderer-Independent Subpixel Camera Engine.
 Provides CameraTransform abstraction and multi-trajectory motion synthesis.
 Decoupled from FFmpeg, PyTorch, and Web Canvas backends.
 """
+from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Tuple, Dict, Any, Optional
+from typing import List, Tuple, Dict, Any, Optional, Union, Callable, Set
 
 
 @dataclass

@@ -4,13 +4,14 @@ Automatic translation engine for scripts and subtitles.
 Supports fast batch translation from Korean (ko), Chinese (zh), English (en), etc., to Vietnamese (vi)
 while preserving exact timestamps (start, end, id).
 """
+from __future__ import annotations
 
 import json
 import re
 import html
 import urllib.request
 import urllib.parse
-from typing import List, Dict, Any, Tuple
+from typing import List, Tuple, Dict, Any, Optional, Union, Callable, Set
 
 
 def translate_text(text: str, source_lang: str = 'auto', target_lang: str = 'vi') -> str:

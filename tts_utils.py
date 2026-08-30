@@ -8,6 +8,7 @@ Supports:
 - JSON scenes batch synthesis with exact per-scene speech duration measurement.
 - 100% exact SRT subtitle generation and per-image duration alignment.
 """
+from __future__ import annotations
 
 import os
 import re
@@ -17,7 +18,7 @@ import asyncio
 import tempfile
 import subprocess
 from pathlib import Path
-from typing import Optional, Callable, List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, Optional, Union, Callable, Set
 
 def get_ffmpeg_bin() -> str:
     from ffmpeg_utils import get_ffmpeg_bin as _get_ff

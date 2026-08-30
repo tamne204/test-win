@@ -6,6 +6,7 @@ Supports 2 distinct user-selectable engines:
 Aligns 100% ground-truth script text line-by-line to audio waveforms (WAV/MP3).
 Produces millisecond-accurate SRT subtitles preserving exact text, casing, and punctuation.
 """
+from __future__ import annotations
 
 import os
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
@@ -17,7 +18,7 @@ import json
 import sys
 import tempfile
 import uuid
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Tuple, Dict, Any, Optional, Union, Callable, Set
 
 _fw_align_model = None
 _fw_align_lock = threading.Lock()
@@ -997,4 +998,3 @@ def forced_align(
         'engine': engine,
         'language': eff_lang
     }
-

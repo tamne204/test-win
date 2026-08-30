@@ -5,6 +5,7 @@ Inspired by Loomos-hub/glide-ffmpeg.
 Continuous floating-point affine transform + GPU torch.grid_sample + direct raw RGB streaming to FFmpeg.
 Zero integer quantization on camera coordinates with automatic fallback to Renderer D (Golden Baseline).
 """
+from __future__ import annotations
 
 import os
 import sys
@@ -12,7 +13,7 @@ import time
 import subprocess
 import logging
 import threading
-from typing import Optional, Dict, Any, List, Tuple
+from typing import List, Tuple, Dict, Any, Optional, Union, Callable, Set
 from PIL import Image
 import numpy as np
 
@@ -158,6 +159,11 @@ class GlideGPUEngine:
 
         img_np = np.array(img_pil, dtype=np.float32) / 255.0  # (H, W, 3)
         img_tensor = torch.from_numpy(img_np).permute(2, 0, 1).unsqueeze(0).to(self.device)  # (1, 3, H, W)
+        logger.info(
+            f"🚀 [Renderer G] Device: {self.device} | Source: {src_w}x{src_h} ({source_scale_mode}) | "
+            f"Output: {width}x{height} @ {fps}fps | Effect: {effect} (mag={magnitude}) | "
+            f"Batch: {batch_size} | Encoder: {encoder}"
+        )
 
         # 2. Setup Base Grid on GPU
         base_grid = self.get_base_grid(width, height)

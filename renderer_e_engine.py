@@ -4,12 +4,13 @@ Renderer E: High-Precision Subpixel GPU Camera Engine.
 Leverages continuous floating-point affine grid sampling on Apple MPS (Metal) / NVIDIA CUDA
 with fallback to high-performance CPU subpixel interpolation and Renderer D.
 """
+from __future__ import annotations
 
 import os
 import sys
 import subprocess
 import logging
-from typing import Tuple, Optional, Dict, Any
+from typing import List, Tuple, Dict, Any, Optional, Union, Callable, Set
 from PIL import Image
 import numpy as np
 
