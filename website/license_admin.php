@@ -102,13 +102,28 @@ if ($admin_logged_in && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['a
             $days = intval($ord_item['duration_days'] ?? 30);
             $tier = $ord_item['tier'] ?? 'VIP';
             
+            $is_2toolne = ($ord_item['product'] ?? '') === '2TOOLNE' || stripos($ord_item['package_name'] ?? '', '2toolne') !== false;
             $is_ext_order = ($ord_item['product'] ?? '') === 'LABS_EXTENSION' || ($ord_item['tier'] ?? '') === 'LABS_EXTENSION' || stripos($ord_item['package_name'] ?? '', 'Extension') !== false || strpos($ord_item['package_price'] ?? '', '100.000') !== false;
-            $prod_tag = $is_ext_order ? 'LABS_EXTENSION' : 'SLIDESHOW';
-            $tier_tag = $is_ext_order ? 'LIFETIME' : $tier;
-            $days_val = $is_ext_order ? 36500 : $days;
             
-            $rnd = strtoupper(bin2hex(random_bytes(2)) . '-' . bin2hex(random_bytes(2)));
-            $new_key = $is_ext_order ? "2TAMNE-LABS-{$rnd}" : "2TAMNE-{$tier}-{$rnd}";
+            if ($is_2toolne) {
+                $prod_tag = '2TOOLNE';
+                $tier_tag = $tier;
+                $days_val = $days;
+                $rnd = strtoupper(bin2hex(random_bytes(2)) . '-' . bin2hex(random_bytes(2)));
+                $new_key = "2TOOLNE-{$tier}-{$rnd}";
+            } elseif ($is_ext_order) {
+                $prod_tag = 'LABS_EXTENSION';
+                $tier_tag = 'LIFETIME';
+                $days_val = 36500;
+                $rnd = strtoupper(bin2hex(random_bytes(2)) . '-' . bin2hex(random_bytes(2)));
+                $new_key = "2TAMNE-LABS-{$rnd}";
+            } else {
+                $prod_tag = 'SLIDESHOW';
+                $tier_tag = $tier;
+                $days_val = $days;
+                $rnd = strtoupper(bin2hex(random_bytes(2)) . '-' . bin2hex(random_bytes(2)));
+                $new_key = "2TAMNE-{$tier}-{$rnd}";
+            }
 
             db_create_license($new_key, $prod_tag, $tier_tag, $days_val, $u, "Đơn hàng {$ord_id}: {$ord_item['package_name']} ({$ord_item['package_price']})");
             db_approve_order($ord_id, $new_key);
@@ -126,14 +141,20 @@ if ($admin_logged_in && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['a
 
     // 3. CREATE KEY MANUALLY
     elseif ($act === 'create_key') {
-        $product = $_POST['product'] ?? 'SLIDESHOW';
+        $product = $_POST['product'] ?? '2TOOLNE';
         $tier = $_POST['tier'] ?? 'VIP';
         $duration = intval($_POST['duration_days'] ?? 30);
         $note = trim($_POST['note'] ?? '');
         $owner_user = trim($_POST['owner_user'] ?? '');
         
         $rnd = strtoupper(bin2hex(random_bytes(2)) . '-' . bin2hex(random_bytes(2)));
-        $new_key = ($product === 'LABS_EXTENSION') ? "2TAMNE-LABS-{$rnd}" : "2TAMNE-{$tier}-{$rnd}";
+        if ($product === '2TOOLNE') {
+            $new_key = "2TOOLNE-{$tier}-{$rnd}";
+        } elseif ($product === 'LABS_EXTENSION') {
+            $new_key = "2TAMNE-LABS-{$rnd}";
+        } else {
+            $new_key = "2TAMNE-{$tier}-{$rnd}";
+        }
 
         db_create_license($new_key, $product, $tier, $duration, $owner_user, $note);
         adm_redirect('success', "✅ Đã tạo Key <b>{$new_key}</b>" . (!empty($owner_user) ? " → Gán cho <b>{$owner_user}</b>" : ""), 'keys');
@@ -778,6 +799,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="form-group">
                         <label>Sản Phẩm (Product):</label>
                         <select name="product">
+                            <option value="2TOOLNE">🚀 2toolne — AI YouTube Production Studio</option>
                             <option value="SLIDESHOW">🎬 Tool Video AI (Slideshow Builder)</option>
                             <option value="LABS_EXTENSION">🖼️ Extension Google Labs (Tải Ảnh 2K/4K)</option>
                         </select>
@@ -828,12 +850,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             <!-- SUB-TABS: PRODUCT FILTER (EXTENSIBLE ARCHITECTURE) -->
             <?php
-            $count_video = count(array_filter($licenses_db, fn($x) => ($x['product']??'') !== 'LABS_EXTENSION'));
-            $count_ext   = count(array_filter($licenses_db, fn($x) => ($x['product']??'') === 'LABS_EXTENSION'));
+            $count_2toolne = count(array_filter($licenses_db, fn($x) => ($x['product']??'') === '2TOOLNE' || strpos($x['license_key']??'', '2TOOLNE-') === 0));
+            $count_video   = count(array_filter($licenses_db, fn($x) => ($x['product']??'') === 'SLIDESHOW' || (strpos($x['license_key']??'', '2TAMNE-') === 0 && strpos($x['license_key']??'', '2TAMNE-LABS-') !== 0)));
+            $count_ext     = count(array_filter($licenses_db, fn($x) => ($x['product']??'') === 'LABS_EXTENSION' || strpos($x['license_key']??'', '2TAMNE-LABS-') === 0));
             ?>
             <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;border-bottom:1px solid #1e293b;padding-bottom:12px">
                 <button type="button" class="btn btn-primary subtab-prod-btn active" onclick="filterKeysByProduct('ALL', this)" style="padding:6px 14px;font-size:12px">
                     ✨ Tất Cả (<?= count($licenses_db) ?>)
+                </button>
+                <button type="button" class="btn btn-outline subtab-prod-btn" onclick="filterKeysByProduct('2TOOLNE', this)" style="padding:6px 14px;font-size:12px;border-color:#10b981;color:#34d399">
+                    🚀 2toolne Studio (<?= $count_2toolne ?>)
                 </button>
                 <button type="button" class="btn btn-outline subtab-prod-btn" onclick="filterKeysByProduct('SLIDESHOW', this)" style="padding:6px 14px;font-size:12px;border-color:#6366f1;color:#a5b4fc">
                     🎬 Tool Video AI (<?= $count_video ?>)
@@ -864,12 +890,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         $owner = $lic['owner_user'] ?? '';
                     ?>
                         <?php
+                        $is_2toolne_key = ($lic['product'] ?? '') === '2TOOLNE' || strpos($k, '2TOOLNE-') === 0;
                         $is_ext_key = ($lic['product'] ?? '') === 'LABS_EXTENSION' || strpos($k, '2TAMNE-LABS-') === 0;
+                        $prod_row_tag = $is_2toolne_key ? '2TOOLNE' : ($is_ext_key ? 'LABS_EXTENSION' : 'SLIDESHOW');
                         ?>
-                        <tr class="lic-row" data-product="<?= $is_ext_key ? 'LABS_EXTENSION' : 'SLIDESHOW' ?>">
+                        <tr class="lic-row" data-product="<?= $prod_row_tag ?>">
                             <td><b style="font-family:monospace;color:#a5f3fc;font-size:13px"><?= htmlspecialchars($k) ?></b></td>
                             <td>
-                                <?php if ($is_ext_key): ?>
+                                <?php if ($is_2toolne_key): ?>
+                                    <span class="badge" style="background:rgba(16,185,129,0.2);color:#34d399;border:1px solid #10b981">🚀 2toolne Studio</span>
+                                <?php elseif ($is_ext_key): ?>
                                     <span class="badge" style="background:rgba(56,189,248,0.2);color:#38bdf8;border:1px solid #0284c7">🖼️ Labs Extension</span>
                                 <?php else: ?>
                                     <span class="badge" style="background:rgba(99,102,241,0.2);color:#a5b4fc;border:1px solid #6366f1">🎬 Video Tool</span>

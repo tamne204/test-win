@@ -752,6 +752,61 @@ if (isset($_GET['registered'])) {
                     <h3 style="font-size:18px;font-weight:800;color:#fff;margin-bottom:8px">🛒 CHỌN GÓI BẢN QUYỀN VIP</h3>
                     <p style="font-size:13px;color:#94a3b8;margin-bottom:24px">Thanh toán qua chuyển khoản quét mã VietQR tự động — Hỗ trợ <b>Update Trọn Đời</b></p>
                     
+                    <!-- SECTION: 2TOOLNE AI YOUTUBE PRODUCTION STUDIO -->
+                    <div style="background:linear-gradient(180deg,#064e3b 0%,#0b0f19 100%);border:2px solid #10b981;border-radius:16px;padding:24px;margin-bottom:30px;box-shadow:0 10px 30px rgba(16,185,129,0.15)">
+                        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;margin-bottom:16px">
+                            <div>
+                                <span style="background:rgba(16,185,129,0.2);color:#34d399;border:1px solid #10b981;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:900">🚀 NEW RELEASE v1.0.0</span>
+                                <h4 style="font-size:18px;font-weight:900;color:#fff;margin-top:6px">🚀 2TOOLNE — AI YOUTUBE PRODUCTION STUDIO</h4>
+                                <p style="font-size:12.5px;color:#a7f3d0;margin-top:4px">Hệ thống sản xuất video tài liệu 200–250 shots tự động bằng AI Flow, Edge TTS, Cắt ghép Opencut & Phân tích tăng trưởng YouTube.</p>
+                            </div>
+                        </div>
+                        <div class="grid-3">
+                            <div class="pricing-card" style="background:#0b0f19;border-color:#059669">
+                                <div>
+                                    <h4 style="font-size:16px;font-weight:800;color:#fff">2TOOLNE (1 THÁNG)</h4>
+                                    <div class="price-val" style="font-size:26px;color:#34d399">1.200.000đ</div>
+                                    <div class="price-period">Thời hạn: 30 ngày</div>
+                                    <ul class="price-features">
+                                        <li>✅ 225-Shot Parallel Flow DAG</li>
+                                        <li>✅ Edge TTS + Căn Chỉnh Khớp Lời</li>
+                                        <li>✅ DAW Audio Ducking & Subtitles</li>
+                                    </ul>
+                                </div>
+                                <button type="button" class="btn-outline" style="border-color:#10b981;color:#34d399" onclick="openQrPayment('2toolne (1 Tháng)', '1.200.000đ', 30, 'VIP', '2TOOLNE')">⚡ Mua 2toolne 1 Tháng</button>
+                            </div>
+
+                            <div class="pricing-card pricing-vip" style="background:linear-gradient(180deg,#064e3b 0%,#0b0f19 100%);border-color:#10b981">
+                                <span class="pricing-tag" style="background:linear-gradient(135deg,#059669,#10b981)">VIP KHUYÊN DÙNG</span>
+                                <div>
+                                    <h4 style="font-size:16px;font-weight:800;color:#fff">2TOOLNE (1 NĂM VIP)</h4>
+                                    <div class="price-val" style="font-size:26px;color:#34d399">12.000.000đ</div>
+                                    <div class="price-period">Thời hạn: 365 ngày</div>
+                                    <ul class="price-features">
+                                        <li>✅ Toàn bộ quyền lợi gói tháng</li>
+                                        <li>✅ Hỗ trợ ưu tiên 1-1 từ Admin</li>
+                                        <li>✅ YouTube Uploader & Growth Radar</li>
+                                    </ul>
+                                </div>
+                                <button type="button" class="btn-primary" style="background:linear-gradient(135deg,#059669,#10b981)" onclick="openQrPayment('2toolne (1 Năm VIP)', '12.000.000đ', 365, 'VIP', '2TOOLNE')">⚡ Mua 2toolne 1 Năm</button>
+                            </div>
+
+                            <div class="pricing-card" style="background:#0b0f19;border-color:#059669">
+                                <div>
+                                    <h4 style="font-size:16px;font-weight:800;color:#fff">2TOOLNE (VĨNH VIỄN)</h4>
+                                    <div class="price-val" style="font-size:26px;color:#34d399">18.000.000đ</div>
+                                    <div class="price-period">Sở hữu trọn đời (Lifetime)</div>
+                                    <ul class="price-features">
+                                        <li>👑 <b>Update tính năng trọn đời</b></li>
+                                        <li>👑 Quyền lợi VIP cao cấp nhất</li>
+                                        <li>👑 Hỗ trợ kỹ thuật 24/7 trực tiếp</li>
+                                    </ul>
+                                </div>
+                                <button type="button" class="btn-outline" style="border-color:#10b981;color:#34d399" onclick="openQrPayment('2toolne (Vĩnh Viễn)', '18.000.000đ', 36500, 'LIFETIME', '2TOOLNE')">👑 Mua Gói Vĩnh Viễn</button>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <!-- SECTION: EXTENSION GOOGLE LABS 100K -->
                     <div style="background:linear-gradient(180deg,#131b33 0%,#0b0f19 100%);border:2px solid #0284c7;border-radius:16px;padding:24px;margin-bottom:30px;box-shadow:0 10px 30px rgba(56,189,248,0.15)">
                         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px">
@@ -1121,7 +1176,10 @@ if (isset($_GET['registered'])) {
 
                 <!-- PRODUCT TABS BAR (EASILY EXTENSIBLE) -->
                 <div style="display:flex;justify-content:center;gap:12px;margin-bottom:36px;flex-wrap:wrap">
-                    <button class="btn-primary prod-tab-btn active" id="ptab-btn-video" onclick="switchProductTab('ptab-video', 'ptab-btn-video')" style="padding:12px 24px;font-size:14px;font-weight:900;border-radius:30px;box-shadow:0 8px 25px rgba(99,102,241,0.3)">
+                    <button class="btn-primary prod-tab-btn active" id="ptab-btn-2toolne" onclick="switchProductTab('ptab-2toolne', 'ptab-btn-2toolne')" style="padding:12px 24px;font-size:14px;font-weight:900;border-radius:30px;border-color:#10b981;background:linear-gradient(135deg,#059669,#10b981);box-shadow:0 8px 25px rgba(16,185,129,0.3)">
+                        🚀 2toolne (AI YouTube Studio)
+                    </button>
+                    <button class="btn-outline prod-tab-btn" id="ptab-btn-video" onclick="switchProductTab('ptab-video', 'ptab-btn-video')" style="padding:12px 24px;font-size:14px;font-weight:900;border-radius:30px;border-color:#6366f1;color:#a5b4fc">
                         🎬 Tool Tạo Video AI (Slideshow Builder)
                     </button>
                     <button class="btn-outline prod-tab-btn" id="ptab-btn-extension" onclick="switchProductTab('ptab-extension', 'ptab-btn-extension')" style="padding:12px 24px;font-size:14px;font-weight:900;border-radius:30px;border-color:#0284c7;color:#38bdf8">
@@ -1129,8 +1187,112 @@ if (isset($_GET['registered'])) {
                     </button>
                 </div>
 
+                <!-- ── PRODUCT 0: 2TOOLNE — AI YOUTUBE PRODUCTION STUDIO ── -->
+                <div id="ptab-2toolne" class="prod-tab-content" style="display:block">
+                    <!-- Features 2toolne -->
+                    <div id="features-2toolne" class="grid-3" style="margin-bottom:40px;scroll-margin-top:90px">
+                        <div class="feature-card">
+                            <div class="feat-icon">🎬</div>
+                            <div class="feat-title">200–250 Shots Auto Flow</div>
+                            <div class="feat-desc">Sản xuất video tài liệu dài tự động bằng DAG Orchestrator song song, tối ưu hóa qua trình duyệt Flow chống tắc nghẽn.</div>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feat-icon">🎙️</div>
+                            <div class="feat-title">Edge TTS & Forced Alignment</div>
+                            <div class="feat-desc">Sinh giọng đọc phát thanh viên và căn chỉnh khớp lời chính xác theo từng mili-giây (Integer ms Ground Truth).</div>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feat-icon">🎛️</div>
+                            <div class="feat-title">DAW Scrubber & Ducking DSP</div>
+                            <div class="feat-desc">Trình cắt ghép timeline 4 rãnh mượt mà, tự động giảm âm lượng BGM (-18dB) khi có giọng đọc và xuất phụ đề Karaoke ASS/SRT.</div>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feat-icon">🔒</div>
+                            <div class="feat-title">Character Bank & Lock Guard</div>
+                            <div class="feat-desc">Ngân hàng nhân vật đồng nhất (char1, char2), bảo vệ prompt tự động trong chế độ safe_auto chống trôi hình ảnh.</div>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feat-icon">📺</div>
+                            <div class="feat-title">YouTube Review & Resumable Upload</div>
+                            <div class="feat-desc">Cổng kiểm duyệt trước khi đăng (mặc định Private-First), hỗ trợ tải lên từng phần Resumable và xuất bản an toàn.</div>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feat-icon">📊</div>
+                            <div class="feat-title">Growth Radar & Outlier Detector</div>
+                            <div class="feat-desc">Phân tích chỉ số tăng trưởng kênh YouTube, phát hiện chủ đề bùng nổ của đối thủ (&gt;2.5x) và tự động tối ưu hóa sản xuất.</div>
+                        </div>
+                    </div>
+
+                    <!-- 2toolne Download Box -->
+                    <div style="background:#064e3b;border:1px solid #10b981;border-radius:18px;padding:28px;margin-bottom:40px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;box-shadow:0 10px 30px rgba(16,185,129,0.2)">
+                        <div>
+                            <span class="badge badge-active" style="background:rgba(16,185,129,0.3);color:#a7f3d0;border:1px solid #10b981;margin-bottom:8px;display:inline-block">BẢN CHÍNH THỨC v1.0.0 (RELEASE CANDIDATE)</span>
+                            <h3 style="font-size:20px;font-weight:900;color:#fff">Tải Bản Cài Đặt 2toolne Studio</h3>
+                            <p style="font-size:13px;color:#a7f3d0;margin-top:4px">Kiến trúc Electron 44 + React 19 + Python Media Worker — Độc lập, an toàn và mượt mà.</p>
+                        </div>
+                        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+                            <a href="/downloads/2toolne_macOS_latest.zip" class="btn-primary" style="padding:12px 20px;background:linear-gradient(135deg,#059669,#10b981)">🍎 Tải Cho macOS (.app)</a>
+                            <a href="/downloads/2toolne_Windows_latest.zip" class="btn-primary" style="padding:12px 20px;background:linear-gradient(135deg,#0284c7,#38bdf8)">🪟 Tải Cho Windows (.zip)</a>
+                            <button class="btn-outline" style="padding:12px 18px;border-color:#10b981;color:#a7f3d0" onclick="openModal('modal-register')">🎁 Dùng Thử 3 Ngày</button>
+                        </div>
+                    </div>
+
+                    <!-- Pricing 2toolne -->
+                    <h3 id="pricing-2toolne" style="text-align:center;font-size:24px;font-weight:800;color:#fff;margin-bottom:24px;scroll-margin-top:80px">💰 BẢNG GIÁ BẢN QUYỀN 2TOOLNE STUDIO</h3>
+                    <div class="grid-3" style="margin-bottom:40px">
+                        <div class="pricing-card" style="border-color:#059669">
+                            <div>
+                                <h3 style="font-size:18px;font-weight:800;color:#fff">GÓI 1 THÁNG</h3>
+                                <p style="font-size:12px;color:#94a3b8">Dành cho cá nhân làm kênh YouTube</p>
+                                <div class="price-val" style="color:#34d399">1.200.000đ</div>
+                                <div class="price-period">Thời hạn: 30 ngày sử dụng</div>
+                                <ul class="price-features">
+                                    <li>✅ 225-Shot Parallel Flow DAG</li>
+                                    <li>✅ Edge TTS + Căn Chỉnh Khớp Lời</li>
+                                    <li>✅ DAW Audio Ducking & Phụ đề Karaoke</li>
+                                    <li>✅ Hỗ trợ Update trong suốt thời gian thuê</li>
+                                </ul>
+                            </div>
+                            <button class="btn-outline" style="width:100%;border-color:#10b981;color:#34d399" onclick="openModal('modal-login')">⚡ Đăng Nhập Để Mua</button>
+                        </div>
+
+                        <div class="pricing-card pricing-vip" style="background:linear-gradient(180deg,#064e3b 0%,#0b0f19 100%);border-color:#10b981">
+                            <span class="pricing-tag" style="background:linear-gradient(135deg,#059669,#10b981)">KHUYÊN DÙNG VIP</span>
+                            <div>
+                                <h3 style="font-size:18px;font-weight:800;color:#fff">GÓI 1 NĂM (VIP)</h3>
+                                <p style="font-size:12px;color:#94a3b8">Lựa chọn tối ưu cho xưởng sản xuất video</p>
+                                <div class="price-val" style="color:#34d399">12.000.000đ</div>
+                                <div class="price-period">Thời hạn: 365 ngày sử dụng</div>
+                                <ul class="price-features">
+                                    <li>✅ Toàn bộ quyền lợi gói tháng</li>
+                                    <li>✅ Hỗ trợ ưu tiên 1-1 từ Admin</li>
+                                    <li>✅ YouTube Uploader & Growth Radar</li>
+                                    <li>✅ Đổi máy tính HWID linh hoạt</li>
+                                </ul>
+                            </div>
+                            <button class="btn-primary" style="width:100%;background:linear-gradient(135deg,#059669,#10b981)" onclick="openModal('modal-login')">⚡ Đăng Nhập Để Mua</button>
+                        </div>
+
+                        <div class="pricing-card" style="border-color:#059669">
+                            <div>
+                                <h3 style="font-size:18px;font-weight:800;color:#fff">GÓI VĨNH VIỄN</h3>
+                                <p style="font-size:12px;color:#94a3b8">Sở hữu trọn đời không giới hạn</p>
+                                <div class="price-val" style="color:#34d399">18.000.000đ</div>
+                                <div class="price-period">Sở hữu trọn đời (Lifetime)</div>
+                                <ul class="price-features">
+                                    <li>👑 <b>Miễn phí 100% mọi bản Update tương lai</b></li>
+                                    <li>👑 Quyền lợi VIP cao cấp nhất</li>
+                                    <li>👑 Hỗ trợ kỹ thuật 24/7 từ Admin</li>
+                                    <li>👑 Ưu tiên phát triển tính năng theo yêu cầu</li>
+                                </ul>
+                            </div>
+                            <button class="btn-outline" style="width:100%;border-color:#10b981;color:#34d399" onclick="openModal('modal-login')">👑 Đăng Nhập Để Mua</button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- ── PRODUCT 1: SLIDESHOW BUILDER AI ── -->
-                <div id="ptab-video" class="prod-tab-content" style="display:block">
+                <div id="ptab-video" class="prod-tab-content" style="display:none">
                     <!-- Features -->
                     <div id="features" class="grid-3" style="margin-bottom:40px;scroll-margin-top:90px">
                         <div class="feature-card">
