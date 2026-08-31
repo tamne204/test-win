@@ -140,7 +140,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $pkg_price = trim($_POST['package_price'] ?? '1.000.000đ');
         $pkg_days = intval($_POST['duration_days'] ?? 30);
         $pkg_tier = trim($_POST['tier'] ?? 'VIP');
-        $pkg_prod = trim($_POST['product'] ?? (stripos($pkg_name, 'Extension') !== false ? 'LABS_EXTENSION' : 'SLIDESHOW'));
+        $pkg_prod = trim($_POST['product'] ?? (stripos($pkg_name, '2toolne') !== false ? '2TOOLNE' : (stripos($pkg_name, 'Extension') !== false ? 'LABS_EXTENSION' : 'SLIDESHOW')));
 
         $ord_id = uniqid('ORD_');
         db_create_order(
@@ -250,1397 +250,1296 @@ if (isset($_GET['registered'])) {
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>Slideshow Builder AI — 2tamne.site | Tự Động Hóa Video Khớp Nhạc & Phụ Đề</title>
+    <title>2tamne.site — Commercial AI Software Suite & Production Tools</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="globals.css">
     <style>
-        :root {
-            --bg: #0b0c0e;
-            --bg-subtle: #111215;
-            --bg-card: #141518;
-            --bg-card-hover: #181a1e;
-            --bg-card-elev: #1c1d22;
-            --border: rgba(255, 255, 255, 0.07);
-            --border-subtle: rgba(255, 255, 255, 0.04);
-            --border-hover: rgba(255, 255, 255, 0.14);
-            --primary: #3b82f6;
-            --primary-hover: #2563eb;
-            --primary-subtle: rgba(59, 130, 246, 0.10);
-            --success: #34d399;
-            --success-bg: rgba(52, 211, 153, 0.08);
-            --warning: #fbbf24;
-            --warning-bg: rgba(251, 191, 36, 0.08);
-            --danger: #f87171;
-            --danger-bg: rgba(248, 113, 113, 0.08);
-            --text-main: #f0f0f2;
-            --text-sub: #8b8d98;
-            --text-muted: #565866;
-            --btn-radius: 8px;
-            --card-radius: 12px;
-            --modal-radius: 14px;
-        }
-
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        html { scroll-behavior: smooth; }
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: var(--bg);
-            color: var(--text-main);
-            line-height: 1.6;
-            letter-spacing: -0.011em;
-            -webkit-font-smoothing: antialiased;
-        }
-        a { color: var(--text-main); text-decoration: none; transition: color 0.15s ease; }
-        a:hover { color: #ffffff; }
-        .container { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
-        
-        /* ── Navbar ───────────────────────────────────────── */
-        nav {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 14px 0; border-bottom: 1px solid var(--border);
-            position: sticky; top: 0;
-            background: rgba(11, 12, 14, 0.85);
+        /* ── Specific View Layout Adjustments ──────────────────────────────── */
+        .site-nav {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(9, 9, 11, 0.85);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
-            z-index: 1000;
-        }
-        .nav-brand {
-            display: flex; align-items: center; gap: 8px;
-            font-size: 15px; font-weight: 700; color: var(--text-main);
-            letter-spacing: -0.02em;
-        }
-        .nav-brand-badge {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 10px; font-weight: 600;
-            background: var(--bg-card-elev); color: var(--text-sub);
-            padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border);
-        }
-        .nav-links { display: flex; align-items: center; gap: 24px; }
-        .nav-link {
-            font-size: 13px; font-weight: 500; color: var(--text-sub);
-            transition: color 0.15s ease;
-        }
-        .nav-link:hover { color: var(--text-main); }
-        
-        /* ── Floating Trial Badge Callout (Below Register Button) ── */
-        .register-btn-wrap {
-            position: relative;
-            display: inline-flex;
-            flex-direction: column;
+            border-bottom: 1px solid var(--border);
+            height: 60px;
+            display: flex;
             align-items: center;
         }
-        .trial-badge-callout {
-            position: absolute;
-            top: calc(100% + 8px);
-            left: 50%;
-            transform: translateX(-50%);
-            background: #1c1d22;
-            color: #a1a1aa;
-            border: 1px solid var(--border-hover);
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 11px; font-weight: 600;
-            padding: 3px 10px; border-radius: 6px;
-            white-space: nowrap;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-            pointer-events: none;
-            z-index: 100;
-            display: flex; align-items: center; gap: 5px;
+        .nav-inner {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
         }
-        .trial-badge-callout .callout-arrow {
-            position: absolute;
-            bottom: 100%; left: 50%;
-            transform: translateX(-50%);
-            width: 0; height: 0;
-            border-left: 5px solid transparent;
-            border-right: 5px solid transparent;
-            border-bottom: 5px solid var(--border-hover);
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--foreground);
+            letter-spacing: -0.02em;
+        }
+        .nav-brand-logo {
+            width: 26px;
+            height: 26px;
+            border-radius: 6px;
+            background: linear-gradient(135deg, #10b981, #0284c7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            color: #fff;
+            font-size: 13px;
+        }
+        .nav-menu {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .nav-item {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--muted-foreground);
+            transition: color 0.15s ease;
+        }
+        .nav-item:hover {
+            color: var(--foreground);
         }
 
-        /* ── Buttons (Linear Minimalist Craft) ─────────────── */
-        button, .btn {
-            font-family: inherit; outline: none; border: none;
-            display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-            cursor: pointer; transition: all 0.15s ease;
+        /* ── Hero Section ─────────────────────────────────────────────────── */
+        .hero-section {
+            padding: 72px 0 48px;
+            text-align: center;
         }
-        .btn-primary, .btn-solid-white {
-            background: #f0f0f2; color: #0b0c0e;
-            font-weight: 600; font-size: 13px; height: 38px; padding: 0 16px;
-            border-radius: var(--btn-radius); border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-        .btn-primary:hover, .btn-solid-white:hover {
-            background: #ffffff; transform: translateY(-1px);
-        }
-        .btn-primary:active, .btn-solid-white:active { transform: translateY(0); }
-
-        .btn-accent {
-            background: var(--primary); color: #ffffff;
-            font-weight: 600; font-size: 13px; height: 38px; padding: 0 16px;
-            border-radius: var(--btn-radius); border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        .btn-accent:hover { background: var(--primary-hover); transform: translateY(-1px); }
-
-        .btn-outline, .btn-secondary {
-            background: rgba(255, 255, 255, 0.03); color: var(--text-main);
-            font-weight: 500; font-size: 13px; height: 38px; padding: 0 16px;
-            border-radius: var(--btn-radius); border: 1px solid var(--border);
-        }
-        .btn-outline:hover, .btn-secondary:hover {
-            background: rgba(255, 255, 255, 0.07); border-color: var(--border-hover);
-        }
-        .btn-sm { height: 32px; padding: 0 12px; font-size: 12px; }
-        .btn-lg { height: 44px; padding: 0 22px; font-size: 14px; font-weight: 600; border-radius: 10px; }
-
-        /* ── Hero Section ─────────────────────────────────── */
-        .hero { padding: 80px 0 60px; text-align: center; }
-        .hero-badge {
-            display: inline-flex; align-items: center; gap: 8px;
-            background: var(--bg-card); border: 1px solid var(--border);
-            color: var(--text-sub); padding: 5px 14px;
-            border-radius: 9999px; font-size: 12px; font-weight: 500;
-            margin-bottom: 24px;
+        .hero-eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--surface-1);
+            border: 1px solid var(--border);
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-size: 12px;
+            color: var(--muted-foreground);
+            margin-bottom: 20px;
         }
         .hero-title {
-            font-size: 44px; font-weight: 700; line-height: 1.2;
-            margin-bottom: 18px; letter-spacing: -0.03em;
-            color: var(--text-main);
+            font-size: 44px;
+            font-weight: 700;
+            line-height: 1.15;
+            letter-spacing: -0.03em;
+            margin-bottom: 16px;
+            color: var(--foreground);
+        }
+        .hero-title span {
+            background: linear-gradient(135deg, #fafafa 30%, #a1a1aa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
         .hero-desc {
-            font-size: 16px; color: var(--text-sub);
-            max-width: 680px; margin: 0 auto 36px; font-weight: 400; line-height: 1.6;
+            font-size: 15px;
+            color: var(--muted-foreground);
+            max-width: 640px;
+            margin: 0 auto 32px;
+            line-height: 1.6;
         }
-        .hero-cta { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; }
+        .hero-actions {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
 
-        /* ── Product Mockup Window (Raycast / Linear UI) ───── */
-        .mockup-window {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: var(--card-radius);
-            margin: 48px auto 0;
-            max-width: 960px;
-            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
-            overflow: hidden;
-            text-align: left;
+        /* ── Product Switcher Tabs ────────────────────────────────────────── */
+        .prod-tab-bar {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin: 40px 0 32px;
+            flex-wrap: wrap;
         }
-        .mockup-header {
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 12px 18px; border-bottom: 1px solid var(--border);
-            background: var(--bg-subtle);
-        }
-        .mockup-dots { display: flex; gap: 6px; }
-        .mockup-dot { width: 10px; height: 10px; border-radius: 50%; background: #2c2d33; }
-        .mockup-dot.red { background: #ef4444; }
-        .mockup-dot.yellow { background: #f59e0b; }
-        .mockup-dot.green { background: #10b981; }
-        .mockup-title { font-size: 12px; color: var(--text-sub); font-family: 'JetBrains Mono', monospace; }
-        .mockup-body { padding: 24px; display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px; }
-        @media (max-width: 768px) { .mockup-body { grid-template-columns: 1fr; } }
 
-        /* ── Minimalist Cards ─────────────────────────────── */
-        .sec-title { font-size: 26px; font-weight: 700; text-align: center; margin-bottom: 10px; color: var(--text-main); letter-spacing: -0.02em; }
-        .sec-subtitle { font-size: 14px; color: var(--text-sub); text-align: center; margin-bottom: 40px; }
-        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-bottom: 50px; }
-        
+        /* ── Feature Grid ─────────────────────────────────────────────────── */
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 16px;
+            margin-bottom: 40px;
+        }
         .feature-card {
-            background: var(--bg-card);
+            background: var(--surface-1);
             border: 1px solid var(--border);
-            border-radius: var(--card-radius);
-            padding: 26px 24px;
+            border-radius: var(--radius-md);
+            padding: 20px;
             transition: all 0.2s ease;
         }
         .feature-card:hover {
             border-color: var(--border-hover);
-            background: var(--bg-card-hover);
-            transform: translateY(-2px);
+            background: var(--surface-hover);
         }
-        .feat-icon { font-size: 24px; margin-bottom: 14px; color: var(--primary); }
-        .feat-title { font-size: 16px; font-weight: 600; color: var(--text-main); margin-bottom: 8px; letter-spacing: -0.01em; }
-        .feat-desc { font-size: 13px; color: var(--text-sub); line-height: 1.6; }
-
-        /* ── Pricing Cards ────────────────────────────────── */
-        .pricing-card {
-            background: var(--bg-card);
+        .feature-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius-sm);
+            background: var(--surface-2);
             border: 1px solid var(--border);
-            border-radius: var(--card-radius);
-            padding: 30px 26px; position: relative;
-            display: flex; flex-direction: column; justify-content: space-between;
-            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            margin-bottom: 14px;
+            color: var(--foreground);
         }
-        .pricing-card:hover { border-color: var(--border-hover); }
-        .pricing-vip {
-            border: 1px solid rgba(59, 130, 246, 0.40);
-            background: #16181d;
+        .feature-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--foreground);
+            margin-bottom: 6px;
         }
-        .pricing-tag {
-            position: absolute; top: 16px; right: 18px;
-            background: var(--primary-subtle); color: var(--primary);
-            border: 1px solid rgba(59, 130, 246, 0.3);
-            font-size: 11px; font-weight: 600; padding: 2px 8px;
-            border-radius: 6px; font-family: 'JetBrains Mono', monospace;
+        .feature-desc {
+            font-size: 13px;
+            color: var(--muted-foreground);
+            line-height: 1.5;
+        }
+
+        /* ── Pricing Matrix ───────────────────────────────────────────────── */
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 16px;
+            margin-bottom: 48px;
+        }
+        .pricing-card {
+            background: var(--surface-1);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+        }
+        .pricing-card.featured {
+            border-color: var(--emerald);
+            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.15);
+        }
+        .pricing-card-badge {
+            position: absolute;
+            top: 14px;
+            right: 14px;
         }
         .price-val {
-            font-size: 32px; font-weight: 700; color: var(--text-main);
-            margin: 14px 0 6px; letter-spacing: -0.02em;
-            font-family: 'Inter', sans-serif;
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--foreground);
+            margin: 12px 0 4px;
+            letter-spacing: -0.02em;
         }
-        .price-period { font-size: 12.5px; color: var(--text-muted); }
-        .price-features { list-style: none; margin: 24px 0; font-size: 13px; color: var(--text-sub); }
-        .price-features li { margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
-
-        /* ── Alerts & Badges ──────────────────────────────── */
-        .alert {
-            padding: 12px 18px; border-radius: var(--btn-radius);
-            font-size: 13px; font-weight: 500; margin-bottom: 20px;
+        .price-sub {
+            font-size: 12px;
+            color: var(--muted-foreground);
+            margin-bottom: 20px;
         }
-        .alert-success { background: var(--success-bg); border: 1px solid rgba(52, 211, 153, 0.2); color: var(--success); }
-        .alert-error { background: var(--danger-bg); border: 1px solid rgba(248, 113, 113, 0.2); color: var(--danger); }
-        .alert-pending { background: var(--warning-bg); border: 1px solid rgba(251, 191, 36, 0.2); color: var(--warning); }
-
-        .badge { padding: 2px 8px; border-radius: 6px; font-size: 11.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; font-family: 'JetBrains Mono', monospace; }
-        .badge-active { background: var(--success-bg); border: 1px solid rgba(52, 211, 153, 0.2); color: var(--success); }
-        .badge-trial { background: var(--warning-bg); border: 1px solid rgba(251, 191, 36, 0.2); color: var(--warning); }
-        .badge-banned { background: var(--danger-bg); border: 1px solid rgba(248, 113, 113, 0.2); color: var(--danger); }
-
-        /* ── User Dashboard & Key Box ─────────────────────── */
-        .dash-header {
-            display: flex; justify-content: space-between; align-items: center;
-            background: var(--bg-card); border: 1px solid var(--border);
-            border-radius: var(--card-radius); padding: 22px 28px; margin: 28px 0;
+        .price-checklist {
+            list-style: none;
+            margin-bottom: 24px;
+            font-size: 13px;
+            color: var(--foreground);
         }
-        .key-box {
-            background: var(--bg-card-elev); border: 1px solid var(--border);
-            border-radius: var(--btn-radius); padding: 14px 20px; margin: 14px 0;
-            display: flex; justify-content: space-between; align-items: center;
-        }
-        .key-text {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 15px; font-weight: 600; color: #60a5fa; letter-spacing: 0.5px;
+        .price-checklist li {
+            padding: 6px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
-        /* ── Tabs ─────────────────────────────────────────── */
-        .tab-bar {
-            display: flex; gap: 6px; border-bottom: 1px solid var(--border);
-            margin-bottom: 24px; padding-bottom: 4px;
+        /* ── Dashboard Layout ─────────────────────────────────────────────── */
+        .dash-layout {
+            display: grid;
+            grid-template-columns: 240px 1fr;
+            gap: 24px;
+            margin-top: 24px;
+            min-height: calc(100vh - 180px);
         }
-        .tab-btn {
-            background: transparent; border: none; padding: 8px 14px;
-            color: var(--text-sub); font-weight: 500; font-size: 13px;
-            cursor: pointer; border-radius: var(--btn-radius);
+        .dash-sidebar {
+            background: var(--surface-1);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            height: fit-content;
+        }
+        .dash-user-card {
+            padding-bottom: 14px;
+            margin-bottom: 14px;
+            border-bottom: 1px solid var(--border);
+        }
+        .dash-user-name {
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--foreground);
+        }
+        .dash-user-sub {
+            font-size: 12px;
+            color: var(--muted-foreground);
+            font-family: var(--font-mono);
+        }
+        .dash-nav {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .dash-nav-btn {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 9px 12px;
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--muted-foreground);
+            background: transparent;
+            border: none;
+            text-align: left;
+            cursor: pointer;
+            width: 100%;
             transition: all 0.15s ease;
         }
-        .tab-btn:hover { color: var(--text-main); background: var(--bg-card-elev); }
-        .tab-btn.active { color: var(--text-main); background: var(--bg-card-elev); font-weight: 600; }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
+        .dash-nav-btn:hover {
+            color: var(--foreground);
+            background: var(--surface-2);
+        }
+        .dash-nav-btn.active {
+            color: #ffffff;
+            background: var(--surface-3);
+            font-weight: 600;
+        }
+        .dash-main {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
 
-        /* ── Forms, Inputs & Tables ───────────────────────── */
-        .form-group { margin-bottom: 16px; }
-        label { display: block; font-size: 11.5px; font-weight: 600; color: var(--text-sub); margin-bottom: 6px; letter-spacing: 0.02em; }
-        input[type="text"], input[type="password"], input[type="email"], textarea, select {
-            width: 100%; padding: 10px 14px;
-            background: var(--bg-card-elev); border: 1px solid var(--border);
-            border-radius: var(--btn-radius); color: var(--text-main);
-            font-size: 13px; outline: none; transition: border-color 0.15s ease;
-            font-family: inherit;
+        /* ── Toast Notification ───────────────────────────────────────────── */
+        #toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: var(--surface-1);
+            color: var(--foreground);
+            border: 1px solid var(--border-strong);
+            padding: 10px 16px;
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            box-shadow: var(--shadow-lg);
+            display: none;
+            align-items: center;
+            gap: 8px;
+            z-index: 10000;
+            animation: modalFadeIn 0.2s ease;
         }
-        input:focus, textarea:focus, select:focus {
-            border-color: var(--border-hover);
-        }
-        table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 13px; }
-        th {
-            text-align: left; padding: 10px 14px; background: var(--bg-subtle);
-            color: var(--text-muted); font-size: 11px; text-transform: uppercase; font-weight: 600;
-            letter-spacing: 0.05em; border-bottom: 1px solid var(--border);
-        }
-        td { padding: 12px 14px; border-bottom: 1px solid var(--border-subtle); vertical-align: middle; }
-        tr:hover td { background: rgba(255, 255, 255, 0.02); }
 
-        /* ── Modals ───────────────────────────────────────── */
-        .modal {
-            display: none; position: fixed; inset: 0;
-            background: rgba(0, 0, 0, 0.75);
-            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-            z-index: 9999; align-items: center; justify-content: center; padding: 20px;
-        }
-        .modal-card {
-            background: var(--bg-card); border: 1px solid var(--border-hover);
-            border-radius: var(--modal-radius); max-width: 460px; width: 100%; padding: 28px;
-            position: relative; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
-        }
-        .modal-close {
-            position: absolute; top: 16px; right: 16px;
-            background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border);
-            width: 28px; height: 28px; border-radius: 6px;
-            color: var(--text-sub); font-size: 16px; cursor: pointer;
-            display: flex; align-items: center; justify-content: center;
-        }
-        .modal-close:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
-
-        /* ── Mobile ───────────────────────────────────────── */
-        @media (max-width: 768px) {
-            * { max-width: 100% !important; box-sizing: border-box !important; }
-            html, body { overflow-x: hidden !important; width: 100% !important; }
-            .container { padding: 0 16px !important; width: 100% !important; }
-            nav { padding: 12px 0 !important; }
-            nav .container { flex-direction: column !important; gap: 10px !important; align-items: center !important; }
-            .nav-brand { justify-content: center !important; }
-            .nav-links { display: flex !important; flex-wrap: wrap !important; justify-content: center !important; gap: 8px !important; width: 100% !important; }
-            .hero { padding: 48px 0 32px !important; }
-            .hero-title { font-size: 28px !important; }
-            .hero-desc { font-size: 14px !important; margin-bottom: 24px !important; }
-            .hero-cta { flex-direction: column !important; width: 100% !important; gap: 10px !important; }
-            .hero-cta .btn-primary, .hero-cta .btn-outline { width: 100% !important; justify-content: center !important; }
-            .grid-3 { grid-template-columns: 1fr !important; gap: 16px !important; }
-            .pricing-card { padding: 22px 18px !important; }
-            .price-val { font-size: 26px !important; }
-            .dash-header { flex-direction: column !important; gap: 14px !important; text-align: center !important; }
-            .dash-header > div:last-child { display: flex !important; flex-direction: column !important; width: 100% !important; gap: 8px !important; }
-            .tab-bar { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 6px !important; }
+        @media (max-width: 900px) {
+            .dash-layout {
+                grid-template-columns: 1fr;
+            }
+            .hero-title {
+                font-size: 32px;
+            }
         }
     </style>
 </head>
 <body>
 
-    <!-- NAVBAR -->
-    <nav>
-        <div class="container" style="display:flex;justify-content:space-between;align-items:center;width:100%">
-            <div class="nav-brand">
-                <span>🎬</span>
-                <span>2TAMNE.SITE</span>
-            </div>
-            <div class="nav-links">
-                <a href="#products" class="nav-link" style="color:#38bdf8;font-weight:800">🎁 Sản Phẩm</a>
-                <a href="#features" class="nav-link">Tính Năng</a>
-                <a href="#pricing" class="nav-link">Bảng Giá</a>
-                <a href="#download" class="nav-link">Tải Về</a>
+    <!-- ═══ HEADER / NAVBAR ═══ -->
+    <header class="site-nav">
+        <div class="container nav-inner">
+            <a href="index.php" class="nav-brand">
+                <div class="nav-brand-logo">2</div>
+                <span>2tamne.site</span>
+                <span class="badge" style="font-size:10px;padding:1px 6px">v1.0-rc</span>
+            </a>
+
+            <nav class="nav-menu">
+                <a href="#products" class="nav-item">Sản Phẩm</a>
+                <a href="#downloads" class="nav-item">Tải Về</a>
+                <a href="#pricing" class="nav-item">Bảng Giá</a>
+                <a href="https://zalo.me/0326649304" target="_blank" class="nav-item" style="color:var(--emerald)">Hỗ Trợ Zalo</a>
+            </nav>
+
+            <div style="display:flex;align-items:center;gap:10px">
                 <?php if ($user_info): ?>
-                    <a href="?logout=1" class="btn-outline" style="font-size:12px">Đăng Xuất (<?= htmlspecialchars($user_info['username']) ?>) 🚪</a>
+                    <a href="?logout=1" class="btn btn-outline btn-sm">
+                        <span>Đăng Xuất (<?= htmlspecialchars($user_info['username']) ?>)</span>
+                    </a>
                 <?php else: ?>
-                    <button class="btn-outline" onclick="openModal('modal-login')">Đăng Nhập</button>
-                    <div class="register-btn-wrap">
-                        <div class="trial-badge-callout">
-                            🎁 Nhận Key 3 Ngày
-                            <span class="callout-arrow"></span>
-                        </div>
-                        <button class="btn-primary shimmer-button" onclick="openModal('modal-register')">✨ Đăng Ký</button>
-                    </div>
+                    <button class="btn btn-outline btn-sm" onclick="openModal('modal-login')">Đăng Nhập</button>
+                    <button class="btn btn-primary btn-sm" onclick="openModal('modal-register')">🎁 Nhận Key 3 Ngày</button>
                 <?php endif; ?>
             </div>
         </div>
-    </nav>
+    </header>
 
-    <div class="container">
+    <main class="container">
+        <!-- FLASH ALERTS -->
         <?php if ($msg_success): ?>
             <div class="alert alert-success" style="margin-top:20px"><?= $msg_success ?></div>
         <?php endif; ?>
         <?php if ($msg_error): ?>
-            <div class="alert alert-error" style="margin-top:20px"><?= $msg_error ?></div>
+            <div class="alert alert-danger" style="margin-top:20px"><?= $msg_error ?></div>
         <?php endif; ?>
 
         <?php if ($user_info): ?>
-            <!-- ===================================================== -->
-            <!-- USER DASHBOARD (KHI ĐÃ ĐĂNG NHẬP) -->
-            <!-- ===================================================== -->
-            <div class="dash-header">
-                <div>
-                    <h2 style="font-size:22px;font-weight:900;color:#fff">Xin chào, <?= htmlspecialchars($user_info['fullname'] ?: $user_info['username']) ?> 👋</h2>
-                    <p style="font-size:13px;color:#94a3b8">Quản lý License Key · Mua Gói VIP · Đóng góp ý kiến nâng cấp</p>
-                </div>
-                <div style="display:flex;gap:10px">
-                    <button class="btn-primary" onclick="switchMainTab('tab-buy-key')">🛒 Mua / Thuê Key VIP</button>
-                    <a href="/downloads/SlideshowBuilder_Windows_latest.zip" class="btn-outline">📥 Tải Bản Cài Đặt (v2.3.0)</a>
-                </div>
-            </div>
-
-            <!-- PENDING ORDER NOTICE IF ANY -->
-            <div id="pending-banners-wrap">
+            <!-- ═══════════════════════════════════════════════════════════════
+                 LOGGED-IN USER ACCOUNT PORTAL / DASHBOARD
+                 ═══════════════════════════════════════════════════════════════ -->
+            
+            <!-- PENDING ORDERS POLLING BANNER -->
             <?php if (!empty($user_pending_orders)): ?>
                 <?php foreach ($user_pending_orders as $p_ord): ?>
-                    <div class="alert alert-pending" style="display:flex;justify-content:space-between;align-items:center;animation:pulseGlow 2s infinite">
+                    <div class="alert alert-warning" style="margin-top:20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
                         <div>
-                            ⏳ <b>ĐƠN HÀNG ĐANG CHỜ DUYỆT:</b> Bạn vừa tạo đơn mua <b><?= htmlspecialchars($p_ord['package_name']) ?> (<?= htmlspecialchars($p_ord['package_price']) ?>)</b>.
-                            <br><span style="font-size:12px;color:#cbd5e1">Key đang được Admin duyệt, vui lòng chờ · Tự kiểm tra sau <b id="poll-sec">10</b>s...</span>
+                            ⏳ <b>Đơn hàng đang chờ duyệt:</b> Đơn mua <b><?= htmlspecialchars($p_ord['package_name']) ?> (<?= htmlspecialchars($p_ord['package_price']) ?>)</b>.
+                            Key sẽ tự động xuất hiện tại mục "Bản Quyền". Tự động kiểm tra sau <b id="poll-sec">10</b>s...
                         </div>
-                        <a href="https://zalo.me/0326649304" target="_blank" class="btn-outline" style="background:#0b0f19;border-color:#f59e0b;color:#fcd34d;font-size:11.5px">💬 Nhắn Admin Duyệt Ngay</a>
+                        <a href="https://zalo.me/0326649304" target="_blank" class="btn btn-outline btn-xs" style="border-color:var(--warning);color:var(--warning)">
+                            💬 Nhắn Admin Duyệt Gấp
+                        </a>
                     </div>
                 <?php endforeach; ?>
             <?php endif; ?>
-            </div>
 
-            <!-- MAIN DASHBOARD TABS -->
-            <div class="tab-bar" style="margin-top:10px">
-                <button class="tab-btn active" id="btn-tab-keys" onclick="switchMainTab('tab-my-keys')">🔑 Quản Lý License Key</button>
-                <button class="tab-btn" id="btn-tab-buy" onclick="switchMainTab('tab-buy-key')">🛒 Mua / Thuê Gói VIP Mới</button>
-                <button class="tab-btn" id="btn-tab-features" onclick="switchMainTab('tab-features-view')">🌟 Mong Muốn Update (3/tháng)</button>
-                <button class="tab-btn" id="btn-tab-bugs" onclick="switchMainTab('tab-bugs-view')">🐞 Báo Lỗi Phần Mềm</button>
-                <button class="tab-btn" id="btn-tab-settings" onclick="switchMainTab('tab-settings')">⚙️ Tài Khoản</button>
-            </div>
-
-            <!-- TAB 1: MY KEYS -->
-            <div id="tab-my-keys" class="tab-content active">
-                <div class="feature-card" style="margin-bottom:30px">
-                    <h3 style="font-size:17px;font-weight:800;color:#f8fafc;margin-bottom:14px">🔑 DANH SÁCH LICENSE KEY CỦA BẠN</h3>
-                    
-                    <div id="in-tab-pending-notice">
-                    <?php if (!empty($user_pending_orders)): ?>
-                        <div style="background:rgba(245,158,11,0.1);border:1px dashed #f59e0b;padding:12px 18px;border-radius:10px;color:#fcd34d;font-size:12.5px;margin-bottom:14px">
-                            ⏳ <b><?= count($user_pending_orders) ?> đơn hàng đang được Admin duyệt.</b> Key sẽ tự động xuất hiện tại đây khi được duyệt.
-                        </div>
-                    <?php endif; ?>
+            <div class="dash-layout">
+                <!-- SIDEBAR -->
+                <aside class="dash-sidebar">
+                    <div class="dash-user-card">
+                        <div class="dash-user-name"><?= htmlspecialchars($user_info['fullname'] ?: $user_info['username']) ?></div>
+                        <div class="dash-user-sub">@<?= htmlspecialchars($user_info['username']) ?></div>
                     </div>
+                    <nav class="dash-nav">
+                        <button class="dash-nav-btn active" id="btn-tab-keys" onclick="switchMainTab('tab-my-keys')">
+                            <span>🔑</span> Bản Quyền Của Tôi
+                        </button>
+                        <button class="dash-nav-btn" id="btn-tab-buy" onclick="switchMainTab('tab-buy-key')">
+                            <span>🛒</span> Mua Gói Bản Quyền
+                        </button>
+                        <button class="dash-nav-btn" id="btn-tab-features" onclick="switchMainTab('tab-features-view')">
+                            <span>💡</span> Góp Ý Tính Năng
+                        </button>
+                        <button class="dash-nav-btn" id="btn-tab-bugs" onclick="switchMainTab('tab-bugs-view')">
+                            <span>🐞</span> Báo Lỗi Phần Mềm
+                        </button>
+                        <button class="dash-nav-btn" id="btn-tab-settings" onclick="switchMainTab('tab-settings')">
+                            <span>⚙️</span> Cài Đặt Tài Khoản
+                        </button>
+                    </nav>
+                </aside>
 
-                    <?php 
-                    $my_keys = $user_info['keys'] ?? [];
-                    if (empty($my_keys)): 
-                    ?>
-                        <div style="background:#0b0f19;padding:24px;border-radius:10px;text-align:center;color:#64748b">
-                            Bạn chưa sở hữu License Key nào. Hãy bấm sang tab <b>"🛒 Mua / Thuê Gói VIP Mới"</b> để chọn gói phù hợp!
-                        </div>
-                    <?php else: ?>
-                        <?php foreach ($my_keys as $k): 
-                            $lic = $licenses_db[$k] ?? null;
-                            if (!$lic) continue;
-                            $status = $lic['status'] ?? 'active';
-                            $tier = $lic['tier'] ?? 'VIP';
-                            $hwid = $lic['hwid'] ?? '';
-                        ?>
-                            <div class="key-box">
-                                <div>
-                                    <?php
-                                    $is_ext = ($lic['product'] ?? '') === 'LABS_EXTENSION' || strpos($k, '2TAMNE-LABS-') === 0;
-                                    ?>
-                                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap">
-                                        <span class="key-text"><?= htmlspecialchars($k) ?></span>
-                                        <span class="badge <?= $tier === 'TRIAL' ? 'badge-trial' : 'badge-active' ?>"><?= $tier ?></span>
-                                        <?php if ($is_ext): ?>
-                                            <span class="badge" style="background:rgba(56,189,248,0.2);color:#38bdf8;border:1px solid #0284c7">🖼️ Extension Google Labs</span>
-                                        <?php else: ?>
-                                            <span class="badge" style="background:rgba(99,102,241,0.2);color:#a5b4fc;border:1px solid #6366f1">🎬 Tool Video AI</span>
-                                        <?php endif; ?>
+                <!-- MAIN WORKSPACE -->
+                <div class="dash-main">
+
+                    <!-- TAB 1: MY KEYS -->
+                    <div id="tab-my-keys" class="tab-pane active">
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-title">🔑 Danh Sách License Key Đã Sở Hữu</div>
+                                <button class="btn btn-emerald btn-sm" onclick="switchMainTab('tab-buy-key')">+ Mua Thêm Key</button>
+                            </div>
+                            <div class="card-body" style="padding:0">
+                                <?php 
+                                $my_keys = $user_info['keys'] ?? [];
+                                if (empty($my_keys)): 
+                                ?>
+                                    <div class="empty-state">
+                                        <div class="empty-state-icon">🔑</div>
+                                        <div class="empty-state-title">Chưa Có License Key Nào</div>
+                                        <div class="empty-state-desc">Bạn chưa kích hoạt license nào trên tài khoản. Hãy bấm sang tab "Mua Gói Bản Quyền" để chọn gói phù hợp.</div>
                                     </div>
-                                    <div style="font-size:12px;color:#94a3b8">
-                                        Thời hạn: <b><?= $lic['expires_at'] ? (strpos($lic['expires_at'], '2099') !== false ? '👑 Vĩnh viễn (Lifetime)' : $lic['expires_at']) : ($lic['duration_days'] . ' ngày (bắt đầu tính khi kích hoạt)') ?></b>
-                                        <?php if ($hwid): ?>
-                                            · Thiết bị đã liên kết: <code style="color:#38bdf8"><?= substr($hwid, 0, 16) ?>...</code> (<?= htmlspecialchars($lic['device_name'] ?: 'Desktop') ?>)
-                                        <?php else: ?>
-                                            · <span style="color:#10b981">Chưa kích hoạt trên máy nào</span>
-                                        <?php endif; ?>
+                                <?php else: ?>
+                                    <div class="table-responsive">
+                                        <table class="data-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>License Key</th>
+                                                    <th>Sản Phẩm</th>
+                                                    <th>Gói</th>
+                                                    <th>Thời Hạn</th>
+                                                    <th>Trạng Thái</th>
+                                                    <th>Thiết Bị (HWID)</th>
+                                                    <th>Thao Tác</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <?php foreach ($my_keys as $k): 
+                                                    $lic = $licenses_db[$k] ?? null;
+                                                    if (!$lic) continue;
+                                                    $status = $lic['status'] ?? 'active';
+                                                    $tier = $lic['tier'] ?? 'VIP';
+                                                    $hwid = $lic['hwid'] ?? '';
+                                                    $is_2toolne = ($lic['product'] ?? '') === '2TOOLNE' || strpos($k, '2TOOLNE-') === 0;
+                                                    $is_ext = ($lic['product'] ?? '') === 'LABS_EXTENSION' || strpos($k, '2TAMNE-LABS-') === 0;
+                                                ?>
+                                                    <tr>
+                                                        <td>
+                                                            <div style="display:flex;align-items:center;gap:6px">
+                                                                <code class="font-mono" style="color:var(--info);font-size:12.5px;font-weight:600"><?= htmlspecialchars($k) ?></code>
+                                                                <button class="btn btn-outline btn-xs" onclick="copyText('<?= htmlspecialchars($k) ?>')" title="Sao chép">📋</button>
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <?php if ($is_2toolne): ?>
+                                                                <span class="badge badge-active">🚀 2toolne Studio</span>
+                                                            <?php elseif ($is_ext): ?>
+                                                                <span class="badge badge-info">🖼️ Labs Extension</span>
+                                                            <?php else: ?>
+                                                                <span class="badge badge-purple">🎬 Slideshow AI</span>
+                                                            <?php endif; ?>
+                                                        </td>
+                                                        <td>
+                                                            <span class="badge <?= $tier === 'TRIAL' ? 'badge-trial' : 'badge-active' ?>"><?= htmlspecialchars($tier) ?></span>
+                                                        </td>
+                                                        <td style="font-size:12px;color:var(--muted-foreground)">
+                                                            <?= $lic['expires_at'] ? (strpos($lic['expires_at'], '2099') !== false ? '👑 Vĩnh viễn' : htmlspecialchars($lic['expires_at'])) : ($lic['duration_days'] . ' ngày') ?>
+                                                        </td>
+                                                        <td>
+                                                            <span class="badge <?= $status === 'active' ? 'badge-active' : 'badge-danger' ?>">
+                                                                <?= strtoupper($status) ?>
+                                                            </span>
+                                                        </td>
+                                                        <td>
+                                                            <?php if ($hwid): ?>
+                                                                <div style="font-size:11.5px">
+                                                                    <code style="color:var(--info)"><?= substr($hwid, 0, 10) ?>...</code>
+                                                                    <div style="color:var(--muted-subtle)"><?= htmlspecialchars($lic['device_name'] ?: 'Desktop') ?></div>
+                                                                </div>
+                                                            <?php else: ?>
+                                                                <span style="color:var(--emerald);font-size:12px">Chưa kích hoạt</span>
+                                                            <?php endif; ?>
+                                                        </td>
+                                                        <td>
+                                                            <?php if ($hwid): ?>
+                                                                <button type="button" class="btn btn-outline btn-xs" style="color:var(--info);border-color:var(--info)" onclick="openResetHwidModal('<?= htmlspecialchars($k) ?>')">
+                                                                    🔄 Đổi Máy
+                                                                </button>
+                                                            <?php else: ?>
+                                                                <span class="text-subtle" style="font-size:11px">Sẵn sàng</span>
+                                                            <?php endif; ?>
+                                                        </td>
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
                                     </div>
-                                </div>
-                                <div style="display:flex;gap:8px">
-                                    <button class="btn-outline" style="padding:7px 14px;font-size:12px" onclick="copyText('<?= htmlspecialchars($k) ?>')">📋 Sao Chép Key</button>
-                                    <?php if ($hwid): ?>
-                                        <form method="POST" style="display:inline" onsubmit="return confirm('Bạn có chắc chắn muốn Reset HWID để chuyển sang máy tính mới?')">
-                                            <input type="hidden" name="action" value="reset_hwid">
-                                            <input type="hidden" name="key" value="<?= htmlspecialchars($k) ?>">
-                                            <button type="submit" class="btn-outline" style="padding:7px 14px;font-size:12px;border-color:#0284c7;color:#38bdf8">🔄 Đổi Máy (Reset HWID)</button>
-                                        </form>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </div>
-            </div>
-
-            <!-- TAB 2: BUY KEY WITH QR PAYMENT -->
-            <div id="tab-buy-key" class="tab-content">
-                <div class="feature-card" style="margin-bottom:30px">
-                    <h3 style="font-size:18px;font-weight:800;color:#fff;margin-bottom:8px">🛒 CHỌN GÓI BẢN QUYỀN VIP</h3>
-                    <p style="font-size:13px;color:#94a3b8;margin-bottom:24px">Thanh toán qua chuyển khoản quét mã VietQR tự động — Hỗ trợ <b>Update Trọn Đời</b></p>
-                    
-                    <!-- SECTION: 2TOOLNE AI YOUTUBE PRODUCTION STUDIO -->
-                    <div style="background:linear-gradient(180deg,#064e3b 0%,#0b0f19 100%);border:2px solid #10b981;border-radius:16px;padding:24px;margin-bottom:30px;box-shadow:0 10px 30px rgba(16,185,129,0.15)">
-                        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;margin-bottom:16px">
-                            <div>
-                                <span style="background:rgba(16,185,129,0.2);color:#34d399;border:1px solid #10b981;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:900">🚀 NEW RELEASE v1.0.0</span>
-                                <h4 style="font-size:18px;font-weight:900;color:#fff;margin-top:6px">🚀 2TOOLNE — AI YOUTUBE PRODUCTION STUDIO</h4>
-                                <p style="font-size:12.5px;color:#a7f3d0;margin-top:4px">Hệ thống sản xuất video tài liệu 200–250 shots tự động bằng AI Flow, Edge TTS, Cắt ghép Opencut & Phân tích tăng trưởng YouTube.</p>
-                            </div>
-                        </div>
-                        <div class="grid-3">
-                            <div class="pricing-card" style="background:#0b0f19;border-color:#059669">
-                                <div>
-                                    <h4 style="font-size:16px;font-weight:800;color:#fff">2TOOLNE (1 THÁNG)</h4>
-                                    <div class="price-val" style="font-size:26px;color:#34d399">1.200.000đ</div>
-                                    <div class="price-period">Thời hạn: 30 ngày</div>
-                                    <ul class="price-features">
-                                        <li>✅ 225-Shot Parallel Flow DAG</li>
-                                        <li>✅ Edge TTS + Căn Chỉnh Khớp Lời</li>
-                                        <li>✅ DAW Audio Ducking & Subtitles</li>
-                                    </ul>
-                                </div>
-                                <button type="button" class="btn-outline" style="border-color:#10b981;color:#34d399" onclick="openQrPayment('2toolne (1 Tháng)', '1.200.000đ', 30, 'VIP', '2TOOLNE')">⚡ Mua 2toolne 1 Tháng</button>
-                            </div>
-
-                            <div class="pricing-card pricing-vip" style="background:linear-gradient(180deg,#064e3b 0%,#0b0f19 100%);border-color:#10b981">
-                                <span class="pricing-tag" style="background:linear-gradient(135deg,#059669,#10b981)">VIP KHUYÊN DÙNG</span>
-                                <div>
-                                    <h4 style="font-size:16px;font-weight:800;color:#fff">2TOOLNE (1 NĂM VIP)</h4>
-                                    <div class="price-val" style="font-size:26px;color:#34d399">12.000.000đ</div>
-                                    <div class="price-period">Thời hạn: 365 ngày</div>
-                                    <ul class="price-features">
-                                        <li>✅ Toàn bộ quyền lợi gói tháng</li>
-                                        <li>✅ Hỗ trợ ưu tiên 1-1 từ Admin</li>
-                                        <li>✅ YouTube Uploader & Growth Radar</li>
-                                    </ul>
-                                </div>
-                                <button type="button" class="btn-primary" style="background:linear-gradient(135deg,#059669,#10b981)" onclick="openQrPayment('2toolne (1 Năm VIP)', '12.000.000đ', 365, 'VIP', '2TOOLNE')">⚡ Mua 2toolne 1 Năm</button>
-                            </div>
-
-                            <div class="pricing-card" style="background:#0b0f19;border-color:#059669">
-                                <div>
-                                    <h4 style="font-size:16px;font-weight:800;color:#fff">2TOOLNE (VĨNH VIỄN)</h4>
-                                    <div class="price-val" style="font-size:26px;color:#34d399">18.000.000đ</div>
-                                    <div class="price-period">Sở hữu trọn đời (Lifetime)</div>
-                                    <ul class="price-features">
-                                        <li>👑 <b>Update tính năng trọn đời</b></li>
-                                        <li>👑 Quyền lợi VIP cao cấp nhất</li>
-                                        <li>👑 Hỗ trợ kỹ thuật 24/7 trực tiếp</li>
-                                    </ul>
-                                </div>
-                                <button type="button" class="btn-outline" style="border-color:#10b981;color:#34d399" onclick="openQrPayment('2toolne (Vĩnh Viễn)', '18.000.000đ', 36500, 'LIFETIME', '2TOOLNE')">👑 Mua Gói Vĩnh Viễn</button>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>
-                    
-                    <!-- SECTION: EXTENSION GOOGLE LABS 100K -->
-                    <div style="background:linear-gradient(180deg,#131b33 0%,#0b0f19 100%);border:2px solid #0284c7;border-radius:16px;padding:24px;margin-bottom:30px;box-shadow:0 10px 30px rgba(56,189,248,0.15)">
-                        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px">
-                            <div>
-                                <span style="background:rgba(56,189,248,0.2);color:#38bdf8;border:1px solid #0284c7;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:900">HOT DEAL 100K</span>
-                                <h4 style="font-size:18px;font-weight:900;color:#fff;margin-top:6px">🖼️ EXTENSION GOOGLE LABS 2K/4K (VĨNH VIỄN)</h4>
-                                <p style="font-size:12.5px;color:#94a3b8;margin-top:4px">Tự động tải hàng loạt ảnh 2K/4K từ Google Labs Flow, tự động đánh số 001→xxx, thu nhỏ thông minh.</p>
+
+                    <!-- TAB 2: BUY VIP KEY -->
+                    <div id="tab-buy-key" class="tab-pane" style="display:none">
+                        <div class="card" style="margin-bottom:24px">
+                            <div class="card-header">
+                                <div class="card-title">🚀 2TOOLNE — AI YouTube Production Studio (Khuyên Dùng)</div>
+                                <span class="badge badge-active">NEW v1.0.0</span>
                             </div>
-                            <div style="text-align:right">
-                                <div style="font-size:28px;font-weight:900;color:#38bdf8">100.000đ</div>
-                                <button type="button" class="btn-primary" style="margin-top:8px;padding:10px 20px;background:linear-gradient(135deg,#0284c7,#38bdf8)" onclick="openQrPayment('Extension Google Labs (Vĩnh Viễn)', '100.000đ', 36500, 'LIFETIME', 'LABS_EXTENSION')">
+                            <div class="card-body">
+                                <p class="text-muted" style="margin-bottom:20px">Hệ thống sản xuất video tài liệu tự động 200–250 shots, Edge TTS, Cắt ghép Opencut Multi-Track & Radar phân tích tăng trưởng.</p>
+                                <div class="pricing-grid" style="margin-bottom:0">
+                                    <div class="pricing-card">
+                                        <div>
+                                            <h4>2toolne (1 Tháng)</h4>
+                                            <div class="price-val" style="color:var(--emerald)">1.200.000đ</div>
+                                            <div class="price-sub">Thời hạn: 30 ngày sử dụng</div>
+                                            <ul class="price-checklist">
+                                                <li>✅ 225-Shot Parallel Flow DAG</li>
+                                                <li>✅ Edge TTS + Căn Chỉnh Khớp Lời</li>
+                                                <li>✅ DAW Audio Ducking DSP</li>
+                                            </ul>
+                                        </div>
+                                        <button class="btn btn-outline" style="border-color:var(--emerald);color:var(--emerald)" onclick="openQrPayment('2toolne (1 Tháng)', '1.200.000đ', 30, 'VIP', '2TOOLNE')">⚡ Mua Gói 1 Tháng</button>
+                                    </div>
+
+                                    <div class="pricing-card featured">
+                                        <span class="badge badge-active pricing-card-badge">TIẾT KIỆM 2 TRIỆU</span>
+                                        <div>
+                                            <h4>2toolne (1 Năm VIP)</h4>
+                                            <div class="price-val" style="color:var(--emerald)">12.000.000đ</div>
+                                            <div class="price-sub">Thời hạn: 365 ngày sử dụng</div>
+                                            <ul class="price-checklist">
+                                                <li>✅ Toàn bộ quyền lợi gói tháng</li>
+                                                <li>✅ Hỗ trợ ưu tiên 1-1 từ Admin</li>
+                                                <li>✅ YouTube Uploader & Growth Radar</li>
+                                            </ul>
+                                        </div>
+                                        <button class="btn btn-emerald" onclick="openQrPayment('2toolne (1 Năm VIP)', '12.000.000đ', 365, 'VIP', '2TOOLNE')">⚡ Mua Gói 1 Năm (VIP)</button>
+                                    </div>
+
+                                    <div class="pricing-card">
+                                        <div>
+                                            <h4>2toolne (Vĩnh Viễn)</h4>
+                                            <div class="price-val" style="color:var(--emerald)">18.000.000đ</div>
+                                            <div class="price-sub">Sở hữu trọn đời (Lifetime)</div>
+                                            <ul class="price-checklist">
+                                                <li>👑 <b>Cập nhật tính năng trọn đời</b></li>
+                                                <li>👑 Quyền lợi VIP cao cấp nhất</li>
+                                                <li>👑 Hỗ trợ kỹ thuật 24/7 trực tiếp</li>
+                                            </ul>
+                                        </div>
+                                        <button class="btn btn-outline" style="border-color:var(--emerald);color:var(--emerald)" onclick="openQrPayment('2toolne (Vĩnh Viễn)', '18.000.000đ', 36500, 'LIFETIME', '2TOOLNE')">👑 Mua Gói Vĩnh Viễn</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card" style="margin-bottom:24px">
+                            <div class="card-header">
+                                <div class="card-title">🎬 Tool Video AI (Slideshow Builder)</div>
+                            </div>
+                            <div class="card-body">
+                                <div class="pricing-grid" style="margin-bottom:0">
+                                    <div class="pricing-card">
+                                        <div>
+                                            <h4>Gói 1 Tháng</h4>
+                                            <div class="price-val">1.000.000đ</div>
+                                            <div class="price-sub">Thời hạn: 30 ngày</div>
+                                        </div>
+                                        <button class="btn btn-outline" onclick="openQrPayment('Slideshow Builder (1 Tháng)', '1.000.000đ', 30, 'VIP', 'SLIDESHOW')">⚡ Mua Gói 1 Tháng</button>
+                                    </div>
+                                    <div class="pricing-card">
+                                        <div>
+                                            <h4>Gói 1 Năm (VIP)</h4>
+                                            <div class="price-val">10.000.000đ</div>
+                                            <div class="price-sub">Thời hạn: 365 ngày</div>
+                                        </div>
+                                        <button class="btn btn-primary" onclick="openQrPayment('Slideshow Builder (1 Năm)', '10.000.000đ', 365, 'VIP', 'SLIDESHOW')">⚡ Mua Gói 1 Năm</button>
+                                    </div>
+                                    <div class="pricing-card">
+                                        <div>
+                                            <h4>Gói Vĩnh Viễn</h4>
+                                            <div class="price-val">15.000.000đ</div>
+                                            <div class="price-sub">Sở hữu trọn đời</div>
+                                        </div>
+                                        <button class="btn btn-outline" onclick="openQrPayment('Slideshow Builder (Vĩnh Viễn)', '15.000.000đ', 36500, 'LIFETIME', 'SLIDESHOW')">👑 Mua Gói Vĩnh Viễn</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-title">🖼️ Extension Google Labs (Tải Ảnh 2K/4K)</div>
+                                <span class="badge badge-info">HOT DEAL 100K</span>
+                            </div>
+                            <div class="card-body" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px">
+                                <div>
+                                    <p class="text-muted">Tự động tải hàng loạt ảnh 2K/4K từ Google Labs Flow, tự động đánh số 001→xxx.</p>
+                                    <div class="price-val" style="color:var(--info);margin:8px 0 0">100.000đ <span style="font-size:13px;color:var(--muted-foreground)">/ Sở hữu vĩnh viễn</span></div>
+                                </div>
+                                <button class="btn btn-accent" onclick="openQrPayment('Extension Google Labs (Vĩnh Viễn)', '100.000đ', 36500, 'LIFETIME', 'LABS_EXTENSION')">
                                     ⚡ Mua Key Extension (100k)
                                 </button>
                             </div>
                         </div>
                     </div>
 
-                    <h4 style="font-size:15px;font-weight:800;color:#cbd5e1;margin-bottom:14px">🎬 GÓI BẢN QUYỀN TOOL TẠO VIDEO AI (SLIDESHOW BUILDER)</h4>
-                    <div class="grid-3" style="margin-bottom:20px">
-                        <!-- GÓI 1 THÁNG -->
-                        <div class="pricing-card" style="background:#0b0f19">
-                            <div>
-                                <h4 style="font-size:17px;font-weight:800;color:#fff">GÓI 1 THÁNG</h4>
-                                <div class="price-val" style="font-size:28px">1.000.000đ</div>
-                                <div class="price-period">Thời hạn: 30 ngày</div>
-                                <ul class="price-features">
-                                    <li>✅ Mở khóa toàn bộ tính năng 4K</li>
-                                    <li>✅ Xuất video không giới hạn</li>
-                                    <li>✅ Update trọn đời trong kỳ thuê</li>
-                                </ul>
+                    <!-- TAB 3: FEATURE REQUESTS -->
+                    <div id="tab-features-view" class="tab-pane" style="display:none">
+                        <div class="card" style="margin-bottom:20px">
+                            <div class="card-header">
+                                <div class="card-title">💡 Góp Ý / Mong Muốn Update Tính Năng</div>
+                                <span class="badge">Tối đa 3 phiếu / tháng</span>
                             </div>
-                            <button type="button" class="btn-outline" onclick="openQrPayment('Gói 1 Tháng', '1.000.000đ', 30, 'VIP')">⚡ Mua Gói 1 Tháng</button>
+                            <div class="card-body">
+                                <form method="POST">
+                                    <input type="hidden" name="action" value="add_feature">
+                                    <div class="form-group">
+                                        <label class="form-label">TIÊU ĐỀ TÍNH NĂNG:</label>
+                                        <input type="text" name="title" class="form-input" placeholder="Ví dụ: Tích hợp thêm bộ lọc giọng nữ tiếng Anh..." required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">MÔ TẢ CHI TIẾT MONG MUỐN:</label>
+                                        <textarea name="description" class="form-textarea" rows="3" placeholder="Mô tả cụ thể cách tính năng hoạt động..." required></textarea>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary">Gửi Góp Ý Cho Admin</button>
+                                </form>
+                            </div>
                         </div>
 
-                        <!-- GÓI 1 NĂM -->
-                        <div class="pricing-card pricing-vip" style="background:linear-gradient(180deg,#131b33 0%,#0b0f19 100%)">
-                            <span class="pricing-tag">TIẾT KIỆM 2 TRIỆU</span>
-                            <div>
-                                <h4 style="font-size:17px;font-weight:800;color:#fff">GÓI 1 NĂM (VIP)</h4>
-                                <div class="price-val" style="font-size:28px">10.000.000đ</div>
-                                <div class="price-period">Thời hạn: 365 ngày</div>
-                                <ul class="price-features">
-                                    <li>✅ Toàn bộ quyền lợi gói tháng</li>
-                                    <li>✅ Hỗ trợ ưu tiên 1-1 từ Admin</li>
-                                    <li>✅ Cập nhật tính năng mới liên tục</li>
-                                </ul>
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-title">📋 Lịch Sử Góp Ý Của Bạn</div>
                             </div>
-                            <button type="button" class="btn-primary" onclick="openQrPayment('Gói 1 Năm (VIP)', '10.000.000đ', 365, 'VIP')">⚡ Mua Gói 1 Năm</button>
-                        </div>
-
-                        <!-- GÓI VĨNH VIỄN -->
-                        <div class="pricing-card" style="background:#0b0f19">
-                            <div>
-                                <h4 style="font-size:17px;font-weight:800;color:#fff">GÓI VĨNH VIỄN</h4>
-                                <div class="price-val" style="font-size:28px">15.000.000đ</div>
-                                <div class="price-period">Sở hữu trọn đời (Lifetime)</div>
-                                <ul class="price-features">
-                                    <li>👑 <b>Miễn phí 100% mọi bản Update tương lai</b></li>
-                                    <li>👑 Hỗ trợ kỹ thuật trọn đời</li>
-                                    <li>👑 Ưu tiên phát triển tính năng riêng</li>
-                                </ul>
+                            <div class="card-body" style="padding:0">
+                                <div class="table-responsive">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Tiêu Đề</th>
+                                                <th>Nội Dung</th>
+                                                <th>Trạng Thái</th>
+                                                <th>Ngày Gửi</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php 
+                                            $my_features = array_filter($features_db, fn($x) => ($x['user'] ?? '') === $current_user);
+                                            if (empty($my_features)): ?>
+                                                <tr><td colspan="4" class="empty-state">Bạn chưa gửi phiếu góp ý nào.</td></tr>
+                                            <?php else: ?>
+                                                <?php foreach ($my_features as $f): ?>
+                                                    <tr>
+                                                        <td><b><?= htmlspecialchars($f['title']) ?></b></td>
+                                                        <td class="text-muted"><?= htmlspecialchars($f['description']) ?></td>
+                                                        <td><span class="badge badge-info"><?= htmlspecialchars($f['status'] ?? 'Đang xem xét') ?></span></td>
+                                                        <td class="text-subtle" style="font-size:12px"><?= htmlspecialchars($f['created_at']) ?></td>
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                            <?php endif; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
-                            <button type="button" class="btn-outline" onclick="openQrPayment('Gói Vĩnh Viễn (Lifetime)', '15.000.000đ', 36500, 'LIFETIME')">👑 Mua Gói Vĩnh Viễn</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- TAB 5: ACCOUNT SETTINGS -->
-            <div id="tab-settings" class="tab-content">
-                <div class="feature-card" style="max-width:520px">
-                    <h3 style="font-size:17px;font-weight:800;color:#fff;margin-bottom:20px">⚙️ CÀI ĐẶT TÀI KHOẢN</h3>
-
-                    <div style="background:#0b0f19;padding:20px;border-radius:12px;border:1px solid #1e293b;margin-bottom:16px">
-                        <h4 style="font-size:14px;font-weight:800;color:#cbd5e1;margin-bottom:14px">👤 Thông Tin Tài Khoản</h4>
-                        <div style="font-size:13px;color:#94a3b8;line-height:2">
-                            Tên đăng nhập: <b style="color:#fff"><?= htmlspecialchars($user_info['username']) ?></b><br>
-                            Họ tên: <b style="color:#fff"><?= htmlspecialchars($user_info['fullname'] ?: '(Chưa cập nhật)') ?></b><br>
-                            SĐT / Zalo: <b style="color:#fff"><?= htmlspecialchars($user_info['phone'] ?: '(Chưa cập nhật)') ?></b><br>
-                            Ngày đăng ký: <b style="color:#fff"><?= $user_info['created_at'] ?? '?' ?></b>
                         </div>
                     </div>
 
-                    <div style="background:#0b0f19;padding:20px;border-radius:12px;border:1px solid #1e293b">
-                        <h4 style="font-size:14px;font-weight:800;color:#cbd5e1;margin-bottom:14px">🔐 Đổi Mật Khẩu</h4>
-                        <form method="POST">
-                            <input type="hidden" name="action" value="change_password">
-                            <div class="form-group">
-                                <label>MẬT KHẨU HIỆN TẠI:</label>
-                                <input type="password" name="old_password" required>
+                    <!-- TAB 4: BUG REPORTS -->
+                    <div id="tab-bugs-view" class="tab-pane" style="display:none">
+                        <div class="card" style="margin-bottom:20px">
+                            <div class="card-header">
+                                <div class="card-title">🐞 Báo Cáo Lỗi Phần Mềm</div>
                             </div>
-                            <div class="form-group">
-                                <label>MẬT KHẨU MỚI (tối thiểu 6 ký tự):</label>
-                                <input type="password" name="new_password" required minlength="6">
+                            <div class="card-body">
+                                <form method="POST">
+                                    <input type="hidden" name="action" value="add_bug">
+                                    <div class="form-group">
+                                        <label class="form-label">TIÊU ĐỀ LỖI:</label>
+                                        <input type="text" name="title" class="form-input" placeholder="Ví dụ: Lỗi không xuất được video ở độ phân giải 4K..." required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">MÃ LỖI / ERROR CODE (NẾU CÓ):</label>
+                                        <input type="text" name="error_code" class="form-input" placeholder="Ví dụ: ERR_FFMPEG_ENCODER_TIMEOUT">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">MÔ TẢ CHI TIẾT CÁC BƯỚC BỊ LỖI:</label>
+                                        <textarea name="description" class="form-textarea" rows="3" placeholder="Mô tả cụ thể cấu hình máy, thao tác trước khi xảy ra lỗi..." required></textarea>
+                                    </div>
+                                    <button type="submit" class="btn btn-danger">Gửi Báo Cáo Lỗi Kỹ Thuật</button>
+                                </form>
                             </div>
-                            <div class="form-group">
-                                <label>XÁC NHẬN MẬT KHẨU MỚI:</label>
-                                <input type="password" name="confirm_password" required>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-title">📋 Lịch Sử Báo Lỗi</div>
                             </div>
-                            <button type="submit" class="btn-primary" style="background:linear-gradient(135deg,#10b981,#059669)">🔐 Đổi Mật Khẩu</button>
-                        </form>
+                            <div class="card-body" style="padding:0">
+                                <div class="table-responsive">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Tiêu Đề</th>
+                                                <th>Mã Lỗi</th>
+                                                <th>Trạng Thái</th>
+                                                <th>Ngày Gửi</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php 
+                                            $my_bugs = array_filter($bugs_db, fn($x) => ($x['user'] ?? '') === $current_user);
+                                            if (empty($my_bugs)): ?>
+                                                <tr><td colspan="4" class="empty-state">Không có báo cáo lỗi nào từ bạn.</td></tr>
+                                            <?php else: ?>
+                                                <?php foreach ($my_bugs as $b): ?>
+                                                    <tr>
+                                                        <td><b><?= htmlspecialchars($b['title']) ?></b></td>
+                                                        <td><code><?= htmlspecialchars($b['error_code'] ?: 'N/A') ?></code></td>
+                                                        <td><span class="badge badge-warning"><?= htmlspecialchars($b['status'] ?? 'Đã tiếp nhận') ?></span></td>
+                                                        <td class="text-subtle" style="font-size:12px"><?= htmlspecialchars($b['created_at']) ?></td>
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                            <?php endif; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                </div>
-            </div>
 
-            <!-- TAB 3: FEATURE REQUEST -->
-            <div id="tab-features-view" class="tab-content">
-                <div class="feature-card">
-                    <h3 style="font-size:17px;font-weight:800;color:#fff;margin-bottom:6px">🌟 PHIẾU MONG MUỐN UPDATE</h3>
-                    <?php
-                    $cur_month_feat = date('Y-m');
-                    $feat_used = 0;
-                    foreach ($features_db as $fi_c) {
-                        if (($fi_c['user'] ?? '') === $current_user && strpos($fi_c['created_at'] ?? '', $cur_month_feat) === 0) $feat_used++;
-                    }
-                    $feat_left = max(0, 3 - $feat_used);
-                    // Check if user has any active non-trial key
-                    $has_active_key = false;
-                    foreach (($user_info['keys'] ?? []) as $uk) {
-                        if (isset($licenses_db[$uk]) && ($licenses_db[$uk]['status'] ?? '') === 'active' && ($licenses_db[$uk]['tier'] ?? '') !== 'TRIAL') {
-                            $has_active_key = true; break;
-                        }
-                    }
-                    ?>
-                    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
-                        <p style="font-size:12.5px;color:#94a3b8">Mỗi tháng tài khoản của bạn được tạo <b>tối đa 3 phiếu</b> để yêu cầu thêm tính năng mới.</p>
-                        <span style="background:<?= $feat_left > 0 ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)' ?>;border:1px solid <?= $feat_left > 0 ? '#10b981' : '#ef4444' ?>;color:<?= $feat_left > 0 ? '#34d399' : '#f87171' ?>;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:800;white-space:nowrap">
-                            <?= $feat_left > 0 ? "✅ Còn {$feat_left}/3 phiếu tháng này" : "❌ Đã dùng hết 3/3 phiếu tháng này" ?>
-                        </span>
+                    <!-- TAB 5: SETTINGS -->
+                    <div id="tab-settings" class="tab-pane" style="display:none">
+                        <div class="card" style="margin-bottom:20px">
+                            <div class="card-header">
+                                <div class="card-title">👤 Thông Tin Tài Khoản</div>
+                            </div>
+                            <div class="card-body">
+                                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:13px">
+                                    <div>Tên đăng nhập: <b class="text-primary"><?= htmlspecialchars($user_info['username']) ?></b></div>
+                                    <div>Họ và tên: <b><?= htmlspecialchars($user_info['fullname'] ?: '(Chưa cập nhật)') ?></b></div>
+                                    <div>SĐT / Zalo: <b><?= htmlspecialchars($user_info['phone'] ?: '(Chưa cập nhật)') ?></b></div>
+                                    <div>Ngày tham gia: <span class="text-muted"><?= $user_info['created_at'] ?? '?' ?></span></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="card-title">🔐 Đổi Mật Khẩu</div>
+                            </div>
+                            <div class="card-body">
+                                <form method="POST" style="max-width:400px">
+                                    <input type="hidden" name="action" value="change_password">
+                                    <div class="form-group">
+                                        <label class="form-label">MẬT KHẨU HIỆN TẠI:</label>
+                                        <input type="password" name="old_password" class="form-input" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">MẬT KHẨU MỚI (từ 6 ký tự):</label>
+                                        <input type="password" name="new_password" class="form-input" required minlength="6">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">XÁC NHẬN MẬT KHẨU MỚI:</label>
+                                        <input type="password" name="confirm_password" class="form-input" required minlength="6">
+                                    </div>
+                                    <button type="submit" class="btn btn-primary">Lưu Mật Khẩu Mới</button>
+                                </form>
+                            </div>
+                        </div>
                     </div>
-                    <?php if (!$has_active_key): ?>
-                    <div style="background:rgba(99,102,241,0.1);border:1px solid #6366f1;padding:14px 18px;border-radius:10px;color:#a5b4fc;font-size:13px;margin-bottom:16px">
-                        🔒 Tính năng này chỉ dành cho thành viên có <b>Key VIP / Lifetime</b>. Hãy mua gói để mở khóa!
-                    </div>
-                    <?php endif; ?>
-                    
-                    <?php if ($has_active_key && $feat_left > 0): ?>
-                    <form method="POST" style="background:#0b0f19;padding:20px;border-radius:12px;margin-bottom:24px;border:1px solid #1e293b">
-                        <input type="hidden" name="action" value="add_feature">
-                        <div class="form-group">
-                            <label>TIÊU ĐỀ TÍNH NĂNG MONG MUỐN:</label>
-                            <input type="text" name="title" placeholder="Ví dụ: Thêm hiệu ứng 3D Ken Burns lượn sóng" required>
-                        </div>
-                        <div class="form-group">
-                            <label>MÔ TẢ CHI TIẾT CÁCH TÍNH NĂNG HOẠT ĐỘNG:</label>
-                            <textarea name="description" rows="3" placeholder="Mô tả kỹ tính năng bạn cần để đội ngũ kỹ thuật phát triển ở bản cập nhật tới..." required></textarea>
-                        </div>
-                        <button type="submit" class="btn-primary">🚀 Gửi Phiếu Mong Muốn Update</button>
-                    </form>
-                    <?php endif; ?>
 
-                    <h4 style="font-size:14px;color:#cbd5e1;margin-bottom:10px">📋 Lịch sử phiếu bạn đã gửi:</h4>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Tiêu đề</th>
-                                <th>Nội dung</th>
-                                <th>Ngày gửi</th>
-                                <th>Trạng thái</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php 
-                            $my_feats = array_filter($features_db, fn($x) => ($x['user'] ?? '') === $current_user);
-                            if (empty($my_feats)): 
-                            ?>
-                                <tr><td colspan="4" style="text-align:center;color:#64748b">Bạn chưa gửi phiếu mong muốn update nào.</td></tr>
-                            <?php else: ?>
-                                <?php foreach (array_reverse($my_feats) as $f): ?>
-                                    <tr>
-                                        <td><b><?= htmlspecialchars($f['title']) ?></b></td>
-                                        <td style="color:#94a3b8"><?= nl2br(htmlspecialchars($f['description'])) ?></td>
-                                        <td style="font-size:11px;color:#64748b"><?= $f['created_at'] ?></td>
-                                        <td><span class="badge badge-active"><?= htmlspecialchars($f['status']) ?></span></td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- TAB 4: BUG REPORT -->
-            <div id="tab-bugs-view" class="tab-content">
-                <div class="feature-card">
-                    <h3 style="font-size:17px;font-weight:800;color:#fff;margin-bottom:6px">🐞 BÁO LỖI PHẦN MỀM (VÔ HẠN)</h3>
-                    <p style="font-size:12.5px;color:#94a3b8;margin-bottom:20px">Gửi báo cáo lỗi kỹ thuật để Admin hỗ trợ khắc phục nhanh nhất.</p>
-
-                    <form method="POST" style="background:#0b0f19;padding:20px;border-radius:12px;margin-bottom:24px;border:1px solid #1e293b">
-                        <input type="hidden" name="action" value="add_bug">
-                        <div class="form-group">
-                            <label>TIÊU ĐỀ LỖI GẶP PHẢI:</label>
-                            <input type="text" name="title" placeholder="Ví dụ: Render video 4K bị thoát đột ngột" required>
-                        </div>
-                        <div class="form-group">
-                            <label>MÃ LỖI (NẾU CÓ TRÊN BẢNG CHẨN ĐOÁN):</label>
-                            <input type="text" name="error_code" placeholder="Ví dụ: ERR_FFMPEG_PROCESSING_CRASH">
-                        </div>
-                        <div class="form-group">
-                            <label>CHI TIẾT CÁC BƯỚC DẪN ĐẾN LỖI:</label>
-                            <textarea name="description" rows="3" placeholder="Mô tả các thao tác bạn vừa thực hiện trước khi gặp lỗi..." required></textarea>
-                        </div>
-                        <button type="submit" class="btn-primary" style="background:linear-gradient(135deg,#ef4444,#f59e0b)">🐞 Gửi Báo Cáo Lỗi</button>
-                    </form>
-
-                    <h4 style="font-size:14px;color:#cbd5e1;margin-bottom:10px">📋 Lịch sử báo lỗi của bạn:</h4>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Tiêu đề lỗi</th>
-                                <th>Chi tiết</th>
-                                <th>Mã lỗi</th>
-                                <th>Ngày gửi</th>
-                                <th>Trạng thái</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php 
-                            $my_bugs = array_filter($bugs_db, fn($x) => ($x['user'] ?? '') === $current_user);
-                            if (empty($my_bugs)): 
-                            ?>
-                                <tr><td colspan="5" style="text-align:center;color:#64748b">Chưa có báo cáo lỗi nào.</td></tr>
-                            <?php else: ?>
-                                <?php foreach (array_reverse($my_bugs) as $b): ?>
-                                    <tr>
-                                        <td><b><?= htmlspecialchars($b['title']) ?></b></td>
-                                        <td style="color:#94a3b8"><?= nl2br(htmlspecialchars($b['description'])) ?></td>
-                                        <td><code><?= htmlspecialchars($b['error_code'] ?: '-') ?></code></td>
-                                        <td style="font-size:11px;color:#64748b"><?= $b['created_at'] ?></td>
-                                        <td><span class="badge badge-trial"><?= htmlspecialchars($b['status']) ?></span></td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
                 </div>
             </div>
 
         <?php else: ?>
-            <!-- ===================================================== -->
-            <!-- ===================================================== -->
-            <!-- LANDING PAGE PUBLIC (CHƯA ĐĂNG NHẬP) -->
-            <!-- ===================================================== -->
-            <section class="hero">
-                <div class="hero-badge">
-                    <span style="color:var(--primary)">✦</span>
-                    <span>HỆ SINH THÁI TỰ ĐỘNG HÓA SÁNG TẠO VIDEO & EXTENSION</span>
+            <!-- ═══════════════════════════════════════════════════════════════
+                 PUBLIC LANDING PAGE (KHI CHƯA ĐĂNG NHẬP)
+                 ═══════════════════════════════════════════════════════════════ -->
+            <section class="hero-section">
+                <div class="hero-eyebrow">
+                    <span>✨</span> Commercial Video AI & Developer Tools Suite
                 </div>
-                <h1 class="hero-title">Sáng tạo video & xử lý<br><span style="color:var(--text-sub)">âm thanh tự động</span></h1>
+                <h1 class="hero-title">
+                    <span>Tự Động Hóa Sản Xuất Video</span><br>
+                    Chuẩn Mực & Hiệu Suất Cao
+                </h1>
                 <p class="hero-desc">
-                    Bộ công cụ tối ưu hóa tốc độ render 60 FPS 4K, tự động khớp phụ đề chính xác từng từ bằng AI và tiện ích tải ảnh hàng loạt độ phân giải cao cho nhà sáng tạo nội dung.
+                    Hệ sinh thái phần mềm đồ họa, xử lý video đa luồng và tiện ích AI dành cho nhà sáng tạo nội dung, xưởng sản xuất video tài liệu và kỹ sư công nghệ.
                 </p>
-                <div class="hero-cta">
-                    <a href="#products" class="btn-solid-white btn-lg">Khám Phá Công Cụ →</a>
-                    <a href="#download" class="btn-secondary btn-lg">📥 Tải Bản Cài Đặt (v2.3.0)</a>
-                </div>
-
-                <!-- ── Realistic Studio UI Mockup (Linear / Raycast Craft) ── -->
-                <div class="mockup-window">
-                    <div class="mockup-header">
-                        <div class="mockup-dots">
-                            <span class="mockup-dot red"></span>
-                            <span class="mockup-dot yellow"></span>
-                            <span class="mockup-dot green"></span>
-                        </div>
-                        <span class="mockup-title">slideshow_builder_pro · 60 FPS Hardware Accelerated</span>
-                        <span class="tech-badge" style="font-size:10px">GPU ACTIVE</span>
-                    </div>
-                    <div class="mockup-body">
-                        <!-- Mockup Left: Timeline & Subtitle Engine -->
-                        <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:12px">
-                            <div style="display:flex;justify-content:space-between;align-items:center">
-                                <span style="font-size:12px;font-weight:600;color:var(--text-main)">🎯 Forced Alignment CTC Engine</span>
-                                <span class="badge badge-active" style="font-size:10px">100% ACCURATE</span>
-                            </div>
-                            
-                            <!-- Subtitle Cue Blocks -->
-                            <div style="display:flex;flex-direction:column;gap:8px;font-size:12px">
-                                <div style="background:var(--bg-card);border:1px solid var(--border);padding:8px 12px;border-radius:6px;display:flex;justify-content:space-between;align-items:center">
-                                    <span style="color:var(--text-main)">[01] Tự động đồng bộ từng âm tiết</span>
-                                    <span class="tech-badge">00:00.00 → 00:02.40</span>
-                                </div>
-                                <div style="background:var(--bg-card);border:1px solid var(--primary);padding:8px 12px;border-radius:6px;display:flex;justify-content:space-between;align-items:center">
-                                    <span style="color:#93c5fd;font-weight:500">[02] Xuất 60 FPS mượt mà không rung giật</span>
-                                    <span class="tech-badge" style="color:#93c5fd;border-color:rgba(59,130,246,0.3)">00:02.40 → 00:05.10</span>
-                                </div>
-                                <div style="background:var(--bg-card);border:1px solid var(--border);padding:8px 12px;border-radius:6px;display:flex;justify-content:space-between;align-items:center">
-                                    <span style="color:var(--text-main)">[03] Xuất định dạng 16:9 / 9:16 / 1:1</span>
-                                    <span class="tech-badge">00:05.10 → 00:08.30</span>
-                                </div>
-                            </div>
-
-                            <!-- Audio Waveform simulation -->
-                            <div style="margin-top:auto;padding-top:8px;border-top:1px solid var(--border)">
-                                <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);font-family:'JetBrains Mono',monospace;margin-bottom:6px">
-                                    <span>VOX_CPM_SPEECH.WAV</span>
-                                    <span>00:14.20 / 02:45.00</span>
-                                </div>
-                                <div style="height:24px;background:var(--bg-card);border-radius:4px;display:flex;align-items:center;gap:3px;padding:0 8px;overflow:hidden">
-                                    <div style="width:3px;height:40%;background:var(--primary);border-radius:2px"></div>
-                                    <div style="width:3px;height:70%;background:var(--primary);border-radius:2px"></div>
-                                    <div style="width:3px;height:100%;background:var(--primary);border-radius:2px"></div>
-                                    <div style="width:3px;height:55%;background:var(--primary);border-radius:2px"></div>
-                                    <div style="width:3px;height:85%;background:var(--primary);border-radius:2px"></div>
-                                    <div style="width:3px;height:30%;background:var(--primary);border-radius:2px"></div>
-                                    <div style="width:3px;height:90%;background:var(--primary);border-radius:2px"></div>
-                                    <div style="width:3px;height:65%;background:var(--primary);border-radius:2px"></div>
-                                    <div style="width:3px;height:100%;background:var(--primary);border-radius:2px"></div>
-                                    <div style="width:3px;height:45%;background:var(--primary);border-radius:2px"></div>
-                                    <div style="width:3px;height:80%;background:var(--primary);border-radius:2px"></div>
-                                    <div style="width:3px;height:60%;background:var(--primary);border-radius:2px"></div>
-                                    <div style="width:3px;height:95%;background:var(--primary);border-radius:2px"></div>
-                                    <div style="width:3px;height:40%;background:var(--primary);border-radius:2px"></div>
-                                    <div style="width:3px;height:75%;background:var(--primary);border-radius:2px"></div>
-                                    <div style="width:3px;height:25%;background:var(--primary);border-radius:2px"></div>
-                                    <div style="width:3px;height:85%;background:var(--primary);border-radius:2px"></div>
-                                    <div style="width:3px;height:50%;background:var(--primary);border-radius:2px"></div>
-                                    <div style="width:3px;height:70%;background:var(--primary);border-radius:2px"></div>
-                                    <div style="width:3px;height:35%;background:var(--primary);border-radius:2px"></div>
-                                    <div style="width:3px;height:90%;background:var(--primary);border-radius:2px"></div>
-                                    <div style="width:3px;height:60%;background:var(--primary);border-radius:2px"></div>
-                                    <div style="width:3px;height:100%;background:var(--primary);border-radius:2px"></div>
-                                    <div style="width:3px;height:45%;background:var(--primary);border-radius:2px"></div>
-                                    <div style="width:3px;height:80%;background:var(--primary);border-radius:2px"></div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Mockup Right: Camera & 4K Preview Studio -->
-                        <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:8px;padding:16px;display:flex;flex-direction:column;justify-content:space-between">
-                            <div>
-                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-                                    <span style="font-size:12px;font-weight:600;color:var(--text-main)">🎬 Ken Burns 4K Canvas</span>
-                                    <span class="tech-badge">3840 × 2160</span>
-                                </div>
-                                <div style="position:relative;background:#000000;border:1px solid var(--border);border-radius:6px;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;overflow:hidden">
-                                    <!-- Grid lines simulation -->
-                                    <div style="position:absolute;inset:0;border:1px dashed rgba(255,255,255,0.08);margin:12px"></div>
-                                    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px">
-                                        <span style="font-size:24px">📷</span>
-                                        <span style="font-size:11px;color:var(--text-muted);font-family:'JetBrains Mono',monospace">SMOOTHSTEP SINE ZOOM IN (1.0 → 1.25)</span>
-                                    </div>
-                                    <!-- Live Subtitle simulation -->
-                                    <div style="position:absolute;bottom:12px;background:rgba(0,0,0,0.85);border:1px solid rgba(255,255,255,0.15);padding:3px 10px;border-radius:4px;font-size:11px;color:#ffffff;font-weight:600">
-                                        Đồng bộ âm học từng từ chuẩn xác 100%
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-size:11px;color:var(--text-sub)">
-                                <span>Tốc độ xuất: <b>60 FPS</b></span>
-                                <span>Độ trễ AI: <b>1.8s</b></span>
-                                <span style="color:var(--success)">● Ready</span>
-                            </div>
-                        </div>
-                    </div>
+                <div class="hero-actions">
+                    <button class="btn btn-emerald btn-lg" onclick="openModal('modal-register')">🚀 Nhận Key Dùng Thử 3 Ngày</button>
+                    <a href="#products" class="btn btn-outline btn-lg">Khám Phá Sản Phẩm</a>
                 </div>
             </section>
 
-            <!-- ═══ KHU VỰC TAB SẢN PHẨM MỞ RỘNG (PRODUCTS SHOWCASE) ═══ -->
-            <section id="products" style="padding:40px 0 60px">
-                <div style="text-align:center;margin-bottom:30px">
-                    <span style="background:rgba(99,102,241,0.15);border:1px solid #6366f1;color:#a5b4fc;padding:6px 18px;border-radius:20px;font-size:12px;font-weight:800;display:inline-block;margin-bottom:12px">💎 DANH MỤC PHẦN MỀM</span>
-                    <h2 class="sec-title" style="font-size:32px">LỰA CHỌN SẢN PHẨM BẠN CẦN</h2>
-                    <p class="sec-subtitle">Chuyển đổi giữa các tab để xem chi tiết tính năng, hướng dẫn cài đặt và bảng giá từng công cụ</p>
+            <!-- PRODUCTS SECTION -->
+            <section id="products" style="padding:32px 0 64px">
+                <div style="text-align:center;margin-bottom:24px">
+                    <span class="badge badge-info" style="margin-bottom:8px">DANH MỤC CÔNG CỤ</span>
+                    <h2 style="font-size:28px">Lựa Chọn Phần Mềm Phù Hợp</h2>
                 </div>
 
-                <!-- PRODUCT TABS BAR (EASILY EXTENSIBLE) -->
-                <div style="display:flex;justify-content:center;gap:12px;margin-bottom:36px;flex-wrap:wrap">
-                    <button class="btn-primary prod-tab-btn active" id="ptab-btn-2toolne" onclick="switchProductTab('ptab-2toolne', 'ptab-btn-2toolne')" style="padding:12px 24px;font-size:14px;font-weight:900;border-radius:30px;border-color:#10b981;background:linear-gradient(135deg,#059669,#10b981);box-shadow:0 8px 25px rgba(16,185,129,0.3)">
+                <div class="prod-tab-bar">
+                    <button class="btn btn-emerald prod-tab-btn active" id="ptab-btn-2toolne" onclick="switchProductTab('ptab-2toolne', 'ptab-btn-2toolne')">
                         🚀 2toolne (AI YouTube Studio)
                     </button>
-                    <button class="btn-outline prod-tab-btn" id="ptab-btn-video" onclick="switchProductTab('ptab-video', 'ptab-btn-video')" style="padding:12px 24px;font-size:14px;font-weight:900;border-radius:30px;border-color:#6366f1;color:#a5b4fc">
-                        🎬 Tool Tạo Video AI (Slideshow Builder)
+                    <button class="btn btn-outline prod-tab-btn" id="ptab-btn-video" onclick="switchProductTab('ptab-video', 'ptab-btn-video')">
+                        🎬 Slideshow Builder AI
                     </button>
-                    <button class="btn-outline prod-tab-btn" id="ptab-btn-extension" onclick="switchProductTab('ptab-extension', 'ptab-btn-extension')" style="padding:12px 24px;font-size:14px;font-weight:900;border-radius:30px;border-color:#0284c7;color:#38bdf8">
-                        🖼️ Extension Google Labs Flow (Tải Ảnh 2K/4K)
+                    <button class="btn btn-outline prod-tab-btn" id="ptab-btn-extension" onclick="switchProductTab('ptab-extension', 'ptab-btn-extension')">
+                        🖼️ Google Labs Flow Extension
                     </button>
                 </div>
 
-                <!-- ── PRODUCT 0: 2TOOLNE — AI YOUTUBE PRODUCTION STUDIO ── -->
-                <div id="ptab-2toolne" class="prod-tab-content" style="display:block">
-                    <!-- Features 2toolne -->
-                    <div id="features-2toolne" class="grid-3" style="margin-bottom:40px;scroll-margin-top:90px">
+                <!-- PRODUCT 0: 2TOOLNE STUDIO -->
+                <div id="ptab-2toolne" class="prod-tab-content">
+                    <div class="feature-grid">
                         <div class="feature-card">
-                            <div class="feat-icon">🎬</div>
-                            <div class="feat-title">200–250 Shots Auto Flow</div>
-                            <div class="feat-desc">Sản xuất video tài liệu dài tự động bằng DAG Orchestrator song song, tối ưu hóa qua trình duyệt Flow chống tắc nghẽn.</div>
+                            <div class="feature-icon">🎬</div>
+                            <div class="feature-title">200–250 Shots Auto Flow</div>
+                            <div class="feature-desc">Tự động điều phối kịch bản phim tài liệu dài thông qua DAG pipeline song song, loại bỏ hoàn toàn tắc nghẽn.</div>
                         </div>
                         <div class="feature-card">
-                            <div class="feat-icon">🎙️</div>
-                            <div class="feat-title">Edge TTS & Forced Alignment</div>
-                            <div class="feat-desc">Sinh giọng đọc phát thanh viên và căn chỉnh khớp lời chính xác theo từng mili-giây (Integer ms Ground Truth).</div>
+                            <div class="feature-icon">🎙️</div>
+                            <div class="feature-title">Edge TTS & Forced Alignment</div>
+                            <div class="feature-desc">Sinh giọng đọc phát thanh viên chất lượng cao và căn chỉnh phụ đề khớp từng mili-giây (Integer ms Ground Truth).</div>
                         </div>
                         <div class="feature-card">
-                            <div class="feat-icon">🎛️</div>
-                            <div class="feat-title">DAW Scrubber & Ducking DSP</div>
-                            <div class="feat-desc">Trình cắt ghép timeline 4 rãnh mượt mà, tự động giảm âm lượng BGM (-18dB) khi có giọng đọc và xuất phụ đề Karaoke ASS/SRT.</div>
+                            <div class="feature-icon">🎛️</div>
+                            <div class="feature-title">DAW Scrubber & Ducking DSP</div>
+                            <div class="feature-desc">Timeline 4 rãnh mượt mà, thuật toán tự động giảm âm lượng BGM (-18dB) khi có giọng đọc và xuất phụ đề Karaoke.</div>
                         </div>
                         <div class="feature-card">
-                            <div class="feat-icon">🔒</div>
-                            <div class="feat-title">Character Bank & Lock Guard</div>
-                            <div class="feat-desc">Ngân hàng nhân vật đồng nhất (char1, char2), bảo vệ prompt tự động trong chế độ safe_auto chống trôi hình ảnh.</div>
+                            <div class="feature-icon">🔒</div>
+                            <div class="feature-title">Character Bank & Lock Guard</div>
+                            <div class="feature-desc">Ngân hàng nhân vật đồng nhất (char1, char2), bảo vệ prompt tự động trong chế độ safe_auto chống trôi hình ảnh.</div>
                         </div>
                         <div class="feature-card">
-                            <div class="feat-icon">📺</div>
-                            <div class="feat-title">YouTube Review & Resumable Upload</div>
-                            <div class="feat-desc">Cổng kiểm duyệt trước khi đăng (mặc định Private-First), hỗ trợ tải lên từng phần Resumable và xuất bản an toàn.</div>
+                            <div class="feature-icon">📺</div>
+                            <div class="feature-title">YouTube Review & Resumable Upload</div>
+                            <div class="feature-desc">Cổng kiểm duyệt trước khi đăng (mặc định Private-First), hỗ trợ tải lên từng phần Resumable an toàn.</div>
                         </div>
                         <div class="feature-card">
-                            <div class="feat-icon">📊</div>
-                            <div class="feat-title">Growth Radar & Outlier Detector</div>
-                            <div class="feat-desc">Phân tích chỉ số tăng trưởng kênh YouTube, phát hiện chủ đề bùng nổ của đối thủ (&gt;2.5x) và tự động tối ưu hóa sản xuất.</div>
+                            <div class="feature-icon">📊</div>
+                            <div class="feature-title">Growth Radar & Outlier Detector</div>
+                            <div class="feature-desc">Phân tích chỉ số tăng trưởng kênh YouTube, phát hiện chủ đề bùng nổ của đối thủ (&gt;2.5x) và gợi ý tối ưu.</div>
                         </div>
                     </div>
 
-                    <!-- 2toolne Download Box -->
-                    <div style="background:#064e3b;border:1px solid #10b981;border-radius:18px;padding:28px;margin-bottom:40px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;box-shadow:0 10px 30px rgba(16,185,129,0.2)">
-                        <div>
-                            <span class="badge badge-active" style="background:rgba(16,185,129,0.3);color:#a7f3d0;border:1px solid #10b981;margin-bottom:8px;display:inline-block">BẢN CHÍNH THỨC v1.0.0 (RELEASE CANDIDATE)</span>
-                            <h3 style="font-size:20px;font-weight:900;color:#fff">Tải Bản Cài Đặt 2toolne Studio</h3>
-                            <p style="font-size:13px;color:#a7f3d0;margin-top:4px">Kiến trúc Electron 44 + React 19 + Python Media Worker — Độc lập, an toàn và mượt mà.</p>
-                        </div>
-                        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-                            <a href="/downloads/2toolne_macOS_latest.zip" class="btn-primary" style="padding:12px 20px;background:linear-gradient(135deg,#059669,#10b981)">🍎 Tải Cho macOS (.app)</a>
-                            <a href="/downloads/2toolne_Windows_latest.zip" class="btn-primary" style="padding:12px 20px;background:linear-gradient(135deg,#0284c7,#38bdf8)">🪟 Tải Cho Windows (.zip)</a>
-                            <button class="btn-outline" style="padding:12px 18px;border-color:#10b981;color:#a7f3d0" onclick="openModal('modal-register')">🎁 Dùng Thử 3 Ngày</button>
-                        </div>
-                    </div>
-
-                    <!-- Pricing 2toolne -->
-                    <h3 id="pricing-2toolne" style="text-align:center;font-size:24px;font-weight:800;color:#fff;margin-bottom:24px;scroll-margin-top:80px">💰 BẢNG GIÁ BẢN QUYỀN 2TOOLNE STUDIO</h3>
-                    <div class="grid-3" style="margin-bottom:40px">
-                        <div class="pricing-card" style="border-color:#059669">
+                    <!-- DOWNLOAD BOX -->
+                    <div class="card" style="margin-bottom:36px;border-color:var(--emerald);background:linear-gradient(180deg, #09261e 0%, var(--surface-1) 100%)">
+                        <div class="card-body" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px">
                             <div>
-                                <h3 style="font-size:18px;font-weight:800;color:#fff">GÓI 1 THÁNG</h3>
-                                <p style="font-size:12px;color:#94a3b8">Dành cho cá nhân làm kênh YouTube</p>
-                                <div class="price-val" style="color:#34d399">1.200.000đ</div>
-                                <div class="price-period">Thời hạn: 30 ngày sử dụng</div>
-                                <ul class="price-features">
+                                <span class="badge badge-active" style="margin-bottom:8px">BẢN CHÍNH THỨC v1.0.0 (RELEASE CANDIDATE)</span>
+                                <h3 style="font-size:18px">Tải Bản Cài Đặt 2toolne Studio</h3>
+                                <p class="text-muted" style="margin-top:4px">Kiến trúc Electron 44 + React 19 + Python Media Worker — Độc lập và bảo mật.</p>
+                            </div>
+                            <div style="display:flex;gap:8px;flex-wrap:wrap">
+                                <a href="/downloads/2toolne_macOS_latest.zip" class="btn btn-emerald">🍎 Tải Cho macOS (.app)</a>
+                                <a href="/downloads/2toolne_Windows_latest.zip" class="btn btn-accent">🪟 Tải Cho Windows (.zip)</a>
+                                <button class="btn btn-outline" onclick="openModal('modal-register')">🎁 Dùng Thử 3 Ngày</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PRICING -->
+                    <div class="pricing-grid">
+                        <div class="pricing-card">
+                            <div>
+                                <h4>Gói 1 Tháng</h4>
+                                <div class="price-val" style="color:var(--emerald)">1.200.000đ</div>
+                                <div class="price-sub">Thời hạn: 30 ngày sử dụng</div>
+                                <ul class="price-checklist">
                                     <li>✅ 225-Shot Parallel Flow DAG</li>
                                     <li>✅ Edge TTS + Căn Chỉnh Khớp Lời</li>
-                                    <li>✅ DAW Audio Ducking & Phụ đề Karaoke</li>
-                                    <li>✅ Hỗ trợ Update trong suốt thời gian thuê</li>
+                                    <li>✅ DAW Audio Ducking & Phụ Đề Karaoke</li>
+                                    <li>✅ Hỗ trợ Update trong suốt kỳ thuê</li>
                                 </ul>
                             </div>
-                            <button class="btn-outline" style="width:100%;border-color:#10b981;color:#34d399" onclick="openModal('modal-login')">⚡ Đăng Nhập Để Mua</button>
+                            <button class="btn btn-outline" onclick="openModal('modal-login')">⚡ Đăng Nhập Để Mua</button>
                         </div>
-
-                        <div class="pricing-card pricing-vip" style="background:linear-gradient(180deg,#064e3b 0%,#0b0f19 100%);border-color:#10b981">
-                            <span class="pricing-tag" style="background:linear-gradient(135deg,#059669,#10b981)">KHUYÊN DÙNG VIP</span>
+                        <div class="pricing-card featured">
+                            <span class="badge badge-active pricing-card-badge">KHUYÊN DÙNG VIP</span>
                             <div>
-                                <h3 style="font-size:18px;font-weight:800;color:#fff">GÓI 1 NĂM (VIP)</h3>
-                                <p style="font-size:12px;color:#94a3b8">Lựa chọn tối ưu cho xưởng sản xuất video</p>
-                                <div class="price-val" style="color:#34d399">12.000.000đ</div>
-                                <div class="price-period">Thời hạn: 365 ngày sử dụng</div>
-                                <ul class="price-features">
+                                <h4>Gói 1 Năm (VIP)</h4>
+                                <div class="price-val" style="color:var(--emerald)">12.000.000đ</div>
+                                <div class="price-sub">Thời hạn: 365 ngày sử dụng</div>
+                                <ul class="price-checklist">
                                     <li>✅ Toàn bộ quyền lợi gói tháng</li>
                                     <li>✅ Hỗ trợ ưu tiên 1-1 từ Admin</li>
                                     <li>✅ YouTube Uploader & Growth Radar</li>
                                     <li>✅ Đổi máy tính HWID linh hoạt</li>
                                 </ul>
                             </div>
-                            <button class="btn-primary" style="width:100%;background:linear-gradient(135deg,#059669,#10b981)" onclick="openModal('modal-login')">⚡ Đăng Nhập Để Mua</button>
+                            <button class="btn btn-emerald" onclick="openModal('modal-login')">⚡ Đăng Nhập Để Mua</button>
                         </div>
-
-                        <div class="pricing-card" style="border-color:#059669">
+                        <div class="pricing-card">
                             <div>
-                                <h3 style="font-size:18px;font-weight:800;color:#fff">GÓI VĨNH VIỄN</h3>
-                                <p style="font-size:12px;color:#94a3b8">Sở hữu trọn đời không giới hạn</p>
-                                <div class="price-val" style="color:#34d399">18.000.000đ</div>
-                                <div class="price-period">Sở hữu trọn đời (Lifetime)</div>
-                                <ul class="price-features">
-                                    <li>👑 <b>Miễn phí 100% mọi bản Update tương lai</b></li>
+                                <h4>Gói Vĩnh Viễn</h4>
+                                <div class="price-val" style="color:var(--emerald)">18.000.000đ</div>
+                                <div class="price-sub">Sở hữu trọn đời (Lifetime)</div>
+                                <ul class="price-checklist">
+                                    <li>👑 <b>Cập nhật tính năng trọn đời</b></li>
                                     <li>👑 Quyền lợi VIP cao cấp nhất</li>
                                     <li>👑 Hỗ trợ kỹ thuật 24/7 từ Admin</li>
                                     <li>👑 Ưu tiên phát triển tính năng theo yêu cầu</li>
                                 </ul>
                             </div>
-                            <button class="btn-outline" style="width:100%;border-color:#10b981;color:#34d399" onclick="openModal('modal-login')">👑 Đăng Nhập Để Mua</button>
+                            <button class="btn btn-outline" onclick="openModal('modal-login')">👑 Đăng Nhập Để Mua</button>
                         </div>
                     </div>
                 </div>
 
-                <!-- ── PRODUCT 1: SLIDESHOW BUILDER AI ── -->
+                <!-- PRODUCT 1: SLIDESHOW BUILDER -->
                 <div id="ptab-video" class="prod-tab-content" style="display:none">
-                    <!-- Features -->
-                    <div id="features" class="grid-3" style="margin-bottom:40px;scroll-margin-top:90px">
+                    <div class="feature-grid">
                         <div class="feature-card">
-                            <div class="feat-icon">🎥</div>
-                            <div class="feat-title">Cú Máy Ken Burns 4K</div>
-                            <div class="feat-desc">Áp dụng công thức Sine Easing & Subpixel nội suy Bicubic, chuyển động mượt mà tuyệt đối ở cả 1080p, 2K và 4K.</div>
+                            <div class="feature-icon">🎥</div>
+                            <div class="feature-title">Cú Máy Ken Burns 4K</div>
+                            <div class="feature-desc">Sine Easing & Subpixel nội suy Bicubic, chuyển động mượt mà ở cả 1080p, 2K và 4K.</div>
                         </div>
                         <div class="feature-card">
-                            <div class="feat-icon">⚡</div>
-                            <div class="feat-title">Lồng Tiếng AI 0% RAM</div>
-                            <div class="feat-desc">Tích hợp Edge-TTS Microsoft Cloud và VoxCPM thế hệ mới, sinh giọng đọc chuẩn phát thanh viên siêu tốc.</div>
+                            <div class="feature-icon">⚡</div>
+                            <div class="feature-title">Lồng Tiếng AI 0% RAM</div>
+                            <div class="feature-desc">Tích hợp Edge-TTS Microsoft Cloud và VoxCPM thế hệ mới, sinh giọng đọc phát thanh viên siêu tốc.</div>
                         </div>
                         <div class="feature-card">
-                            <div class="feat-icon">🔤</div>
-                            <div class="feat-title">Phụ Đề Pill & Font Noonnu</div>
-                            <div class="feat-desc">Tự động xuống dòng thông minh, căn chỉnh vị trí linh hoạt và tích hợp sẵn 5 font chữ Hàn Quốc siêu đẹp.</div>
+                            <div class="feature-icon">🔤</div>
+                            <div class="feature-title">Phụ Đề Pill & Font Noonnu</div>
+                            <div class="feature-desc">Tự động xuống dòng thông minh, căn chỉnh vị trí linh hoạt và tích hợp sẵn 5 font chữ cao cấp.</div>
                         </div>
                     </div>
 
-                    <!-- Video Tool Download Box (Windows & macOS Dedicated) -->
-                    <div style="background:#101626;border:1px solid #6366f1;border-radius:18px;padding:28px;margin-bottom:40px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px">
-                        <div>
-                            <span class="badge badge-active" style="margin-bottom:8px;display:inline-block">BẢN CHÍNH THỨC v2.3.0</span>
-                            <h3 style="font-size:20px;font-weight:900;color:#fff">Tải Bản Cài Đặt Slideshow Builder AI</h3>
-                            <p style="font-size:13px;color:#94a3b8;margin-top:4px">Phiên bản tối ưu hóa riêng biệt cho Windows & macOS — Giải nén là chạy ngay lập tức.</p>
-                        </div>
-                        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-                            <a href="/downloads/SlideshowBuilder_Windows_latest.zip" class="btn-primary" style="padding:12px 20px;background:linear-gradient(135deg,#0284c7,#38bdf8)">🪟 Tải Cho Windows (.zip)</a>
-                            <a href="/downloads/SlideshowBuilder_macOS_latest.zip" class="btn-primary" style="padding:12px 20px;background:linear-gradient(135deg,#6366f1,#a855f7)">🍎 Tải Cho macOS (.zip)</a>
-                            <button class="btn-outline" style="padding:12px 18px" onclick="openModal('modal-register')">🎁 Dùng Thử 3 Ngày</button>
-                        </div>
-                    </div>
-
-                    <!-- Pricing Video -->
-                    <h3 id="pricing" style="text-align:center;font-size:24px;font-weight:800;color:#fff;margin-bottom:24px;scroll-margin-top:80px">💰 BẢNG GIÁ BẢN QUYỀN TOOL VIDEO</h3>
-                    <div class="grid-3">
+                    <div class="pricing-grid">
                         <div class="pricing-card">
                             <div>
-                                <h3 style="font-size:18px;font-weight:800;color:#fff">GÓI 1 THÁNG</h3>
-                                <p style="font-size:12px;color:#94a3b8">Dành cho cá nhân trải nghiệm dự án</p>
+                                <h4>Gói 1 Tháng</h4>
                                 <div class="price-val">1.000.000đ</div>
-                                <div class="price-period">Thời hạn: 30 ngày sử dụng</div>
-                                <ul class="price-features">
-                                    <li>✅ Mở khóa toàn bộ tính năng 4K</li>
-                                    <li>✅ Xuất video không giới hạn</li>
-                                    <li>✅ Hỗ trợ Update trong suốt thời gian thuê</li>
-                                    <li>✅ Tặng 3 phiếu mong muốn update / tháng</li>
-                                </ul>
+                                <div class="price-sub">Thời hạn: 30 ngày</div>
                             </div>
-                            <button class="btn-outline" style="width:100%" onclick="openModal('modal-login')">⚡ Đăng Nhập Để Mua</button>
+                            <button class="btn btn-outline" onclick="openModal('modal-login')">⚡ Đăng Nhập Để Mua</button>
                         </div>
-
-                        <div class="pricing-card pricing-vip">
-                            <span class="pricing-tag">TIẾT KIỆM 2 TRIỆU</span>
+                        <div class="pricing-card featured">
+                            <span class="badge badge-info pricing-card-badge">TIẾT KIỆM 2 TRIỆU</span>
                             <div>
-                                <h3 style="font-size:18px;font-weight:800;color:#fff">GÓI 1 NĂM (VIP)</h3>
-                                <p style="font-size:12px;color:#94a3b8">Lựa chọn tối ưu cho nhà sáng tạo</p>
+                                <h4>Gói 1 Năm (VIP)</h4>
                                 <div class="price-val">10.000.000đ</div>
-                                <div class="price-period">Thời hạn: 365 ngày sử dụng</div>
-                                <ul class="price-features">
-                                    <li>✅ Toàn bộ quyền lợi gói tháng</li>
-                                    <li>✅ Hỗ trợ ưu tiên 1-1 từ Admin</li>
-                                    <li>✅ Cập nhật tính năng mới liên tục</li>
-                                    <li>✅ Reset đổi máy tính linh hoạt</li>
-                                </ul>
+                                <div class="price-sub">Thời hạn: 365 ngày</div>
                             </div>
-                            <button class="btn-primary" style="width:100%" onclick="openModal('modal-login')">⚡ Đăng Nhập Để Mua</button>
+                            <button class="btn btn-primary" onclick="openModal('modal-login')">⚡ Đăng Nhập Để Mua</button>
                         </div>
-
                         <div class="pricing-card">
                             <div>
-                                <h3 style="font-size:18px;font-weight:800;color:#fff">GÓI VĨNH VIỄN</h3>
-                                <p style="font-size:12px;color:#94a3b8">Đầu tư 1 lần — Dùng trọn đời</p>
+                                <h4>Gói Vĩnh Viễn</h4>
                                 <div class="price-val">15.000.000đ</div>
-                                <div class="price-period">Sở hữu trọn đời (Lifetime)</div>
-                                <ul class="price-features">
-                                    <li>👑 <b>Miễn phí 100% mọi bản Update tương lai</b></li>
-                                    <li>👑 Quyền lợi VIP cao nhất</li>
-                                    <li>👑 Hỗ trợ kỹ thuật trọn đời</li>
-                                    <li>👑 Ưu tiên phát triển tính năng riêng</li>
-                                </ul>
+                                <div class="price-sub">Sở hữu trọn đời</div>
                             </div>
-                            <button class="btn-outline" style="width:100%" onclick="openModal('modal-login')">👑 Đăng Nhập Để Mua</button>
+                            <button class="btn btn-outline" onclick="openModal('modal-login')">👑 Đăng Nhập Để Mua</button>
                         </div>
                     </div>
                 </div>
 
-                <!-- ── PRODUCT 2: GOOGLE LABS EXTENSION ── -->
+                <!-- PRODUCT 2: LABS EXTENSION -->
                 <div id="ptab-extension" class="prod-tab-content" style="display:none">
-                    <!-- Extension Features -->
-                    <div class="grid-3" style="margin-bottom:40px">
+                    <div class="feature-grid">
                         <div class="feature-card">
-                            <div style="font-size:32px;margin-bottom:16px">🎯</div>
-                            <div style="font-size:18px;font-weight:800;color:#f8fafc;margin-bottom:10px">Tự Động Chọn 2K / 4K</div>
-                            <div style="font-size:13.5px;color:#94a3b8">Tự động hover vào menu "Tải xuống", lựa chọn chuẩn 2K nét căng và bỏ qua các nút yêu cầu nâng cấp/bị khóa.</div>
+                            <div class="feature-icon">🎯</div>
+                            <div class="feature-title">Tự Động Chọn Chuẩn 2K / 4K</div>
+                            <div class="feature-desc">Tự động nhận diện nút tải xuống, lựa chọn độ phân giải nét cao nhất trên Google Labs.</div>
                         </div>
                         <div class="feature-card">
-                            <div style="font-size:32px;margin-bottom:16px">🔢</div>
-                            <div style="font-size:18px;font-weight:800;color:#f8fafc;margin-bottom:10px">Đánh Số 001→xxx Chuẩn Xác</div>
-                            <div style="font-size:13.5px;color:#94a3b8">Thuật toán Bottom-Up (dưới lên trên, phải qua trái) đảm bảo ảnh đầu tiên ở góc phải dưới cùng luôn là 001.png.</div>
+                            <div class="feature-icon">🔢</div>
+                            <div class="feature-title">Đánh Số 001→xxx Chuẩn Xác</div>
+                            <div class="feature-desc">Thuật toán Bottom-Up đảm bảo thứ tự ảnh đầu tiên đến cuối cùng luôn liên tục và chính xác.</div>
                         </div>
                         <div class="feature-card">
-                            <div style="font-size:32px;margin-bottom:16px">🗕</div>
-                            <div style="font-size:18px;font-weight:800;color:#f8fafc;margin-bottom:10px">Thu Nhỏ Gọn & Kéo Thả</div>
-                            <div style="font-size:13.5px;color:#94a3b8">Bảng điều khiển tự thu gọn khi chạy để tránh che khuất giao diện làm việc, hỗ trợ kéo thả tự do trên màn hình.</div>
+                            <div class="feature-icon">🗕</div>
+                            <div class="feature-title">Thu Nhỏ Gọn & Kéo Thả</div>
+                            <div class="feature-desc">Bảng điều khiển tự thu gọn khi chạy để tránh che khuất giao diện, kéo thả tự do trên màn hình.</div>
                         </div>
                     </div>
 
-                    <!-- Installation Guide -->
-                    <div style="background:#101626;border:1px solid #0284c7;border-radius:18px;padding:32px;margin-bottom:40px">
-                        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;margin-bottom:20px">
+                    <div style="max-width:480px;margin:0 auto">
+                        <div class="pricing-card featured" style="border-color:var(--info)">
+                            <span class="badge badge-info pricing-card-badge">HOT DEAL 100K</span>
                             <div>
-                                <h3 style="font-size:20px;font-weight:900;color:#fff">📖 HƯỚNG DẪN CÀI ĐẶT EXTENSION (EDGE & CHROME)</h3>
-                                <p style="font-size:13px;color:#94a3b8">Cài đặt trực tiếp chỉ trong 30 giây mà không cần qua Chrome Web Store</p>
-                            </div>
-                            <a href="/downloads/2tamne_Labs_Extension_v1.5.0.2.zip?v=1.5.0.2" class="btn-primary" style="padding:12px 22px;font-size:13.5px;background:linear-gradient(135deg,#0284c7,#38bdf8)">📥 Tải File Extension (.zip)</a>
-                        </div>
-
-                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px">
-                            <div style="background:#0b0f19;border:1px solid #1e293b;border-radius:12px;padding:18px">
-                                <div style="font-size:24px;font-weight:900;color:#38bdf8;margin-bottom:8px">1️⃣</div>
-                                <h4 style="font-size:14px;font-weight:800;color:#fff;margin-bottom:6px">Tải & Giải Nén</h4>
-                                <p style="font-size:12.5px;color:#94a3b8">Tải file <code>2tamne_Labs_Extension_v1.0.zip</code> và giải nén ra thư mục trên máy tính.</p>
-                            </div>
-                            <div style="background:#0b0f19;border:1px solid #1e293b;border-radius:12px;padding:18px">
-                                <div style="font-size:24px;font-weight:900;color:#38bdf8;margin-bottom:8px">2️⃣</div>
-                                <h4 style="font-size:14px;font-weight:800;color:#fff;margin-bottom:6px">Mở Quản Lý Tiện Ích</h4>
-                                <p style="font-size:12.5px;color:#94a3b8">Truy cập <code>chrome://extensions</code> (Chrome) hoặc <code>edge://extensions</code> (Edge).</p>
-                            </div>
-                            <div style="background:#0b0f19;border:1px solid #1e293b;border-radius:12px;padding:18px">
-                                <div style="font-size:24px;font-weight:900;color:#38bdf8;margin-bottom:8px">3️⃣</div>
-                                <h4 style="font-size:14px;font-weight:800;color:#fff;margin-bottom:6px">Bật Developer Mode</h4>
-                                <p style="font-size:12.5px;color:#94a3b8">Gạt công tắc <b>Chế độ dành cho nhà phát triển</b> (Developer mode) sang BẬT.</p>
-                            </div>
-                            <div style="background:#0b0f19;border:1px solid #1e293b;border-radius:12px;padding:18px">
-                                <div style="font-size:24px;font-weight:900;color:#38bdf8;margin-bottom:8px">4️⃣</div>
-                                <h4 style="font-size:14px;font-weight:800;color:#fff;margin-bottom:6px">Tải Tiện Ích Đã Giải Nén</h4>
-                                <p style="font-size:12.5px;color:#94a3b8">Bấm nút <b>Load Unpacked (Tải tiện ích đã giải nén)</b> và chọn thư mục vừa giải nén!</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Pricing Extension -->
-                    <div style="max-width:520px;margin:0 auto">
-                        <div class="pricing-card" style="background:linear-gradient(180deg,#131b33 0%,#0b0f19 100%);border:2px solid #0284c7;box-shadow:0 10px 40px rgba(56,189,248,0.25)">
-                            <span class="pricing-tag" style="background:linear-gradient(135deg,#0284c7,#38bdf8)">HOT DEAL 100K</span>
-                            <div>
-                                <h3 style="font-size:20px;font-weight:900;color:#fff">🖼️ EXTENSION GOOGLE LABS 2K/4K</h3>
-                                <p style="font-size:12px;color:#94a3b8">Tiện ích tải ảnh hàng loạt tự động</p>
-                                <div class="price-val" style="color:#38bdf8">100.000đ</div>
-                                <div class="price-period">Sở hữu vĩnh viễn (Lifetime)</div>
-                                <ul class="price-features">
+                                <h4>Extension Google Labs 2K/4K</h4>
+                                <div class="price-val" style="color:var(--info)">100.000đ</div>
+                                <div class="price-sub">Sở hữu vĩnh viễn (Lifetime)</div>
+                                <ul class="price-checklist">
                                     <li>👑 <b>Sở hữu trọn đời vĩnh viễn</b></li>
                                     <li>👑 Tự động tải ảnh 2K/4K đánh số 001→xxx</li>
                                     <li>👑 Khóa bản quyền 1 máy (Hỗ trợ đổi máy linh hoạt)</li>
-                                    <li>👑 Miễn phí 100% mọi bản Update tương lai</li>
+                                    <li>👑 Miễn phí mọi bản Update tương lai</li>
                                 </ul>
                             </div>
-                            <button class="btn-primary" style="width:100%;padding:14px;background:linear-gradient(135deg,#0284c7,#38bdf8);font-size:14px;font-weight:900" onclick="openModal('modal-login')">⚡ Đăng Nhập Để Mua (100k)</button>
+                            <button class="btn btn-accent" style="width:100%" onclick="openModal('modal-login')">⚡ Đăng Nhập Để Mua (100k)</button>
                         </div>
                     </div>
                 </div>
             </section>
 
-            <!-- ═══ KHU VỰC TẢI VỀ PHẦN MỀM (DOWNLOADS SECTION) ═══ -->
-            <section id="download" style="padding:40px 0 60px;scroll-margin-top:80px">
+            <!-- DOWNLOADS SECTION -->
+            <section id="downloads" style="padding:48px 0 64px;border-top:1px solid var(--border)">
                 <div style="text-align:center;margin-bottom:32px">
-                    <span style="background:rgba(10,132,255,0.15);border:1px solid #0a84ff;color:#64d2ff;padding:6px 18px;border-radius:20px;font-size:12px;font-weight:800;display:inline-block;margin-bottom:12px">📥 TẢI PHẦN MỀM & EXTENSION</span>
-                    <h2 class="sec-title" style="font-size:32px">TẢI VỀ PHIÊN BẢN MỚI NHẤT (v2.3.0)</h2>
-                    <p class="sec-subtitle">Tương thích hoàn hảo trên cả Windows 10/11 và macOS Apple Silicon / Intel</p>
+                    <span class="badge badge-primary" style="margin-bottom:8px">DOWNLOADS</span>
+                    <h2 style="font-size:28px">Tải Phần Mềm & Tiện Ích</h2>
+                    <p class="text-muted" style="margin-top:4px">Tương thích hoàn hảo trên cả Windows 10/11 và macOS Apple Silicon / Intel</p>
                 </div>
 
-                <div class="grid-3" style="margin-bottom:30px">
-                    <!-- Download Card 1: Windows -->
-                    <div class="feature-card liquid-glass" style="display:flex;flex-direction:column;justify-content:space-between">
-                        <div>
-                            <div style="font-size:36px;margin-bottom:14px">🪟</div>
-                            <div class="feat-title">Bản Cài Windows (64-bit)</div>
-                            <p class="feat-desc" style="margin-bottom:16px">Tự động kích hoạt GPU NVIDIA NVENC, AMD AMF & Intel QSV. Khóa chuẩn xuất 60 FPS mượt mà.</p>
-                            <div style="font-size:12px;color:var(--text-muted);margin-bottom:18px">
-                                📌 Yêu cầu: Windows 10 / 11 (64-bit) · Dung lượng: ~6.28 MB
+                <div class="feature-grid">
+                    <div class="card">
+                        <div class="card-body" style="display:flex;flex-direction:column;justify-content:space-between;height:100%">
+                            <div>
+                                <div style="font-size:28px;margin-bottom:10px">🍎</div>
+                                <div class="card-title">Bản Cài macOS (Apple Silicon / Intel)</div>
+                                <p class="text-muted" style="font-size:13px;margin:8px 0 16px">Tối ưu hóa GPU Apple VideoToolbox Metal, siêu tiết kiệm pin và render tốc độ cao.</p>
+                                <div class="text-subtle" style="font-size:12px;margin-bottom:16px">Yêu cầu: macOS 12 Monterey trở lên</div>
                             </div>
+                            <a href="/downloads/2toolne_macOS_latest.zip" class="btn btn-emerald" style="width:100%">📥 Tải Cho macOS (.zip)</a>
                         </div>
-                        <a href="/downloads/SlideshowBuilder_Windows_latest.zip" class="btn-primary shimmer-button" style="width:100%;padding:12px;font-weight:800;justify-content:center">
-                            📥 Tải Bản Windows (.zip)
-                        </a>
                     </div>
 
-                    <!-- Download Card 2: macOS -->
-                    <div class="feature-card liquid-glass" style="display:flex;flex-direction:column;justify-content:space-between">
-                        <div>
-                            <div style="font-size:36px;margin-bottom:14px">🍎</div>
-                            <div class="feat-title">Bản Cài macOS (M1/M2/M3/M4 & Intel)</div>
-                            <p class="feat-desc" style="margin-bottom:16px">Tối ưu hóa GPU Apple VideoToolbox Metal, siêu tiết kiệm pin và render 60 FPS tốc độ cao.</p>
-                            <div style="font-size:12px;color:var(--text-muted);margin-bottom:18px">
-                                📌 Yêu cầu: macOS 12 Monterey trở lên · Dung lượng: ~6.28 MB
+                    <div class="card">
+                        <div class="card-body" style="display:flex;flex-direction:column;justify-content:space-between;height:100%">
+                            <div>
+                                <div style="font-size:28px;margin-bottom:10px">🪟</div>
+                                <div class="card-title">Bản Cài Windows (64-bit)</div>
+                                <p class="text-muted" style="font-size:13px;margin:8px 0 16px">Tự động kích hoạt GPU NVIDIA NVENC, AMD AMF & Intel QSV mượt mà.</p>
+                                <div class="text-subtle" style="font-size:12px;margin-bottom:16px">Yêu cầu: Windows 10 / 11 (64-bit)</div>
                             </div>
+                            <a href="/downloads/2toolne_Windows_latest.zip" class="btn btn-accent" style="width:100%">📥 Tải Cho Windows (.zip)</a>
                         </div>
-                        <a href="/downloads/SlideshowBuilder_macOS_latest.zip" class="btn-primary shimmer-button" style="width:100%;padding:12px;font-weight:800;justify-content:center">
-                            📥 Tải Bản macOS (.zip)
-                        </a>
                     </div>
 
-                    <!-- Download Card 3: Extension Google Labs -->
-                    <div class="feature-card liquid-glass" style="display:flex;flex-direction:column;justify-content:space-between">
-                        <div>
-                            <div style="font-size:36px;margin-bottom:14px">🧩</div>
-                            <div class="feat-title">Extension Google Labs Flow</div>
-                            <p class="feat-desc" style="margin-bottom:16px">Tiện ích tự động tải ảnh 2K/4K hàng loạt, đánh số 001→xxx cho Chrome và Microsoft Edge.</p>
-                            <div style="font-size:12px;color:var(--text-muted);margin-bottom:18px">
-                                📌 Trình duyệt: Google Chrome / Edge · Cài đặt 30s
+                    <div class="card">
+                        <div class="card-body" style="display:flex;flex-direction:column;justify-content:space-between;height:100%">
+                            <div>
+                                <div style="font-size:28px;margin-bottom:10px">🧩</div>
+                                <div class="card-title">Extension Google Labs Flow</div>
+                                <p class="text-muted" style="font-size:13px;margin:8px 0 16px">Tiện ích tự động tải ảnh 2K/4K hàng loạt, đánh số 001→xxx cho Chrome/Edge.</p>
+                                <div class="text-subtle" style="font-size:12px;margin-bottom:16px">Cài đặt trực tiếp qua Developer Mode trong 30s</div>
                             </div>
+                            <a href="/downloads/2tamne_Labs_Extension_v1.5.0.2.zip?v=1.5.0.2" class="btn btn-outline" style="width:100%">📥 Tải Extension (.zip)</a>
                         </div>
-                        <a href="/downloads/2tamne_Labs_Extension_v1.5.0.2.zip?v=1.5.0.2" class="btn-outline" style="width:100%;padding:12px;font-weight:800;justify-content:center">
-                            📥 Tải Extension (.zip)
-                        </a>
                     </div>
                 </div>
             </section>
-
         <?php endif; ?>
-    </div>
+    </main>
 
-    <!-- MODAL VIETQR PAYMENT WITH COUNTDOWN TIMER -->
-    <div id="modal-qr-pay" class="modal">
-        <div class="modal-card" style="max-width:440px;text-align:center">
-            <button class="modal-close" onclick="closeModal('modal-qr-pay')">&times;</button>
-            <h3 style="font-size:17px;font-weight:800;color:#fff;margin-bottom:4px">QUÉT MÃ VIETQR THANH TOÁN</h3>
-            <p style="font-size:12px;color:#94a3b8;margin-bottom:12px">Gói chọn mua: <b id="qr-pkg-title" style="color:#38bdf8">...</b></p>
-            
-            <!-- QR IMAGE DISPLAY -->
-            <div style="background:#fff;padding:10px;border-radius:12px;display:inline-block;margin-bottom:12px;box-shadow:0 10px 30px rgba(0,0,0,0.5)">
-                <img src="/assets/vietqr_tamne.png" alt="Mã VietQR Thanh Toán" style="width:240px;height:auto;border-radius:6px;display:block">
-            </div>
-
-            <!-- TRANSFER INFO -->
-            <div style="background:#0b0f19;border:1px solid #1e293b;border-radius:10px;padding:12px;text-align:left;font-size:12px;margin-bottom:14px">
-                <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-                    <span style="color:#64748b">Ngân hàng:</span>
-                    <b>VietinBank (PGD Thủ Đô)</b>
-                </div>
-                <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-                    <span style="color:#64748b">Chủ tài khoản:</span>
-                    <b>HOANG LUONG TAM</b>
-                </div>
-                <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-                    <span style="color:#64748b">Số tài khoản:</span>
-                    <b style="color:#38bdf8">101876965948</b>
-                </div>
-                <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-                    <span style="color:#64748b">Số tiền:</span>
-                    <b id="qr-pkg-price" style="color:#34d399;font-size:14px">...</b>
-                </div>
-                <div style="display:flex;justify-content:space-between">
-                    <span style="color:#64748b">Nội dung CK:</span>
-                    <b id="qr-memo-text" style="color:#fcd34d">...</b>
-                </div>
-            </div>
-
-            <!-- 2-MINUTE COUNTDOWN TIMER -->
-            <div style="background:rgba(99,102,241,0.15);border:1px solid #6366f1;border-radius:8px;padding:8px;margin-bottom:14px;font-size:13px;font-weight:800;color:#a5b4fc">
-                ⏱️ Thời gian giữ đơn thanh toán: <span id="countdown-timer" style="color:#f43f5e;font-size:15px">02:00</span>
-            </div>
-
-            <!-- SUBMIT BUTTON -->
-            <form method="POST">
-                <input type="hidden" name="action" value="submit_payment">
-                <input type="hidden" name="package_name" id="form-pkg-name">
-                <input type="hidden" name="package_price" id="form-pkg-price">
-                <input type="hidden" name="duration_days" id="form-pkg-days">
-                <input type="hidden" name="tier" id="form-pkg-tier">
-                <input type="hidden" name="product" id="form-pkg-product" value="SLIDESHOW">
-                <button type="submit" class="btn-primary" style="width:100%;padding:12px;font-size:14px">✅ Tôi Đã Thanh Toán</button>
-            </form>
+    <!-- ═══ FOOTER ═══ -->
+    <footer style="border-top:1px solid var(--border);padding:32px 0;text-align:center;font-size:13px;color:var(--muted-foreground);margin-top:64px">
+        <div class="container">
+            <p>© 2026 <b>2tamne.site</b> — Commercial AI Software Suite. Mọi quyền được bảo lưu.</p>
+            <p style="margin-top:6px">Hotline & Zalo Admin Hỗ Trợ: <a href="https://zalo.me/0326649304" target="_blank" style="color:var(--emerald);font-weight:600">0326649304</a></p>
         </div>
-    </div>
-
-    <!-- MODAL LOGIN -->
-    <div id="modal-login" class="modal">
-        <div class="modal-card">
-            <button class="modal-close" onclick="closeModal('modal-login')">&times;</button>
-            <h3 style="font-size:18px;font-weight:800;margin-bottom:16px;color:#fff">🔐 ĐĂNG NHẬP TÀI KHOẢN</h3>
-            <form method="POST">
-                <input type="hidden" name="action" value="login">
-                <div class="form-group">
-                    <label>TÊN ĐĂNG NHẬP:</label>
-                    <input type="text" name="username" required autofocus>
-                </div>
-                <div class="form-group">
-                    <label>MẬT KHẨU:</label>
-                    <input type="password" name="password" required>
-                </div>
-                <button type="submit" class="btn-primary" style="width:100%">Đăng Nhập Ngay</button>
-            </form>
-        </div>
-    </div>
-
-    <!-- MODAL REGISTER -->
-    <div id="modal-register" class="modal">
-        <div class="modal-card">
-            <button class="modal-close" onclick="closeModal('modal-register')">&times;</button>
-            <h3 style="font-size:18px;font-weight:800;margin-bottom:6px;color:#fff">🎁 ĐĂNG KÝ NHẬN KEY 3 NGÀY</h3>
-            <p style="font-size:12px;color:#94a3b8;margin-bottom:16px">Tự động cấp 1 License Key 3 ngày miễn phí cho IP của bạn</p>
-            <form method="POST">
-                <input type="hidden" name="action" value="register">
-                <div class="form-group">
-                    <label>TÊN ĐĂNG NHẬP (Chữ thường, số):</label>
-                    <input type="text" name="username" placeholder="Ví dụ: hoangtam2026" required>
-                </div>
-                <div class="form-group">
-                    <label>HỌ VÀ TÊN:</label>
-                    <input type="text" name="fullname" placeholder="Ví dụ: Hoàng Tâm" required>
-                </div>
-                <div class="form-group">
-                    <label>SỐ ĐIỆN THOẠI / ZALO (Để nhận hỗ trợ):</label>
-                    <input type="text" name="phone" placeholder="Ví dụ: 09xx xxx xxx" required>
-                </div>
-                <div class="form-group">
-                    <label>MẬT KHẨU:</label>
-                    <input type="password" name="password" required>
-                </div>
-                <button type="submit" class="btn-primary" style="width:100%">🚀 Tạo Tài Khoản & Nhận Key Ngay</button>
-            </form>
-        </div>
-    </div>
-
-    <footer style="border-top:1px solid #1e293b;padding:30px 0;text-align:center;font-size:12px;color:#64748b;margin-top:60px">
-        <p>© 2026 <b>2TAMNE.SITE</b> — Phần mềm Slideshow Builder AI. Mọi quyền được bảo lưu.</p>
-        <p style="margin-top:6px">Hotline / Zalo hỗ trợ: <a href="https://zalo.me/0326649304" target="_blank" style="color:#38bdf8;font-weight:700">0326649304 (Admin)</a></p>
     </footer>
 
+    <!-- ═══ MODALS & DIALOGS ═══ -->
+
+    <!-- MODAL: VIETQR PAYMENT WITH COUNTDOWN TIMER -->
+    <div id="modal-qr-pay" class="modal-backdrop">
+        <div class="modal-dialog" style="max-width:440px;text-align:center">
+            <div class="modal-header">
+                <div class="modal-title">Quét Mã VietQR Thanh Toán</div>
+                <button class="modal-close" onclick="closeModal('modal-qr-pay')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size:13px;color:var(--muted-foreground);margin-bottom:12px">
+                    Gói chọn mua: <b id="qr-pkg-title" style="color:var(--emerald)">...</b>
+                </p>
+                
+                <!-- QR IMAGE -->
+                <div style="background:#fff;padding:8px;border-radius:var(--radius-sm);display:inline-block;margin-bottom:14px;box-shadow:var(--shadow-md)">
+                    <img src="/assets/vietqr_tamne.png" alt="VietQR" style="width:230px;height:auto;border-radius:4px;display:block">
+                </div>
+
+                <!-- BANK DETAILS -->
+                <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;text-align:left;font-size:12.5px;margin-bottom:14px">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+                        <span class="text-muted">Ngân hàng:</span>
+                        <b>VietinBank (PGD Thủ Đô)</b>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+                        <span class="text-muted">Chủ tài khoản:</span>
+                        <b>HOANG LUONG TAM</b>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+                        <span class="text-muted">Số tài khoản:</span>
+                        <b class="font-mono" style="color:var(--info)">101876965948</b>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+                        <span class="text-muted">Số tiền:</span>
+                        <b id="qr-pkg-price" style="color:var(--emerald);font-size:14px">...</b>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;align-items:center">
+                        <span class="text-muted">Nội dung CK:</span>
+                        <div style="display:flex;align-items:center;gap:4px">
+                            <b id="qr-memo-text" class="font-mono" style="color:var(--warning)">...</b>
+                            <button type="button" class="btn btn-outline btn-xs" onclick="copyText(document.getElementById('qr-memo-text').textContent)">📋</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2-MINUTE COUNTDOWN -->
+                <div style="background:var(--surface-2);border:1px solid var(--border-strong);border-radius:var(--radius-sm);padding:8px;font-size:12.5px;font-weight:600;color:var(--foreground);margin-bottom:14px">
+                    ⏱️ Thời gian giữ đơn: <span id="countdown-timer" style="color:var(--danger);font-size:14px">02:00</span>
+                </div>
+
+                <form method="POST">
+                    <input type="hidden" name="action" value="submit_payment">
+                    <input type="hidden" name="package_name" id="form-pkg-name">
+                    <input type="hidden" name="package_price" id="form-pkg-price">
+                    <input type="hidden" name="duration_days" id="form-pkg-days">
+                    <input type="hidden" name="tier" id="form-pkg-tier">
+                    <input type="hidden" name="product" id="form-pkg-product" value="SLIDESHOW">
+                    <button type="submit" class="btn btn-emerald" style="width:100%;height:40px;font-size:14px">
+                        ✅ Tôi Đã Chuyển Khoản Thành Công
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: LOGIN -->
+    <div id="modal-login" class="modal-backdrop">
+        <div class="modal-dialog" style="max-width:400px">
+            <div class="modal-header">
+                <div class="modal-title">🔐 Đăng Nhập Tài Khoản</div>
+                <button class="modal-close" onclick="closeModal('modal-login')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form method="POST">
+                    <input type="hidden" name="action" value="login">
+                    <div class="form-group">
+                        <label class="form-label">TÊN ĐĂNG NHẬP:</label>
+                        <input type="text" name="username" class="form-input" required autofocus>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">MẬT KHẨU:</label>
+                        <input type="password" name="password" class="form-input" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width:100%;height:38px">Đăng Nhập Ngay</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: REGISTER -->
+    <div id="modal-register" class="modal-backdrop">
+        <div class="modal-dialog" style="max-width:420px">
+            <div class="modal-header">
+                <div class="modal-title">🎁 Đăng Ký Nhận Key 3 Ngày</div>
+                <button class="modal-close" onclick="closeModal('modal-register')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size:12.5px;color:var(--muted-foreground);margin-bottom:14px">
+                    Tự động cấp 1 License Key trải nghiệm 3 ngày miễn phí cho địa chỉ IP của bạn.
+                </p>
+                <form method="POST">
+                    <input type="hidden" name="action" value="register">
+                    <div class="form-group">
+                        <label class="form-label">TÊN ĐĂNG NHẬP (chữ thường, số):</label>
+                        <input type="text" name="username" class="form-input" placeholder="Ví dụ: hoangtam2026" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">HỌ VÀ TÊN:</label>
+                        <input type="text" name="fullname" class="form-input" placeholder="Ví dụ: Hoàng Tâm" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">SỐ ĐIỆN THOẠI / ZALO:</label>
+                        <input type="text" name="phone" class="form-input" placeholder="Ví dụ: 09xx xxx xxx" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">MẬT KHẨU:</label>
+                        <input type="password" name="password" class="form-input" required minlength="6">
+                    </div>
+                    <button type="submit" class="btn btn-emerald" style="width:100%;height:40px">
+                        🚀 Tạo Tài Khoản & Nhận Key Ngay
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: CONFIRM HWID RESET (DESTRUCTIVE ACTION CONFIRM DIALOG) -->
+    <div id="modal-reset-hwid-confirm" class="modal-backdrop">
+        <div class="modal-dialog" style="max-width:420px">
+            <div class="modal-header">
+                <div class="modal-title">🔄 Xác Nhận Đổi Máy (Reset HWID)</div>
+                <button class="modal-close" onclick="closeModal('modal-reset-hwid-confirm')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size:13px;color:var(--foreground);line-height:1.6;margin-bottom:14px">
+                    Bạn có chắc chắn muốn <b>Reset liên kết phần cứng (HWID)</b> cho mã bản quyền này?
+                </p>
+                <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;font-size:12.5px;color:var(--muted-foreground);margin-bottom:16px">
+                    Key: <b id="hwid-reset-key-label" class="font-mono text-primary">...</b><br>
+                    Sau khi reset, bạn có thể nhập key này để kích hoạt trên máy tính mới.
+                </div>
+                <form method="POST">
+                    <input type="hidden" name="action" value="reset_hwid">
+                    <input type="hidden" name="key" id="hwid-reset-key-input">
+                    <div style="display:flex;justify-content:flex-end;gap:10px">
+                        <button type="button" class="btn btn-outline" onclick="closeModal('modal-reset-hwid-confirm')">Hủy Bỏ</button>
+                        <button type="submit" class="btn btn-accent">Xác Nhận Reset HWID</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- GLOBAL BROADCAST NOTICE MODAL -->
+    <?php
+    $active_broadcast = $sys_config['broadcast_notice'] ?? null;
+    $has_active_broadcast = $active_broadcast && !empty($active_broadcast['active']) && !empty($active_broadcast['title']);
+    if ($has_active_broadcast):
+    ?>
+    <div id="modal-global-broadcast" class="modal-backdrop">
+        <div class="modal-dialog" style="max-width:520px;text-align:center">
+            <div class="modal-header" style="justify-content:center">
+                <span class="badge badge-info">📢 THÔNG BÁO TỪ HỆ THỐNG</span>
+            </div>
+            <div class="modal-body">
+                <h3 style="font-size:18px;margin-bottom:12px"><?= htmlspecialchars($active_broadcast['title']) ?></h3>
+                <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;font-size:13px;color:var(--muted-foreground);line-height:1.6;text-align:left;white-space:pre-wrap;max-height:260px;overflow-y:auto;margin-bottom:16px">
+                    <?= htmlspecialchars($active_broadcast['content']) ?>
+                </div>
+                <?php if (!empty($active_broadcast['button_text'])): ?>
+                    <a href="<?= htmlspecialchars($active_broadcast['button_url'] ?: '#') ?>" target="_blank" class="btn btn-outline" style="width:100%;margin-bottom:10px">
+                        <?= htmlspecialchars($active_broadcast['button_text']) ?>
+                    </a>
+                <?php endif; ?>
+                <button type="button" class="btn btn-primary" style="width:100%" onclick="confirmNoticeRead('<?= htmlspecialchars($active_broadcast['id']) ?>')">
+                    ✅ Tôi Đã Hiểu (Đóng Thông Báo)
+                </button>
+            </div>
+        </div>
+    </div>
+    <script>
+    (function() {
+        const noticeId = '<?= htmlspecialchars($active_broadcast['id']) ?>';
+        const storageKey = 'read_notice_' + noticeId;
+        const isReadLocal = localStorage.getItem(storageKey);
+        const isReadCookie = document.cookie.split('; ').some(row => row.startsWith(storageKey + '='));
+        if (!isReadLocal && !isReadCookie) {
+            window.addEventListener('DOMContentLoaded', () => {
+                const m = document.getElementById('modal-global-broadcast');
+                if (m) m.classList.add('active');
+            });
+        }
+    })();
+    function confirmNoticeRead(noticeId) {
+        localStorage.setItem('read_notice_' + noticeId, '1');
+        document.cookie = 'read_notice_' + noticeId + '=1; path=/; max-age=' + (86400 * 60);
+        const m = document.getElementById('modal-global-broadcast');
+        if (m) m.classList.remove('active');
+        fetch('index.php?ajax=mark_notice_read&id=' + encodeURIComponent(noticeId)).catch(() => {});
+    }
+    </script>
+    <?php endif; ?>
+
+    <!-- TOAST NOTIFICATION -->
+    <div id="toast">📋 Đã sao chép vào bộ nhớ đệm!</div>
+
+    <!-- SCRIPTS -->
     <script>
         let timerInterval = null;
 
         function openModal(id) {
-            document.getElementById(id).style.display = 'flex';
+            const el = document.getElementById(id);
+            if (el) el.classList.add('active');
         }
         function closeModal(id) {
-            document.getElementById(id).style.display = 'none';
-            if (id === 'modal-qr-pay' && timerInterval) {
-                clearInterval(timerInterval);
+            const el = document.getElementById(id);
+            if (el) el.classList.remove('active');
+            if (id === 'modal-qr-pay' && timerInterval) clearInterval(timerInterval);
+        }
+        function showToast(text) {
+            const t = document.getElementById('toast');
+            if (t) {
+                t.textContent = text;
+                t.style.display = 'flex';
+                setTimeout(() => { t.style.display = 'none'; }, 2200);
             }
         }
         function copyText(txt) {
             navigator.clipboard.writeText(txt).then(() => {
-                alert('📋 Đã sao chép vào bộ nhớ đệm: ' + txt);
+                showToast('📋 Đã sao chép: ' + txt);
+            }).catch(() => {
+                showToast('📋 Đã sao chép: ' + txt);
             });
         }
+        function openResetHwidModal(key) {
+            document.getElementById('hwid-reset-key-label').textContent = key;
+            document.getElementById('hwid-reset-key-input').value = key;
+            openModal('modal-reset-hwid-confirm');
+        }
+
         const TAB_BTN_MAP = {
             'tab-my-keys': 'btn-tab-keys',
             'tab-buy-key': 'btn-tab-buy',
@@ -1648,54 +1547,46 @@ if (isset($_GET['registered'])) {
             'tab-bugs-view': 'btn-tab-bugs',
             'tab-settings': 'btn-tab-settings'
         };
-        
-        // Switch Homepage Product Tabs
+
         function switchProductTab(tabId, btnId) {
             document.querySelectorAll('.prod-tab-content').forEach(el => el.style.display = 'none');
             document.querySelectorAll('.prod-tab-btn').forEach(btn => {
-                btn.classList.remove('active');
-                btn.classList.remove('btn-primary');
+                btn.classList.remove('active', 'btn-emerald', 'btn-primary');
                 btn.classList.add('btn-outline');
             });
             const targetEl = document.getElementById(tabId);
             const targetBtn = document.getElementById(btnId);
             if (targetEl) targetEl.style.display = 'block';
             if (targetBtn) {
-                targetBtn.classList.add('active');
-                targetBtn.classList.add('btn-primary');
+                targetBtn.classList.add('active', 'btn-emerald');
                 targetBtn.classList.remove('btn-outline');
             }
         }
 
         function switchMainTab(tabId) {
-            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-            document.getElementById(tabId).classList.add('active');
-            if (TAB_BTN_MAP[tabId]) document.getElementById(TAB_BTN_MAP[tabId]).classList.add('active');
+            document.querySelectorAll('.tab-pane').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('.dash-nav-btn').forEach(el => el.classList.remove('active'));
+            const target = document.getElementById(tabId);
+            if (target) target.style.display = 'block';
+            if (TAB_BTN_MAP[tabId]) {
+                const b = document.getElementById(TAB_BTN_MAP[tabId]);
+                if (b) b.classList.add('active');
+            }
         }
 
-        function openQrPayment(pkgName, pkgPrice, days, tier, product = 'SLIDESHOW') {
-            const elTitle = document.getElementById('qr-pkg-title');
-            const elPrice = document.getElementById('qr-pkg-price');
-            const elMemo = document.getElementById('qr-memo-text');
-            const elFormName = document.getElementById('form-pkg-name');
-            const elFormPrice = document.getElementById('form-pkg-price');
-            const elFormDays = document.getElementById('form-pkg-days');
-            const elFormTier = document.getElementById('form-pkg-tier');
-            const elFormProd = document.getElementById('form-pkg-product');
-
-            if (elTitle) elTitle.textContent = pkgName;
-            if (elPrice) elPrice.textContent = pkgPrice;
-            if (elMemo) elMemo.textContent = 'Mua tool ' + '<?= $current_user ?>';
+        function openQrPayment(pkgName, pkgPrice, days, tier, product = '2TOOLNE') {
+            document.getElementById('qr-pkg-title').textContent = pkgName;
+            document.getElementById('qr-pkg-price').textContent = pkgPrice;
+            document.getElementById('qr-memo-text').textContent = 'Mua tool ' + '<?= $current_user ?>';
             
-            if (elFormName) elFormName.value = pkgName;
-            if (elFormPrice) elFormPrice.value = pkgPrice;
-            if (elFormDays) elFormDays.value = days;
-            if (elFormTier) elFormTier.value = tier;
-            if (elFormProd) elFormProd.value = product;
+            document.getElementById('form-pkg-name').value = pkgName;
+            document.getElementById('form-pkg-price').value = pkgPrice;
+            document.getElementById('form-pkg-days').value = days;
+            document.getElementById('form-pkg-tier').value = tier;
+            document.getElementById('form-pkg-product').value = product;
 
             openModal('modal-qr-pay');
-            startCountdown(120); // 2 minutes
+            startCountdown(120);
         }
 
         function startCountdown(durationSec) {
@@ -1706,7 +1597,7 @@ if (isset($_GET['registered'])) {
             function updateDisplay() {
                 let m = Math.floor(left / 60);
                 let s = left % 60;
-                timerEl.textContent = (m < 10 ? '0' + m : m) + ':' + (s < 10 ? '0' + s : s);
+                if (timerEl) timerEl.textContent = (m < 10 ? '0' + m : m) + ':' + (s < 10 ? '0' + s : s);
             }
             updateDisplay();
 
@@ -1714,7 +1605,7 @@ if (isset($_GET['registered'])) {
                 left--;
                 if (left < 0) {
                     clearInterval(timerInterval);
-                    timerEl.textContent = 'Hết giờ (vui lòng làm mới)';
+                    if (timerEl) timerEl.textContent = 'Hết hạn';
                 } else {
                     updateDisplay();
                 }
@@ -1736,176 +1627,35 @@ if (isset($_GET['registered'])) {
             }
         })();
 
-        window.onclick = function(e) {
-            if (e.target.classList.contains('modal')) {
-                e.target.style.display = 'none';
+        // Click outside to close modal
+        window.addEventListener('click', function(e) {
+            if (e.target.classList.contains('modal-backdrop')) {
+                e.target.classList.remove('active');
                 if (timerInterval) clearInterval(timerInterval);
             }
-        }
+        });
 
-        // ── AUTO-POLLING: tự kiểm tra đơn hàng mỗi 10s ──────────────
+        // Auto-polling for pending orders
         <?php if (!empty($user_pending_orders)): ?>
         (function() {
             let pollSec = 10;
             const secEl = document.getElementById('poll-sec');
-            
-            // Countdown display every second
-            const cdInterval = setInterval(function() {
+            setInterval(function() {
                 pollSec--;
                 if (secEl) secEl.textContent = pollSec;
                 if (pollSec <= 0) pollSec = 10;
             }, 1000);
 
-            // Actual poll every 10 seconds
             setInterval(function() {
                 fetch('index.php?ajax=poll_orders')
-                .then(function(r){ return r.json(); })
-                .then(function(data) {
-                    if (data.pending_count === 0) {
-                        // All orders approved/rejected — reload to show updated dashboard
-                        location.reload();
-                    }
+                .then(r => r.json())
+                .then(data => {
+                    if (data.pending_count === 0) location.reload();
                 })
-                .catch(function(){/* ignore network errors silently */});
+                .catch(() => {});
             }, 10000);
         })();
         <?php endif; ?>
     </script>
-
-<?php
-$active_broadcast = $sys_config['broadcast_notice'] ?? null;
-$has_active_broadcast = $active_broadcast && !empty($active_broadcast['active']) && !empty($active_broadcast['title']);
-?>
-<?php if ($has_active_broadcast): ?>
-<!-- MANDATORY GLOBAL BROADCAST MODAL -->
-<div id="modal-global-broadcast" class="modal" style="background:rgba(7,10,19,0.92);backdrop-filter:blur(14px);z-index:999999;display:none;position:fixed;inset:0;align-items:center;justify-content:center;padding:20px">
-    <div class="modal-card" style="max-width:560px;width:100%;border:2px solid #6366f1;box-shadow:0 30px 80px rgba(99,102,241,0.4);padding:32px;text-align:center;position:relative;background:#101626;border-radius:18px">
-        <?php
-        $b_type = $active_broadcast['type'] ?? 'info';
-        $badge_title = '📢 THÔNG BÁO TỪ ADMIN';
-        $badge_style = 'background:rgba(99,102,241,0.2);border:1px solid #6366f1;color:#a5b4fc';
-        if ($b_type === 'update') {
-            $badge_title = '🚀 BẢN CẬP NHẬT MỚI';
-            $badge_style = 'background:rgba(16,185,129,0.2);border:1px solid #10b981;color:#34d399';
-        } elseif ($b_type === 'alert') {
-            $badge_title = '⚠️ THÔNG BÁO KHẨN';
-            $badge_style = 'background:rgba(239,68,68,0.2);border:1px solid #ef4444;color:#f87171';
-        } elseif ($b_type === 'maintenance') {
-            $badge_title = '🛠️ BẢO TRÌ HỆ THỐNG';
-            $badge_style = 'background:rgba(245,158,11,0.2);border:1px solid #f59e0b;color:#fcd34d';
-        } elseif ($b_type === 'promo') {
-            $badge_title = '🎁 ƯU ĐÃI ĐẶC BIỆT';
-            $badge_style = 'background:rgba(236,72,153,0.2);border:1px solid #ec4899;color:#f472b6';
-        }
-        ?>
-        <div style="margin-bottom:14px">
-            <span style="display:inline-block;padding:5px 16px;border-radius:20px;font-size:12px;font-weight:900;<?= $badge_style ?>">
-                <?= $badge_title ?>
-            </span>
-        </div>
-        
-        <h2 style="font-size:20px;font-weight:900;color:#fff;margin-bottom:16px;line-height:1.35">
-            <?= htmlspecialchars($active_broadcast['title']) ?>
-        </h2>
-
-        <div style="background:#070a13;border:1px solid #1e293b;border-radius:12px;padding:16px 20px;font-size:13.5px;color:#cbd5e1;line-height:1.75;margin-bottom:20px;text-align:left;white-space:pre-wrap;max-height:280px;overflow-y:auto">
-            <?= htmlspecialchars($active_broadcast['content']) ?>
-        </div>
-
-        <?php if (!empty($active_broadcast['button_text'])): ?>
-            <a href="<?= htmlspecialchars($active_broadcast['button_url'] ?: '#') ?>" target="_blank" class="btn-outline" style="display:block;width:100%;padding:12px;margin-bottom:12px;border-color:#6366f1;color:#818cf8;font-weight:800;font-size:13.5px;text-align:center">
-                <?= htmlspecialchars($active_broadcast['button_text']) ?>
-            </a>
-        <?php endif; ?>
-
-        <button type="button" class="btn-primary" onclick="confirmNoticeRead('<?= htmlspecialchars($active_broadcast['id']) ?>')" style="width:100%;padding:14px;font-size:14px;font-weight:900;justify-content:center">
-            ✅ Tôi Đã Đọc & Hiểu (Xác Nhận)
-        </button>
-    </div>
-</div>
-
-<script>
-(function() {
-    const noticeId = '<?= htmlspecialchars($active_broadcast['id']) ?>';
-    const storageKey = 'read_notice_' + noticeId;
-    
-    // Check if notice is already acknowledged in localStorage or Cookie
-    const isReadLocal = localStorage.getItem(storageKey);
-    const isReadCookie = document.cookie.split('; ').some(row => row.startsWith(storageKey + '='));
-    
-    if (!isReadLocal && !isReadCookie) {
-        window.addEventListener('DOMContentLoaded', () => {
-            const modal = document.getElementById('modal-global-broadcast');
-            if (modal) {
-                modal.style.display = 'flex';
-            }
-        });
-    }
-})();
-
-function confirmNoticeRead(noticeId) {
-    const storageKey = 'read_notice_' + noticeId;
-    localStorage.setItem(storageKey, '1');
-    document.cookie = storageKey + '=1; path=/; max-age=' + (86400 * 60);
-    
-    const modal = document.getElementById('modal-global-broadcast');
-    if (modal) {
-        modal.style.display = 'none';
-    }
-
-    // Send async ping to server to count read statistics
-    fetch('index.php?ajax=mark_notice_read&id=' + encodeURIComponent(noticeId))
-        .catch(() => {});
-}
-</script>
-<?php endif; ?>
-
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-
-// ── Smooth Scroll & Tab Switch for Navbar Links ──────────────
-document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-    anchor.addEventListener('click', function(e) {
-        const targetId = this.getAttribute('href').substring(1);
-        if (!targetId) return;
-
-        // If user is logged in and clicks pricing -> switch to buy tab
-        if (targetId === 'pricing' && typeof switchMainTab === 'function') {
-            const buyTab = document.getElementById('tab-buy-key');
-            if (buyTab) {
-                e.preventDefault();
-                switchMainTab('tab-buy-key');
-                window.scrollTo({ top: buyTab.offsetTop - 80, behavior: 'smooth' });
-                return;
-            }
-        }
-
-        const targetEl = document.getElementById(targetId);
-        if (targetEl) {
-            e.preventDefault();
-            const navHeight = document.querySelector('nav')?.offsetHeight || 70;
-            const elementPosition = targetEl.getBoundingClientRect().top;
-            const offsetPosition = elementPosition + window.pageYOffset - navHeight - 10;
-            window.scrollTo({
-                top: offsetPosition,
-                behavior: 'smooth'
-            });
-        }
-    });
-});
-
-    const spotlightCards = document.querySelectorAll('.feature-card, .pricing-card, .stat-card, .card, .liquid-glass, .dash-header');
-    spotlightCards.forEach(card => {
-        card.addEventListener('mousemove', e => {
-            const rect = card.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            card.style.setProperty('--mouse-x', `${x}px`);
-            card.style.setProperty('--mouse-y', `${y}px`);
-        });
-    });
-});
-</script>
-
 </body>
 </html>

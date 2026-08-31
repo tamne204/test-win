@@ -87,7 +87,7 @@ $sys_config  = db_get_system_config();
 if ($admin_logged_in && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $act = $_POST['action'];
 
-    // 1. APPROVE ORDER -> AUTO GENERATE KEY (TRANSACTION-SAFE)
+    // 1. APPROVE ORDER -> AUTO GENERATE KEY
     if ($act === 'approve_order') {
         $ord_id = trim($_POST['order_id'] ?? '');
         $ord_item = null;
@@ -260,7 +260,7 @@ if ($admin_logged_in && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['a
     // 15. SEND 1-CLICK UPDATE BROADCAST
     elseif ($act === 'send_update_broadcast') {
         $ver = trim($sys_config['app_version'] ?? '2.0.0');
-        $url = trim($sys_config['download_url'] ?? "/downloads/SlideshowBuilder_v{$ver}.zip");
+        $url = trim($sys_config['download_url'] ?? "/downloads/2toolne_macOS_latest.zip");
         $notes = trim($sys_config['release_notes'] ?? "Đã có bản cập nhật mới v{$ver} với nhiều cải tiến và sửa lỗi. Vui lòng cập nhật ngay để có trải nghiệm tốt nhất!");
         
         $nid = 'NOTIC_VER_' . strtoupper(bin2hex(random_bytes(3)));
@@ -318,1356 +318,879 @@ if ($admin_logged_in && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['a
     }
 }
 
-// Refresh databases
-$licenses_db = db_get_licenses();
-$users_db    = db_get_users();
-$orders_db   = db_get_orders();
-$features_db = db_get_features();
-$bugs_db     = db_get_bugs();
-$sys_config  = db_get_system_config();
-
+// Recalculate metrics
 $pending_orders = array_filter($orders_db, fn($x) => ($x['status'] ?? '') === 'pending');
+$count_2toolne = count(array_filter($licenses_db, fn($x) => ($x['product']??'') === '2TOOLNE' || strpos($x['license_key']??'', '2TOOLNE-') === 0));
+$count_video   = count(array_filter($licenses_db, fn($x) => ($x['product']??'') === 'SLIDESHOW' || (strpos($x['license_key']??'', '2TAMNE-') === 0 && strpos($x['license_key']??'', '2TAMNE-LABS-') !== 0)));
+$count_ext     = count(array_filter($licenses_db, fn($x) => ($x['product']??'') === 'LABS_EXTENSION' || strpos($x['license_key']??'', '2TAMNE-LABS-') === 0));
 ?>
-<?php if (!$admin_logged_in): ?>
 <!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>Đăng Nhập Quản Trị — 2tamne.site</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg: #0b0c0e;
-            --bg-subtle: #111215;
-            --bg-card: #141518;
-            --bg-card-hover: #181a1e;
-            --bg-card-elev: #1c1d22;
-            --border: rgba(255, 255, 255, 0.07);
-            --border-subtle: rgba(255, 255, 255, 0.04);
-            --border-hover: rgba(255, 255, 255, 0.14);
-            --primary: #3b82f6;
-            --primary-hover: #2563eb;
-            --success: #34d399;
-            --success-bg: rgba(52, 211, 153, 0.08);
-            --warning: #fbbf24;
-            --warning-bg: rgba(251, 191, 36, 0.08);
-            --danger: #f87171;
-            --danger-bg: rgba(248, 113, 113, 0.08);
-            --text-main: #f0f0f2;
-            --text-sub: #8b8d98;
-            --text-muted: #565866;
-            --btn-radius: 8px;
-            --card-radius: 12px;
-            --modal-radius: 14px;
-        }
-
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: var(--bg); color: var(--text-main);
-            line-height: 1.5; padding: 20px 0;
-            letter-spacing: -0.011em; -webkit-font-smoothing: antialiased;
-        }
-        .container { max-width: 1280px; margin: 0 auto; padding: 0 20px; }
-        
-        .header {
-            display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border);
-        }
-        .header h1 { font-size: 18px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px; letter-spacing: -0.02em; }
-        
-        button, .btn {
-            font-family: inherit; outline: none; border: none;
-            display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-            cursor: pointer; transition: all 0.15s ease;
-        }
-        .btn { padding: 0 14px; height: 34px; border-radius: var(--btn-radius); font-weight: 600; font-size: 12.5px; text-decoration: none; }
-        .btn-primary { background: #f0f0f2; color: #0b0c0e; border: 1px solid rgba(255,255,255,0.2); }
-        .btn-primary:hover { background: #ffffff; }
-        .btn-success { background: var(--success); color: #0b0c0e; font-weight: 600; }
-        .btn-danger { background: var(--danger-bg); border: 1px solid rgba(248, 113, 113, 0.2); color: var(--danger); }
-        .btn-outline { background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border); color: var(--text-main); }
-        .btn-outline:hover { background: rgba(255, 255, 255, 0.07); border-color: var(--border-hover); }
-
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 24px; }
-        .stat-card {
-            background: var(--bg-card); border: 1px solid var(--border);
-            border-radius: var(--card-radius); padding: 18px 20px;
-            transition: all 0.15s ease;
-        }
-        .stat-card:hover { border-color: var(--border-hover); }
-        .stat-val {
-            font-size: 26px; font-weight: 700; color: var(--text-main);
-            margin-top: 4px; letter-spacing: -0.02em; font-family: 'Inter', sans-serif;
-        }
-        .stat-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
-
-        .card {
-            background: var(--bg-card); border: 1px solid var(--border);
-            border-radius: var(--card-radius); padding: 22px 24px; margin-bottom: 24px;
-        }
-        .card-title { font-size: 15px; font-weight: 600; color: var(--text-main); margin-bottom: 16px; letter-spacing: -0.01em; }
-        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
-        .form-group { margin-bottom: 10px; }
-        label { display: block; font-size: 11px; font-weight: 600; color: var(--text-sub); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.05em; }
-        input, select {
-            width: 100%; padding: 8px 12px; background: var(--bg-card-elev);
-            border: 1px solid var(--border); border-radius: 6px; color: #fff;
-            font-size: 12.5px; outline: none; font-family: inherit;
-        }
-        input:focus, select:focus { border-color: var(--border-hover); }
-
-        table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 12px; }
-        th {
-            text-align: left; padding: 10px 12px; background: var(--bg-subtle);
-            color: var(--text-muted); font-size: 10.5px; text-transform: uppercase; font-weight: 600;
-            letter-spacing: 0.05em; border-bottom: 1px solid var(--border);
-        }
-        td { padding: 12px; border-bottom: 1px solid var(--border-subtle); vertical-align: middle; }
-        tr:hover td { background: rgba(255, 255, 255, 0.02); }
-        .badge { padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; font-family: 'JetBrains Mono', monospace; }
-
-        .admin-tab-bar { display: flex; gap: 6px; border-bottom: 1px solid var(--border); margin-bottom: 22px; flex-wrap: wrap; }
-        .admin-tab-btn {
-            background: transparent; border: none; padding: 8px 14px; color: var(--text-sub);
-            font-weight: 500; font-size: 13px; cursor: pointer; border-radius: var(--btn-radius);
-            font-family: inherit; position: relative; transition: all 0.15s ease;
-        }
-        .admin-tab-btn:hover { color: var(--text-main); background: var(--bg-card-elev); }
-        .admin-tab-btn.active { color: var(--text-main); background: var(--bg-card-elev); font-weight: 600; }
-        .admin-tab-content { display: none; }
-        .admin-tab-content.active { display: block; }
-        .badge-count { position: absolute; top: -2px; right: -2px; background: var(--danger); color: #fff; border-radius: 10px; font-size: 10px; font-weight: 700; padding: 1px 5px; min-width: 16px; text-align: center; }
-        .badge-active { background: var(--success-bg); border: 1px solid rgba(52, 211, 153, 0.2); color: var(--success); }
-        .badge-banned { background: var(--danger-bg); border: 1px solid rgba(248, 113, 113, 0.2); color: var(--danger); }
-        .badge-trial { background: var(--warning-bg); border: 1px solid rgba(251, 191, 36, 0.2); color: var(--warning); }
-        .badge-user { background: var(--bg-card-elev); border: 1px solid var(--border); color: #a1a1aa; padding: 2px 7px; border-radius: 4px; font-size: 11.5px; font-family: 'JetBrains Mono', monospace; }
-
-        .alert { padding: 12px 16px; border-radius: var(--btn-radius); font-size: 13px; font-weight: 500; margin-bottom: 20px; }
-        .alert-success { background: var(--success-bg); border: 1px solid rgba(52, 211, 153, 0.2); color: var(--success); }
-        
-        .modal {
-            display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75);
-            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-            z-index: 9999; align-items: center; justify-content: center; padding: 20px;
-        }
-        .modal-card {
-            background: var(--bg-card); border: 1px solid var(--border-hover);
-            border-radius: var(--modal-radius); max-width: 420px; width: 100%; padding: 24px;
-            position: relative; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7);
-        }
-        .modal-close {
-            position: absolute; top: 14px; right: 14px; background: rgba(255, 255, 255, 0.04);
-            border: 1px solid var(--border); width: 26px; height: 26px; border-radius: 6px;
-            color: var(--text-sub); font-size: 15px; cursor: pointer;
-            display: flex; align-items: center; justify-content: center;
-        }
-        .modal-close:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
-    </style>
-</head>
-<body>
-    <div class="login-card">
-        <h2>🔐 ADMIN CONTROL PANEL</h2>
-        <?php if (!empty($msg_error)): ?><div class="err"><?= $msg_error ?></div><?php endif; ?>
-        <?php if (!empty($msg_success)): ?><div style="color:#34d399;font-size:12px;margin-bottom:12px;text-align:center"><?= $msg_success ?></div><?php endif; ?>
-        <form method="POST">
-            <input type="password" name="password" placeholder="Nhập mật khẩu quản trị..." required autofocus>
-            <button type="submit" name="admin_login">ĐĂNG NHẬP HỆ THỐNG</button>
-        </form>
-    </div>
-
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-    const spotlightCards = document.querySelectorAll('.stat-card, .card, .liquid-glass, .login-card');
-    spotlightCards.forEach(card => {
-        card.addEventListener('mousemove', e => {
-            const rect = card.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            card.style.setProperty('--mouse-x', `${x}px`);
-            card.style.setProperty('--mouse-y', `${y}px`);
-        });
-    });
-});
-</script>
-
-</body>
-</html>
-<?php exit; endif; ?>
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <title>Hệ Thống Quản Trị Bản Quyền — 2tamne.site</title>
+    <title>Admin Portal — 2tamne.site Software Management</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="globals.css">
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Montserrat', sans-serif; background: #070a13; color: #f8fafc; line-height: 1.5; padding: 24px 0; }
-        .container { max-width: 1300px; margin: 0 auto; padding: 0 20px; }
-        
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid #1e293b; }
-        .header h1 { font-size: 22px; font-weight: 900; color: #818cf8; display: flex; align-items: center; gap: 8px; }
-        .btn { padding: 8px 16px; border-radius: 8px; font-weight: 800; font-size: 12px; cursor: pointer; border: none; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; }
-        .btn-primary { background: linear-gradient(135deg, #6366f1, #38bdf8); color: #fff; }
-        .btn-success { background: linear-gradient(135deg, #10b981, #059669); color: #fff; }
-        .btn-danger { background: #ef4444; color: #fff; }
-        .btn-outline { background: transparent; border: 1px solid #334155; color: #cbd5e1; }
-        .btn-outline:hover { border-color: #6366f1; color: #818cf8; }
-
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
-        .stat-card { background: #101626; border: 1px solid #1e293b; border-radius: 12px; padding: 18px 20px; }
-        .stat-val { font-size: 28px; font-weight: 900; color: #38bdf8; margin-top: 4px; }
-        .stat-label { font-size: 11.5px; font-weight: 700; color: #64748b; text-transform: uppercase; }
-
-        .card { background: #101626; border: 1px solid #1e293b; border-radius: 14px; padding: 22px; margin-bottom: 24px; }
-        .card-title { font-size: 16px; font-weight: 800; color: #f8fafc; margin-bottom: 16px; }
-        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
-        .form-group { margin-bottom: 10px; }
-        label { display: block; font-size: 11px; font-weight: 700; color: #94a3b8; margin-bottom: 5px; text-transform: uppercase; }
-        input, select { width: 100%; padding: 9px 12px; background: #0b0f19; border: 1px solid #334155; border-radius: 6px; color: #fff; font-size: 12.5px; outline: none; }
-        input:focus, select:focus { border-color: #6366f1; }
-
-        table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-        th { text-align: left; padding: 12px 10px; background: #0b0f19; color: #64748b; font-size: 11px; text-transform: uppercase; border-bottom: 1px solid #1e293b; }
-        td { padding: 12px 10px; border-bottom: 1px solid #1e293b; vertical-align: middle; }
-        tr:hover td { background: rgba(255,255,255,0.02); }
-        .badge { padding: 3px 8px; border-radius: 10px; font-size: 10.5px; font-weight: 800; }
-
-        /* Admin Tab Nav */
-        .admin-tab-bar { display: flex; gap: 6px; border-bottom: 2px solid #1e293b; margin-bottom: 24px; flex-wrap: wrap; }
-        .admin-tab-btn { background: none; border: none; padding: 10px 18px; color: #64748b; font-weight: 800; font-size: 13px; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; font-family: inherit; position: relative; transition: color 0.2s; }
-        .admin-tab-btn:hover { color: #94a3b8; }
-        .admin-tab-btn.active { color: #38bdf8; border-color: #38bdf8; }
-        .admin-tab-content { display: none; }
-        .admin-tab-content.active { display: block; }
-        .badge-count { position: absolute; top: 4px; right: 4px; background: #ef4444; color: #fff; border-radius: 10px; font-size: 10px; font-weight: 900; padding: 1px 5px; min-width: 16px; text-align: center; }
-        .badge-active { background: rgba(16,185,129,0.15); color: #34d399; }
-        .badge-banned { background: rgba(239,68,68,0.15); color: #f87171; }
-        .badge-trial { background: rgba(245,158,11,0.15); color: #f59e0b; }
-        .badge-user { background: rgba(99,102,241,0.2); border: 1px solid rgba(99,102,241,0.4); color: #a5b4fc; padding: 2px 8px; border-radius: 6px; font-size: 11.5px; }
-
-        .alert { padding: 12px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; margin-bottom: 20px; }
-        .alert-success { background: rgba(16,185,129,0.15); border: 1px solid #10b981; color: #34d399; }
-        
-        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 9999; align-items: center; justify-content: center; padding: 20px; }
-        .modal-card { background: #101626; border: 1px solid #1e293b; border-radius: 14px; max-width: 400px; width: 100%; padding: 24px; position: relative; }
-        .modal-close { position: absolute; top: 14px; right: 14px; background: none; border: none; color: #64748b; font-size: 20px; cursor: pointer; }
-
-        /* ═════════════════════════════════════════════════════════ */
-        /* 📱 ADMIN 100% VERTICAL MOBILE ENGINE (ZERO SCROLL)         */
-        /* ═════════════════════════════════════════════════════════ */
-        @media (max-width: 768px) {
-            * { max-width: 100% !important; box-sizing: border-box !important; }
-            html, body { overflow-x: hidden !important; width: 100% !important; }
-            .container { padding: 0 10px !important; width: 100% !important; }
-            
-            .header { flex-direction: column !important; gap: 12px !important; align-items: stretch !important; text-align: center !important; }
-            .header h1 { font-size: 15px !important; justify-content: center !important; }
-            .header > div { justify-content: center !important; display: flex !important; gap: 6px !important; }
-
-            /* Stats Grid: 2 columns */
-            .stats-grid { grid-template-columns: 1fr 1fr !important; gap: 8px !important; margin-bottom: 16px !important; }
-            .stat-card { padding: 10px 12px !important; }
-            .stat-val { font-size: 18px !important; }
-            .stat-label { font-size: 10px !important; }
-
-            /* Admin Tab Bar: 2 Columns Grid */
-            .admin-tab-bar {
-                display: grid !important;
-                grid-template-columns: 1fr 1fr !important;
-                gap: 6px !important;
-                width: 100% !important;
-                overflow: visible !important;
-                border-bottom: none !important;
-                margin-bottom: 16px !important;
-            }
-            .admin-tab-btn {
-                width: 100% !important;
-                text-align: center !important;
-                justify-content: center !important;
-                padding: 10px 4px !important;
-                font-size: 11px !important;
-                background: #101626 !important;
-                border: 1px solid #1e293b !important;
-                border-radius: 8px !important;
-                margin-bottom: 0 !important;
-                border-bottom: 1px solid #1e293b !important;
-                display: flex !important;
-                align-items: center !important;
-            }
-            .admin-tab-btn.active {
-                background: linear-gradient(135deg, rgba(99,102,241,0.25), rgba(56,189,248,0.25)) !important;
-                border-color: #38bdf8 !important;
-                color: #38bdf8 !important;
-                font-weight: 800 !important;
-            }
-
-            /* Subtabs for products: Full width stack */
-            .subtab-prod-btn {
-                font-size: 11px !important;
-                padding: 8px 10px !important;
-                flex: 1 !important;
-                text-align: center !important;
-            }
-
-            /* Forms */
-            .form-grid { grid-template-columns: 1fr !important; gap: 10px !important; }
-            .card { padding: 14px !important; border-radius: 12px !important; margin-bottom: 16px !important; }
-
-            /* Admin Tables Transformed to Mobile Vertical Cards */
-            table { display: block !important; width: 100% !important; border: none !important; }
-            thead { display: none !important; }
-            tbody { display: flex !important; flex-direction: column !important; gap: 10px !important; width: 100% !important; }
-            tr { 
-                display: flex !important; 
-                flex-direction: column !important; 
-                background: #080c16 !important; 
-                border: 1px solid #1e293b !important; 
-                border-radius: 10px !important; 
-                padding: 12px !important; 
-                gap: 6px !important; 
-                width: 100% !important; 
-            }
-            td { 
-                display: flex !important; 
-                justify-content: space-between !important; 
-                align-items: center !important; 
-                padding: 3px 0 !important; 
-                border: none !important; 
-                font-size: 11.5px !important; 
-                width: 100% !important; 
-                flex-wrap: wrap !important;
-            }
-            td > div { width: 100% !important; }
-
-            /* Modal */
-            .modal-card { width: 96% !important; max-height: 90vh !important; overflow-y: auto !important; padding: 16px !important; }
-            input, select, textarea { font-size: 16px !important; }
+        .admin-header {
+            background: var(--surface-1);
+            border-bottom: 1px solid var(--border);
+            height: 56px;
+            display: flex;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
         }
-
-        @media (max-width: 480px) {
-            .stats-grid { grid-template-columns: 1fr !important; }
-        }</style>
+        .admin-metrics-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            margin: 20px 0;
+        }
+        .metric-tile {
+            background: var(--surface-1);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 14px 16px;
+        }
+        .metric-title {
+            font-size: 11.5px;
+            font-weight: 500;
+            color: var(--muted-foreground);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 4px;
+        }
+        .metric-val {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--foreground);
+            letter-spacing: -0.02em;
+        }
+        .admin-tab-nav {
+            display: flex;
+            gap: 4px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 20px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .admin-tab-btn {
+            padding: 10px 16px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--muted-foreground);
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s ease;
+        }
+        .admin-tab-btn:hover {
+            color: var(--foreground);
+        }
+        .admin-tab-btn.active {
+            color: var(--foreground);
+            border-bottom-color: var(--emerald);
+            font-weight: 600;
+        }
+        .admin-tab-content {
+            display: none;
+        }
+        .admin-tab-content.active {
+            display: block;
+        }
+        .form-grid-3 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+        }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <!-- HEADER -->
-        <div class="header">
-            <h1>💎 TRÌNH QUẢN TRỊ LICENSE & DUYỆT ĐƠN HÀNG — 2TAMNE.SITE</h1>
-            <div style="display:flex;gap:10px">
-                <a href="index.php" target="_blank" class="btn btn-outline">🌐 Xem Trang Chủ</a>
-                <a href="?logout=1" class="btn btn-danger">Đăng Xuất 🚪</a>
-            </div>
-        </div>
 
-        <?php if ($msg_success): ?>
-            <div class="alert alert-success"><?= $msg_success ?></div>
-        <?php endif; ?>
-        <?php if ($msg_error): ?>
-            <div class="alert" style="background:rgba(239,68,68,0.15);border:1px solid #ef4444;color:#f87171;padding:12px 16px;border-radius:8px;font-size:13px;font-weight:600;margin-bottom:20px"><?= $msg_error ?></div>
-        <?php endif; ?>
-
-        <!-- STATS -->
-        <div class="stats-grid">
-            <div class="stat-card" style="border-color:#f59e0b">
-                <div class="stat-label" style="color:#f59e0b">Đơn Chờ Duyệt (Pending)</div>
-                <div class="stat-val" style="color:#fcd34d"><?= count($pending_orders) ?></div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Tổng Số Key</div>
-                <div class="stat-val"><?= count($licenses_db) ?></div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Khách Hàng Đã Đăng Ký</div>
-                <div class="stat-val" style="color:#a5b4fc"><?= count($users_db) ?></div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Phiếu Mong Muốn Update</div>
-                <div class="stat-val" style="color:#34d399"><?= count($features_db) ?></div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Báo Cáo Lỗi</div>
-                <div class="stat-val" style="color:#f87171"><?= count($bugs_db) ?></div>
-            </div>
-        </div>
-
-        <!-- ADMIN TAB NAV -->
-        <div class="admin-tab-bar">
-            <button class="admin-tab-btn active" id="atab-btn-orders" onclick="switchAdminTab('atab-orders','atab-btn-orders')">
-                🛒 Đơn Hàng Chờ Duyệt
-                <?php if (count($pending_orders) > 0): ?>
-                <span class="badge-count"><?= count($pending_orders) ?></span>
-                <?php endif; ?>
-            </button>
-            <button class="admin-tab-btn" id="atab-btn-keys" onclick="switchAdminTab('atab-keys','atab-btn-keys')">🔑 Quản Lý License Key</button>
-            <button class="admin-tab-btn" id="atab-btn-features" onclick="switchAdminTab('atab-features','atab-btn-features')">
-                🌟 Phiếu Update
-                <?php if (count($features_db) > 0): ?><span class="badge-count" style="background:#6366f1"><?= count($features_db) ?></span><?php endif; ?>
-            </button>
-            <button class="admin-tab-btn" id="atab-btn-bugs" onclick="switchAdminTab('atab-bugs','atab-btn-bugs')">
-                🐞 Báo Cáo Lỗi
-                <?php if (count($bugs_db) > 0): ?><span class="badge-count" style="background:#f59e0b"><?= count($bugs_db) ?></span><?php endif; ?>
-            </button>
-            <button class="admin-tab-btn" id="atab-btn-users" onclick="switchAdminTab('atab-users','atab-btn-users')">
-                👥 Quản Lý User
-                <span class="badge-count" style="background:#6366f1"><?= count($users_db) ?></span>
-            </button>
-            <button class="admin-tab-btn" id="atab-btn-version" onclick="switchAdminTab('atab-version','atab-btn-version')">
-                🚀 Phiên Bản & Thông Báo
-                <?php if (!empty($sys_config['broadcast_notice']['active'])): ?>
-                    <span class="badge-count" style="background:#10b981">Live</span>
-                <?php endif; ?>
-            </button>
-        </div>
-
-        <!-- ═══ TAB 1: ĐƠN HÀNG CHỜ DUYỆT ═══ -->
-        <div id="atab-orders" class="admin-tab-content active">
-
-        <!-- 1. PENDING ORDERS (DUYỆT ĐƠN MUA QR) -->
-        <div class="card" style="border:1px solid #f59e0b;background:linear-gradient(180deg,#161e33 0%,#101626 100%)">
-            <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
-                <span>🛒 ĐƠN HÀNG CHỜ DUYỆT THANH TOÁN VIETQR (<?= count($pending_orders) ?>)</span>
-                <?php if (count($pending_orders) > 0): ?>
-                    <span style="font-size:12px;color:#fcd34d;font-weight:600">🔔 Có khách hàng vừa bấm "Tôi đã thanh toán"!</span>
-                <?php endif; ?>
-            </div>
-            
-            <?php if (empty($pending_orders)): ?>
-                <div style="background:#0b0f19;padding:18px;border-radius:10px;text-align:center;color:#64748b;font-size:13px">
-                    Hiện tại không có đơn hàng nào đang chờ duyệt.
+    <?php if (!$admin_logged_in): ?>
+        <!-- ═══ ADMIN LOGIN SCREEN ═══ -->
+        <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px">
+            <div class="card" style="max-width:380px;width:100%">
+                <div class="card-header" style="justify-content:center;text-align:center;flex-direction:column;gap:6px">
+                    <div style="width:32px;height:32px;border-radius:8px;background:var(--emerald);display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff">2</div>
+                    <div class="card-title" style="font-size:16px">2tamne.site Admin Portal</div>
+                    <div class="text-subtle" style="font-size:12px">Xác thực quyền quản trị hệ thống</div>
                 </div>
-            <?php else: ?>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Mã Đơn</th>
-                            <th>Khách Hàng (User)</th>
-                            <th>Họ Tên / SĐT</th>
-                            <th>Gói Mua</th>
-                            <th>Số Tiền</th>
-                            <th>Thời Gian</th>
-                            <th>Nội Dung CK</th>
-                            <th>Hành Động</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach (array_reverse($pending_orders) as $ord): ?>
-                            <tr>
-                                <td><b><?= htmlspecialchars($ord['id']) ?></b></td>
-                                <td><span class="badge-user">👤 <?= htmlspecialchars($ord['user']) ?></span></td>
-                                <td><?= htmlspecialchars($ord['fullname']) ?> (<?= htmlspecialchars($ord['phone']) ?>)</td>
-                                <td><b style="color:#38bdf8"><?= htmlspecialchars($ord['package_name']) ?></b></td>
-                                <td><b style="color:#34d399;font-size:13.5px"><?= htmlspecialchars($ord['package_price']) ?></b></td>
-                                <td style="font-size:11.5px;color:#94a3b8"><?= $ord['created_at'] ?></td>
-                                <td><code style="color:#fcd34d"><?= htmlspecialchars($ord['memo']) ?></code></td>
-                                <td>
-                                    <div style="display:flex;gap:6px">
-                                        <form method="POST" style="display:inline" onsubmit="return confirm('Xác nhận đã nhận tiền và TỰ ĐỘNG CẤP KEY cho khách này?')">
-                                            <input type="hidden" name="action" value="approve_order">
-                                            <input type="hidden" name="order_id" value="<?= htmlspecialchars($ord['id']) ?>">
-                                            <button type="submit" class="btn btn-success" style="padding:5px 10px;font-size:11.5px">⚡ Duyệt & Cấp Key</button>
-                                        </form>
-                                        <form method="POST" style="display:inline" onsubmit="return confirm('Từ chối / hủy đơn hàng này?')">
-                                            <input type="hidden" name="action" value="reject_order">
-                                            <input type="hidden" name="order_id" value="<?= htmlspecialchars($ord['id']) ?>">
-                                            <button type="submit" class="btn btn-outline" style="padding:5px 10px;font-size:11.5px;color:#f87171">❌ Hủy</button>
-                                        </form>
-                                    </div>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            <?php endif; ?>
-        </div>
-
-        </div><!-- /atab-orders -->
-
-        <!-- ═══ TAB 2: QUẢN LÝ LICENSE KEY ═══ -->
-        <div id="atab-keys" class="admin-tab-content">
-
-        <!-- 2. CREATE NEW KEY MANUALLY -->
-        <div class="card">
-            <div class="card-title">➕ TẠO LICENSE KEY THỦ CÔNG & GÁN USER</div>
-            <form method="POST">
-                <input type="hidden" name="action" value="create_key">
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label>Sản Phẩm (Product):</label>
-                        <select name="product">
-                            <option value="2TOOLNE">🚀 2toolne — AI YouTube Production Studio</option>
-                            <option value="SLIDESHOW">🎬 Tool Video AI (Slideshow Builder)</option>
-                            <option value="LABS_EXTENSION">🖼️ Extension Google Labs (Tải Ảnh 2K/4K)</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Gói Bản Quyền (Tier):</label>
-                        <select name="tier">
-                            <option value="VIP">💎 VIP (1 Tháng / 1 Năm)</option>
-                            <option value="LIFETIME">👑 LIFETIME (Vĩnh Viễn)</option>
-                            <option value="TRIAL">🎁 TRIAL (Dùng Thử)</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Thời Hạn Sử Dụng (Ngày):</label>
-                        <select name="duration_days">
-                            <option value="30">30 Ngày (1 Tháng)</option>
-                            <option value="365">365 Ngày (1 Năm)</option>
-                            <option value="36500">Vĩnh Viễn (Lifetime)</option>
-                            <option value="3">3 Ngày (Dùng Thử)</option>
-                            <option value="7">7 Ngày</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>👤 Gán Cho Tài Khoản User:</label>
-                        <select name="owner_user">
-                            <option value="">-- (Chưa gán / Cấp ngoài) --</option>
-                            <?php foreach ($users_db as $u_id => $u_data): ?>
-                                <option value="<?= htmlspecialchars($u_id) ?>">
-                                    <?= htmlspecialchars($u_id) ?> (<?= htmlspecialchars($u_data['fullname'] ?: 'No name') ?> - <?= htmlspecialchars($u_data['phone'] ?: 'No phone') ?>)
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Ghi Chú (Khách hàng, Zalo):</label>
-                        <input type="text" name="note" placeholder="Ví dụ: Bán cho anh Nam qua Zalo">
-                    </div>
-                </div>
-                <button type="submit" class="btn btn-primary" style="margin-top:10px">⚡ TẠO VÀ GÁN KEY NGAY</button>
-            </form>
-        </div>
-
-        <!-- 3. LICENSE LIST TABLE -->
-        <div class="card">
-            <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
-                <span>🔑 DANH SÁCH TOÀN BỘ LICENSE KEY (<?= count($licenses_db) ?> keys)</span>
-            </div>
-
-            <!-- SUB-TABS: PRODUCT FILTER (EXTENSIBLE ARCHITECTURE) -->
-            <?php
-            $count_2toolne = count(array_filter($licenses_db, fn($x) => ($x['product']??'') === '2TOOLNE' || strpos($x['license_key']??'', '2TOOLNE-') === 0));
-            $count_video   = count(array_filter($licenses_db, fn($x) => ($x['product']??'') === 'SLIDESHOW' || (strpos($x['license_key']??'', '2TAMNE-') === 0 && strpos($x['license_key']??'', '2TAMNE-LABS-') !== 0)));
-            $count_ext     = count(array_filter($licenses_db, fn($x) => ($x['product']??'') === 'LABS_EXTENSION' || strpos($x['license_key']??'', '2TAMNE-LABS-') === 0));
-            ?>
-            <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;border-bottom:1px solid #1e293b;padding-bottom:12px">
-                <button type="button" class="btn btn-primary subtab-prod-btn active" onclick="filterKeysByProduct('ALL', this)" style="padding:6px 14px;font-size:12px">
-                    ✨ Tất Cả (<?= count($licenses_db) ?>)
-                </button>
-                <button type="button" class="btn btn-outline subtab-prod-btn" onclick="filterKeysByProduct('2TOOLNE', this)" style="padding:6px 14px;font-size:12px;border-color:#10b981;color:#34d399">
-                    🚀 2toolne Studio (<?= $count_2toolne ?>)
-                </button>
-                <button type="button" class="btn btn-outline subtab-prod-btn" onclick="filterKeysByProduct('SLIDESHOW', this)" style="padding:6px 14px;font-size:12px;border-color:#6366f1;color:#a5b4fc">
-                    🎬 Tool Video AI (<?= $count_video ?>)
-                </button>
-                <button type="button" class="btn btn-outline subtab-prod-btn" onclick="filterKeysByProduct('LABS_EXTENSION', this)" style="padding:6px 14px;font-size:12px;border-color:#0284c7;color:#38bdf8">
-                    🖼️ Extension Google Labs (<?= $count_ext ?>)
-                </button>
-            </div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>License Key</th>
-                        <th>Sản Phẩm</th>
-                        <th>Gói</th>
-                        <th>Thời Hạn</th>
-                        <th>👤 Tài Khoản Sở Hữu</th>
-                        <th>Trạng Thái</th>
-                        <th>Thiết Bị (HWID)</th>
-                        <th>Ghi Chú</th>
-                        <th>Thao Tác</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach (array_reverse($licenses_db, true) as $k => $lic): 
-                        $status = $lic['status'] ?? 'active';
-                        $tier = $lic['tier'] ?? 'VIP';
-                        $hwid = $lic['hwid'] ?? '';
-                        $owner = $lic['owner_user'] ?? '';
-                    ?>
-                        <?php
-                        $is_2toolne_key = ($lic['product'] ?? '') === '2TOOLNE' || strpos($k, '2TOOLNE-') === 0;
-                        $is_ext_key = ($lic['product'] ?? '') === 'LABS_EXTENSION' || strpos($k, '2TAMNE-LABS-') === 0;
-                        $prod_row_tag = $is_2toolne_key ? '2TOOLNE' : ($is_ext_key ? 'LABS_EXTENSION' : 'SLIDESHOW');
-                        ?>
-                        <tr class="lic-row" data-product="<?= $prod_row_tag ?>">
-                            <td><b style="font-family:monospace;color:#a5f3fc;font-size:13px"><?= htmlspecialchars($k) ?></b></td>
-                            <td>
-                                <?php if ($is_2toolne_key): ?>
-                                    <span class="badge" style="background:rgba(16,185,129,0.2);color:#34d399;border:1px solid #10b981">🚀 2toolne Studio</span>
-                                <?php elseif ($is_ext_key): ?>
-                                    <span class="badge" style="background:rgba(56,189,248,0.2);color:#38bdf8;border:1px solid #0284c7">🖼️ Labs Extension</span>
-                                <?php else: ?>
-                                    <span class="badge" style="background:rgba(99,102,241,0.2);color:#a5b4fc;border:1px solid #6366f1">🎬 Video Tool</span>
-                                <?php endif; ?>
-                            </td>
-                            <td><span class="badge <?= $tier === 'TRIAL' ? 'badge-trial' : 'badge-active' ?>"><?= $tier ?></span></td>
-                            <td>
-                                <?php if ($lic['expires_at']): ?>
-                                    <?= (strpos($lic['expires_at'], '2099') !== false) ? '👑 Vĩnh viễn' : htmlspecialchars($lic['expires_at']) ?>
-                                <?php else: ?>
-                                    <?= $lic['duration_days'] ?> ngày
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <?php if ($owner): ?>
-                                    <span class="badge-user">👤 <?= htmlspecialchars($owner) ?></span>
-                                    <button class="btn btn-outline" style="padding:2px 6px;font-size:10px;margin-left:4px" onclick="openAssignModal('<?= htmlspecialchars($k) ?>', '<?= htmlspecialchars($owner) ?>')">Đổi</button>
-                                <?php else: ?>
-                                    <span style="color:#64748b;font-size:11px">(Chưa gán)</span>
-                                    <button class="btn btn-outline" style="padding:2px 6px;font-size:10px;margin-left:4px;border-color:#6366f1;color:#818cf8" onclick="openAssignModal('<?= htmlspecialchars($k) ?>', '')">➕ Gán</button>
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <span class="badge <?= $status === 'active' ? 'badge-active' : 'badge-banned' ?>">
-                                    <?= strtoupper($status) ?>
-                                </span>
-                            </td>
-                            <td>
-                                <?php if ($hwid): ?>
-                                    <code style="color:#38bdf8;font-size:11px"><?= substr($hwid, 0, 12) ?>...</code>
-                                    <form method="POST" style="display:inline" onsubmit="return confirm('Reset HWID cho key này?')">
-                                        <input type="hidden" name="action" value="reset_hwid">
-                                        <input type="hidden" name="key" value="<?= htmlspecialchars($k) ?>">
-                                        <button type="submit" class="btn btn-outline" style="padding:2px 6px;font-size:10px;color:#38bdf8" title="Reset HWID">🔄</button>
-                                    </form>
-                                <?php else: ?>
-                                    <span style="color:#64748b;font-size:11px">Chưa kích hoạt</span>
-                                <?php endif; ?>
-                            </td>
-                            <td style="color:#94a3b8;font-size:11.5px"><?= htmlspecialchars($lic['note'] ?? '') ?></td>
-                            <td>
-                                <div style="display:flex;gap:4px">
-                                    <form method="POST" style="display:inline">
-                                        <input type="hidden" name="action" value="toggle_ban">
-                                        <input type="hidden" name="key" value="<?= htmlspecialchars($k) ?>">
-                                        <button type="submit" class="btn btn-outline" style="padding:3px 7px;font-size:11px">
-                                            <?= $status === 'banned' ? '🔓 Mở' : '🔒 Khóa' ?>
-                                        </button>
-                                    </form>
-                                    <form method="POST" style="display:inline" onsubmit="return confirm('Bạn có chắc muốn XÓA VĨNH VIỄN key này?')">
-                                        <input type="hidden" name="action" value="delete_key">
-                                        <input type="hidden" name="key" value="<?= htmlspecialchars($k) ?>">
-                                        <button type="submit" class="btn btn-danger" style="padding:3px 7px;font-size:11px">🗑️</button>
-                                    </form>
-                                </div>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-
-        </div><!-- /atab-keys -->
-
-        <!-- ═══ TAB 3: PHIẾU MONG MUỐN UPDATE ═══ -->
-        <div id="atab-features" class="admin-tab-content">
-
-        <!-- 4. FEATURE REQUESTS MANAGEMENT -->
-        <div class="card">
-            <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
-                <span>🌟 PHIẾU MONG MUỐN UPDATE (<?= count($features_db) ?> phiếu)</span>
-            </div>
-            <?php if (empty($features_db)): ?>
-                <div style="background:#0b0f19;padding:18px;border-radius:10px;text-align:center;color:#64748b;font-size:13px">Chưa có phiếu nào được gửi.</div>
-            <?php else: ?>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Người Gửi</th>
-                        <th>Tiêu Đề</th>
-                        <th>Nội Dung</th>
-                        <th>Ngày Gửi</th>
-                        <th>Trạng Thái</th>
-                        <th>Cập Nhật</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach (array_reverse($features_db) as $fi): ?>
-                    <tr>
-                        <td><span class="badge-user">👤 <?= htmlspecialchars($fi['user'] ?? '?') ?></span></td>
-                        <td><b><?= htmlspecialchars($fi['title'] ?? '') ?></b></td>
-                        <td style="color:#94a3b8;max-width:300px;font-size:11.5px"><?= nl2br(htmlspecialchars($fi['description'] ?? '')) ?></td>
-                        <td style="font-size:11px;color:#64748b"><?= $fi['created_at'] ?? '' ?></td>
-                        <td>
-                            <?php
-                            $fst = $fi['status'] ?? 'Đang xem xét';
-                            $fst_cls = $fst === 'Đã thêm vào roadmap' ? 'badge-active' : ($fst === 'Không phù hợp' ? 'badge-banned' : 'badge-trial');
-                            ?>
-                            <span class="badge <?= $fst_cls ?>"><?= htmlspecialchars($fst) ?></span>
-                        </td>
-                        <td style="white-space:nowrap">
-                            <div style="display:flex;gap:4px;align-items:center">
-                            <form method="POST" style="display:flex;gap:4px">
-                                <input type="hidden" name="action" value="update_feature_status">
-                                <input type="hidden" name="feature_id" value="<?= htmlspecialchars($fi['id'] ?? '') ?>">
-                                <select name="new_status" style="padding:4px 6px;font-size:11px;width:140px">
-                                    <option value="Đang xem xét" <?= $fst==='Đang xem xét'?'selected':'' ?>>Đang xem xét</option>
-                                    <option value="Đã thêm vào roadmap" <?= $fst==='Đã thêm vào roadmap'?'selected':'' ?>>Đã thêm vào roadmap</option>
-                                    <option value="Đã phát triển xong" <?= $fst==='Đã phát triển xong'?'selected':'' ?>>Đã phát triển xong</option>
-                                    <option value="Không phù hợp" <?= $fst==='Không phù hợp'?'selected':'' ?>>Không phù hợp</option>
-                                </select>
-                                <button type="submit" class="btn btn-success" style="padding:4px 8px;font-size:11px">💾</button>
-                            </form>
-                            <form method="POST" style="display:inline" onsubmit="return confirm('Xóa phiếu này?')">
-                                <input type="hidden" name="action" value="delete_feature">
-                                <input type="hidden" name="feature_id" value="<?= htmlspecialchars($fi['id'] ?? '') ?>">
-                                <button type="submit" class="btn btn-danger" style="padding:4px 8px;font-size:11px" title="Xóa phiếu">🗑️</button>
-                            </form>
-                            </div>
-                        </td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-            <?php endif; ?>
-        </div>
-
-        </div><!-- /atab-features -->
-
-        <!-- ═══ TAB 4: BÁO CÁO LỖI ═══ -->
-        <div id="atab-bugs" class="admin-tab-content">
-
-        <!-- 5. BUG REPORTS MANAGEMENT -->
-        <div class="card">
-            <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
-                <span>🐞 BÁO CÁO LỖI PHẦN MỀM (<?= count($bugs_db) ?> báo cáo)</span>
-            </div>
-            <?php if (empty($bugs_db)): ?>
-                <div style="background:#0b0f19;padding:18px;border-radius:10px;text-align:center;color:#64748b;font-size:13px">Chưa có báo cáo lỗi nào.</div>
-            <?php else: ?>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Người Gửi</th>
-                        <th>Tiêu Đề</th>
-                        <th>Mã Lỗi</th>
-                        <th>Chi Tiết</th>
-                        <th>Ngày Gửi</th>
-                        <th>Trạng Thái</th>
-                        <th>Cập Nhật</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach (array_reverse($bugs_db) as $bi): ?>
-                    <tr>
-                        <td><span class="badge-user">👤 <?= htmlspecialchars($bi['user'] ?? '?') ?></span></td>
-                        <td><b><?= htmlspecialchars($bi['title'] ?? '') ?></b></td>
-                        <td><code style="color:#f87171;font-size:11px"><?= htmlspecialchars($bi['error_code'] ?? '-') ?></code></td>
-                        <td style="color:#94a3b8;max-width:260px;font-size:11.5px"><?= nl2br(htmlspecialchars($bi['description'] ?? '')) ?></td>
-                        <td style="font-size:11px;color:#64748b"><?= $bi['created_at'] ?? '' ?></td>
-                        <td>
-                            <?php
-                            $bst = $bi['status'] ?? 'Đã tiếp nhận';
-                            $bst_cls = $bst === 'Đã sửa xong' ? 'badge-active' : ($bst === 'Không tái hiện được' ? 'badge-banned' : 'badge-trial');
-                            ?>
-                            <span class="badge <?= $bst_cls ?>"><?= htmlspecialchars($bst) ?></span>
-                        </td>
-                        <td style="white-space:nowrap">
-                            <div style="display:flex;gap:4px;align-items:center">
-                            <form method="POST" style="display:flex;gap:4px">
-                                <input type="hidden" name="action" value="update_bug_status">
-                                <input type="hidden" name="bug_id" value="<?= htmlspecialchars($bi['id'] ?? '') ?>">
-                                <select name="new_status" style="padding:4px 6px;font-size:11px;width:140px">
-                                    <option value="Đã tiếp nhận" <?= $bst==='Đã tiếp nhận'?'selected':'' ?>>Đã tiếp nhận</option>
-                                    <option value="Đang kiểm tra" <?= $bst==='Đang kiểm tra'?'selected':'' ?>>Đang kiểm tra</option>
-                                    <option value="Đã sửa xong" <?= $bst==='Đã sửa xong'?'selected':'' ?>>Đã sửa xong</option>
-                                    <option value="Không tái hiện được" <?= $bst==='Không tái hiện được'?'selected':'' ?>>Không tái hiện được</option>
-                                </select>
-                                <button type="submit" class="btn btn-success" style="padding:4px 8px;font-size:11px">💾</button>
-                            </form>
-                            <form method="POST" style="display:inline" onsubmit="return confirm('Xóa báo cáo lỗi này?')">
-                                <input type="hidden" name="action" value="delete_bug">
-                                <input type="hidden" name="bug_id" value="<?= htmlspecialchars($bi['id'] ?? '') ?>">
-                                <button type="submit" class="btn btn-danger" style="padding:4px 8px;font-size:11px" title="Xóa báo cáo">🗑️</button>
-                            </form>
-                            </div>
-                        </td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-            <?php endif; ?>
-        </div>
-
-        </div><!-- /atab-bugs -->
-
-        <!-- ═══ TAB 5: QUẢN LÝ USER ═══ -->
-        <div id="atab-users" class="admin-tab-content">
-        <div class="card">
-            <div class="card-title">👥 DANH SÁCH TÀI KHOẢN NGƯỜI DÙNG (<?= count($users_db) ?> user)</div>
-            <?php if (empty($users_db)): ?>
-                <div style="background:#0b0f19;padding:18px;border-radius:10px;text-align:center;color:#64748b">Chưa có tài khoản nào.</div>
-            <?php else: ?>
-            <table>
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Tài Khoản</th>
-                        <th>Họ Tên</th>
-                        <th>SĐT / Zalo</th>
-                        <th>IP Đăng Ký</th>
-                        <th>Ngày Đăng Ký</th>
-                        <th>Số Key</th>
-                        <th>Đơn Hàng</th>
-                        <th>Thao Tác</th>
-                    </tr>
-                </thead>
-                <tbody>
-                <?php
-                $row_num = 0;
-                foreach ($users_db as $uid => $udata):
-                    $row_num++;
-                    $u_key_count = count($udata['keys'] ?? []);
-                    $u_orders = array_values(array_filter($orders_db, fn($o) => ($o['user'] ?? '') === $uid));
-                    $u_pending_cnt = count(array_filter($u_orders, fn($o) => ($o['status']??'') === 'pending'));
-                ?>
-                <tr>
-                    <td style="color:#64748b;font-size:12px"><?= $row_num ?></td>
-                    <td><span class="badge-user">👤 <?= htmlspecialchars($uid) ?></span></td>
-                    <td style="font-weight:700"><?= htmlspecialchars($udata['fullname'] ?? '—') ?></td>
-                    <td style="color:#38bdf8"><?= htmlspecialchars($udata['phone'] ?? '—') ?></td>
-                    <td style="font-size:11px;color:#64748b"><code><?= htmlspecialchars($udata['registered_ip'] ?? '—') ?></code></td>
-                    <td style="font-size:11px;color:#64748b"><?= $udata['created_at'] ?? '—' ?></td>
-                    <td>
-                        <span class="badge <?= $u_key_count > 0 ? 'badge-active' : 'badge-banned' ?>">
-                            <?= $u_key_count ?> key
-                        </span>
-                    </td>
-                    <td>
-                        <?= count($u_orders) ?> đơn
-                        <?php if ($u_pending_cnt > 0): ?>
-                            <span class="badge" style="background:rgba(245,158,11,0.2);color:#fcd34d;margin-left:4px"><?= $u_pending_cnt ?> chờ</span>
-                        <?php endif; ?>
-                    </td>
-                    <td>
-                        <button class="btn btn-outline" style="padding:4px 10px;font-size:11px;border-color:#6366f1;color:#818cf8"
-                            onclick="openUserDetailModal(<?= htmlspecialchars(json_encode([
-                                'uid' => $uid,
-                                'fullname' => $udata['fullname'] ?? '',
-                                'phone' => $udata['phone'] ?? '',
-                                'registered_ip' => $udata['registered_ip'] ?? '',
-                                'created_at' => $udata['created_at'] ?? '',
-                                'keys' => array_map(function($k) use ($licenses_db) {
-                                    $l = $licenses_db[$k] ?? [];
-                                    return [
-                                        'key' => $k,
-                                        'tier' => $l['tier'] ?? 'VIP',
-                                        'product' => $l['product'] ?? (strpos($k, '2TAMNE-LABS-') === 0 ? 'LABS_EXTENSION' : 'SLIDESHOW'),
-                                        'status' => $l['status'] ?? 'active',
-                                        'duration_days' => $l['duration_days'] ?? 0,
-                                        'expires_at' => $l['expires_at'] ?? '',
-                                        'hwid' => $l['hwid'] ?? '',
-                                        'device_name' => $l['device_name'] ?? ''
-                                    ];
-                                }, $udata['keys'] ?? []),
-                                'orders' => $u_orders
-                            ]), ENT_QUOTES) ?>)">
-                            👁️ Chi Tiết
-                        </button>
-                    </td>
-                </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-            <?php endif; ?>
-        </div>
-        </div><!-- /atab-users -->
-
-        <!-- ═══ TAB 6: PHIÊN BẢN & THÔNG BÁO TOÀN BỘ USER ═══ -->
-        <div id="atab-version" class="admin-tab-content">
-            
-            <!-- 1. CẤU HÌNH PHIÊN BẢN & PHÁT UPDATE 1-CLICK -->
-            <div class="card" style="border:1px solid #6366f1;background:linear-gradient(180deg,#131b33 0%,#101626 100%)">
-                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
-                    <span>🚀 CẤU HÌNH PHIÊN BẢN CHÍNH THỨC & NHẮC UPDATE 1-CLICK</span>
-                    <span class="badge badge-active" style="font-size:12px">Bản hiện tại: v<?= htmlspecialchars($sys_config['app_version'] ?? '2.0.0') ?></span>
-                </div>
-                
-                <form method="POST">
-                    <input type="hidden" name="action" value="save_version_config">
-                    <div class="form-grid" style="grid-template-columns:1fr 2fr">
+                <div class="card-body">
+                    <?php if ($msg_error): ?>
+                        <div class="alert alert-danger"><?= $msg_error ?></div>
+                    <?php endif; ?>
+                    <form method="POST">
+                        <input type="hidden" name="admin_login" value="1">
                         <div class="form-group">
-                            <label>PHIÊN BẢN PHẦN MỀM MỚI NHẤT:</label>
-                            <input type="text" name="app_version" value="<?= htmlspecialchars($sys_config['app_version'] ?? '2.0.0') ?>" placeholder="Ví dụ: 2.1.0" required>
+                            <label class="form-label">MẬT KHẨU QUẢN TRỊ:</label>
+                            <input type="password" name="password" class="form-input" placeholder="Nhập mật khẩu admin..." required autofocus>
                         </div>
-                        <div class="form-group">
-                            <label>ĐƯỜNG DẪN TẢI FILE CÀI ĐẶT (.ZIP):</label>
-                            <input type="text" name="download_url" value="<?= htmlspecialchars($sys_config['download_url'] ?? '/downloads/SlideshowBuilder_v2.0.0.zip') ?>" placeholder="/downloads/SlideshowBuilder_v2.0.0.zip" required>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>NỘI DUNG GHI CHÚ BẢN PHÁT HÀNH (CHANGELOG / RELEASE NOTES):</label>
-                        <textarea name="release_notes" rows="3" style="width:100%;padding:10px 12px;background:#0b0f19;border:1px solid #334155;border-radius:6px;color:#fff;font-size:12.5px;outline:none" placeholder="Ví dụ: - Nâng cấp Ken Burns 4K mượt mà hơn&#10;- Bổ sung 5 font chữ mới&#10;- Tối ưu 0% RAM lồng tiếng AI"><?= htmlspecialchars($sys_config['release_notes'] ?? '') ?></textarea>
-                    </div>
-                    <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
-                        <button type="submit" class="btn btn-primary">💾 Lưu Cấu Hình Phiên Bản</button>
-                    </div>
-                </form>
-
-                <hr style="border:none;border-top:1px solid #1e293b;margin:20px 0">
-
-                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
-                    <div>
-                        <h4 style="font-size:14px;font-weight:800;color:#fcd34d">🔔 NHẮC THÔNG BÁO CẬP NHẬT CHO TOÀN BỘ USER</h4>
-                        <p style="font-size:12px;color:#94a3b8">Hệ thống sẽ tự động tạo một Popup thông báo cập nhật v<?= htmlspecialchars($sys_config['app_version'] ?? '2.0.0') ?> đè lên màn hình toàn bộ khách hàng kèm nút tải về.</p>
-                    </div>
-                    <form method="POST" onsubmit="return confirm('Xác nhận phát thông báo nhắc cập nhật bản v<?= htmlspecialchars($sys_config['app_version'] ?? '2.0.0') ?> đến TOÀN BỘ khách hàng?')">
-                        <input type="hidden" name="action" value="send_update_broadcast">
-                        <button type="submit" class="btn btn-success" style="padding:10px 18px;font-size:13px">📢 PHÁT LỆNH UPDATE 1-CLICK</button>
+                        <button type="submit" class="btn btn-emerald" style="width:100%;height:38px">Đăng Nhập Vào Quản Trị</button>
                     </form>
                 </div>
+                <div class="card-footer" style="text-align:center;font-size:12px;color:var(--muted-foreground)">
+                    Phiên đăng nhập có thời hạn 4 giờ
+                </div>
+            </div>
+        </div>
+    <?php else: ?>
+        <!-- ═══ ADMIN DASHBOARD ═══ -->
+        <header class="admin-header">
+            <div class="container" style="display:flex;justify-content:space-between;align-items:center;width:100%">
+                <div style="display:flex;align-items:center;gap:10px">
+                    <div style="width:24px;height:24px;border-radius:6px;background:var(--emerald);display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:12px">2</div>
+                    <b style="font-size:14px;color:var(--foreground)">2tamne Admin</b>
+                    <span class="badge badge-active" style="font-size:10px">Live</span>
+                </div>
+
+                <div style="display:flex;align-items:center;gap:12px">
+                    <?php if (count($pending_orders) > 0): ?>
+                        <span class="badge badge-warning" style="animation:pulseGlow 2s infinite">
+                            ⏳ <?= count($pending_orders) ?> đơn chờ duyệt
+                        </span>
+                    <?php endif; ?>
+                    <a href="index.php" target="_blank" class="btn btn-outline btn-xs">🌐 Xem Website</a>
+                    <a href="?logout=1" class="btn btn-outline btn-xs" style="color:var(--danger)">Đăng Xuất</a>
+                </div>
+            </div>
+        </header>
+
+        <main class="container" style="padding-top:16px;padding-bottom:48px">
+            <!-- FLASH MESSAGES -->
+            <?php if ($msg_success): ?>
+                <div class="alert alert-success"><?= $msg_success ?></div>
+            <?php endif; ?>
+            <?php if ($msg_error): ?>
+                <div class="alert alert-danger"><?= $msg_error ?></div>
+            <?php endif; ?>
+
+            <!-- TELEMETRY METRICS -->
+            <div class="admin-metrics-bar">
+                <div class="metric-tile">
+                    <div class="metric-title">Tổng License Keys</div>
+                    <div class="metric-val"><?= count($licenses_db) ?></div>
+                </div>
+                <div class="metric-tile">
+                    <div class="metric-title">🚀 2toolne Studio</div>
+                    <div class="metric-val" style="color:var(--emerald)"><?= $count_2toolne ?></div>
+                </div>
+                <div class="metric-tile">
+                    <div class="metric-title">🎬 Tool Video AI</div>
+                    <div class="metric-val" style="color:var(--primary)"><?= $count_video ?></div>
+                </div>
+                <div class="metric-tile">
+                    <div class="metric-title">🖼️ Extension Labs</div>
+                    <div class="metric-val" style="color:var(--info)"><?= $count_ext ?></div>
+                </div>
+                <div class="metric-tile">
+                    <div class="metric-title">Tổng Người Dùng</div>
+                    <div class="metric-val"><?= count($users_db) ?></div>
+                </div>
+                <div class="metric-tile">
+                    <div class="metric-title">Đơn Chờ Duyệt</div>
+                    <div class="metric-val" style="color:<?= count($pending_orders) > 0 ? 'var(--warning)' : 'var(--muted-foreground)' ?>">
+                        <?= count($pending_orders) ?>
+                    </div>
+                </div>
             </div>
 
-            <!-- 2. SOẠN & QUẢN LÝ POPUP THÔNG BÁO TOÀN HỆ THỐNG -->
-            <?php
-            $notice = $sys_config['broadcast_notice'] ?? [];
-            $is_notice_active = !empty($notice['active']);
-            $notice_type = $notice['type'] ?? 'update';
-            ?>
-            <div class="card">
-                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
-                    <span>📢 SOẠN & PHÁT THÔNG BÁO TOÀN HỆ THỐNG (BROADCAST POPUP)</span>
-                    <div style="display:flex;align-items:center;gap:8px">
-                        <span class="badge <?= $is_notice_active ? 'badge-active' : 'badge-banned' ?>">
-                            <?= $is_notice_active ? '🟢 ĐANG PHÁT TOÀN DIỆN' : '⚫ ĐANG TẮT' ?>
-                        </span>
-                        <span class="badge badge-user">👁️ Đã có <?= intval($notice['read_count'] ?? 0) ?> user đã đọc</span>
+            <!-- ADMIN TABS -->
+            <nav class="admin-tab-nav">
+                <button class="admin-tab-btn active" id="atab-btn-orders" onclick="switchAdminTab('atab-orders', 'atab-btn-orders')">
+                    <span>🛒</span> Đơn Hàng (<?= count($pending_orders) ?>)
+                </button>
+                <button class="admin-tab-btn" id="atab-btn-keys" onclick="switchAdminTab('atab-keys', 'atab-btn-keys')">
+                    <span>🔑</span> Quản Lý License (<?= count($licenses_db) ?>)
+                </button>
+                <button class="admin-tab-btn" id="atab-btn-users" onclick="switchAdminTab('atab-users', 'atab-btn-users')">
+                    <span>👥</span> Người Dùng (<?= count($users_db) ?>)
+                </button>
+                <button class="admin-tab-btn" id="atab-btn-features" onclick="switchAdminTab('atab-features', 'atab-btn-features')">
+                    <span>💡</span> Góp Ý (<?= count($features_db) ?>)
+                </button>
+                <button class="admin-tab-btn" id="atab-btn-bugs" onclick="switchAdminTab('atab-bugs', 'atab-btn-bugs')">
+                    <span>🐞</span> Báo Lỗi (<?= count($bugs_db) ?>)
+                </button>
+                <button class="admin-tab-btn" id="atab-btn-version" onclick="switchAdminTab('atab-version', 'atab-btn-version')">
+                    <span>🚀</span> Phiên Bản & Thông Báo
+                </button>
+            </nav>
+
+            <!-- ═══ TAB 1: ORDERS ═══ -->
+            <div id="atab-orders" class="admin-tab-content active">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">🛒 Danh Sách Đơn Mua Key Cần Duyệt</div>
+                    </div>
+                    <div class="card-body" style="padding:0">
+                        <?php if (empty($orders_db)): ?>
+                            <div class="empty-state">Chưa có đơn hàng nào phát sinh.</div>
+                        <?php else: ?>
+                            <div class="table-responsive">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Mã Đơn</th>
+                                            <th>Người Mua</th>
+                                            <th>Sản Phẩm / Gói</th>
+                                            <th>Số Tiền</th>
+                                            <th>Thời Hạn</th>
+                                            <th>Thời Gian</th>
+                                            <th>Trạng Thái</th>
+                                            <th>Thao Tác</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($orders_db as $ord): 
+                                            $st = $ord['status'] ?? 'pending';
+                                        ?>
+                                            <tr>
+                                                <td><code class="font-mono text-primary"><?= htmlspecialchars($ord['id']) ?></code></td>
+                                                <td>
+                                                    <b><?= htmlspecialchars($ord['user']) ?></b>
+                                                    <div class="text-subtle" style="font-size:11.5px"><?= htmlspecialchars($ord['fullname'] ?: '') ?> · <?= htmlspecialchars($ord['phone'] ?: '') ?></div>
+                                                </td>
+                                                <td>
+                                                    <b><?= htmlspecialchars($ord['package_name']) ?></b>
+                                                    <div style="font-size:11px"><span class="badge"><?= htmlspecialchars($ord['product'] ?? 'SLIDESHOW') ?></span></div>
+                                                </td>
+                                                <td><b style="color:var(--emerald)"><?= htmlspecialchars($ord['package_price']) ?></b></td>
+                                                <td><?= $ord['duration_days'] ?> ngày (<?= htmlspecialchars($ord['tier'] ?? 'VIP') ?>)</td>
+                                                <td class="text-subtle" style="font-size:12px"><?= htmlspecialchars($ord['created_at']) ?></td>
+                                                <td>
+                                                    <span class="badge <?= $st === 'approved' ? 'badge-active' : ($st === 'rejected' ? 'badge-danger' : 'badge-warning') ?>">
+                                                        <?= strtoupper($st) ?>
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <?php if ($st === 'pending'): ?>
+                                                        <div style="display:flex;gap:6px">
+                                                            <form method="POST" style="display:inline">
+                                                                <input type="hidden" name="action" value="approve_order">
+                                                                <input type="hidden" name="order_id" value="<?= htmlspecialchars($ord['id']) ?>">
+                                                                <button type="submit" class="btn btn-emerald btn-xs">⚡ Duyệt & Cấp Key</button>
+                                                            </form>
+                                                            <form method="POST" style="display:inline" onsubmit="return confirm('Hủy đơn này?')">
+                                                                <input type="hidden" name="action" value="reject_order">
+                                                                <input type="hidden" name="order_id" value="<?= htmlspecialchars($ord['id']) ?>">
+                                                                <button type="submit" class="btn btn-danger btn-xs">Hủy</button>
+                                                            </form>
+                                                        </div>
+                                                    <?php else: ?>
+                                                        <span class="text-subtle" style="font-size:11.5px">Đã xử lý</span>
+                                                    <?php endif; ?>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ TAB 2: LICENSE KEYS ═══ -->
+            <div id="atab-keys" class="admin-tab-content">
+                <!-- CREATE KEY FORM -->
+                <div class="card" style="margin-bottom:20px">
+                    <div class="card-header">
+                        <div class="card-title">➕ Tạo License Key Thủ Công & Gán User</div>
+                    </div>
+                    <div class="card-body">
+                        <form method="POST">
+                            <input type="hidden" name="action" value="create_key">
+                            <div class="form-grid-3">
+                                <div class="form-group">
+                                    <label class="form-label">SẢN PHẨM:</label>
+                                    <select name="product" class="form-select">
+                                        <option value="2TOOLNE">🚀 2toolne — AI YouTube Production Studio</option>
+                                        <option value="SLIDESHOW">🎬 Tool Video AI (Slideshow Builder)</option>
+                                        <option value="LABS_EXTENSION">🖼️ Extension Google Labs (Tải Ảnh 2K/4K)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">GÓI BẢN QUYỀN:</label>
+                                    <select name="tier" class="form-select">
+                                        <option value="VIP">💎 VIP</option>
+                                        <option value="LIFETIME">👑 LIFETIME (Vĩnh Viễn)</option>
+                                        <option value="TRIAL">🎁 TRIAL (Dùng Thử)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">THỜI HẠN (NGÀY):</label>
+                                    <select name="duration_days" class="form-select">
+                                        <option value="30">30 Ngày (1 Tháng)</option>
+                                        <option value="365">365 Ngày (1 Năm)</option>
+                                        <option value="36500">Vĩnh Viễn (Lifetime)</option>
+                                        <option value="3">3 Ngày (Dùng Thử)</option>
+                                        <option value="7">7 Ngày</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">GÁN CHO USER:</label>
+                                    <select name="owner_user" class="form-select">
+                                        <option value="">-- (Chưa gán / Cấp ngoài) --</option>
+                                        <?php foreach ($users_db as $u_id => $u_data): ?>
+                                            <option value="<?= htmlspecialchars($u_id) ?>">
+                                                <?= htmlspecialchars($u_id) ?> (<?= htmlspecialchars($u_data['fullname'] ?: 'No name') ?>)
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="grid-column: span 2">
+                                    <label class="form-label">GHI CHÚ KHÁCH HÀNG / ZALO:</label>
+                                    <input type="text" name="note" class="form-input" placeholder="Ví dụ: Khách anh Nam mua qua Zalo 09xx...">
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-emerald" style="margin-top:6px">⚡ Tạo Và Gán Key Ngay</button>
+                        </form>
                     </div>
                 </div>
 
-                <p style="font-size:12.5px;color:#94a3b8;margin-bottom:18px">
-                    Khi bật, Popup sẽ <b>bung ra đè toàn màn hình của mọi user</b>. Khách hàng <b>bắt buộc phải nhấn "Tôi Đã Đọc & Hiểu"</b> mới có thể tắt được thông báo.
-                </p>
+                <!-- LICENSE LIST TABLE -->
+                <div class="card">
+                    <div class="card-header" style="flex-wrap:wrap;gap:10px">
+                        <div class="card-title">🔑 Danh Sách License Key Toàn Hệ Thống (<?= count($licenses_db) ?>)</div>
+                        <input type="text" id="key-search-input" class="form-input" placeholder="🔍 Tìm kiếm key, user, ghi chú..." style="max-width:260px;height:32px" onkeyup="filterKeyTable()">
+                    </div>
+                    <div class="card-body" style="padding:0">
+                        <!-- SUBTAB PRODUCT FILTER -->
+                        <div style="display:flex;gap:6px;padding:12px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap;background:var(--surface-2)">
+                            <button type="button" class="btn btn-primary btn-xs subtab-prod-btn active" onclick="filterKeysByProduct('ALL', this)">
+                                ✨ Tất Cả (<?= count($licenses_db) ?>)
+                            </button>
+                            <button type="button" class="btn btn-outline btn-xs subtab-prod-btn" onclick="filterKeysByProduct('2TOOLNE', this)" style="border-color:var(--emerald);color:var(--emerald)">
+                                🚀 2toolne Studio (<?= $count_2toolne ?>)
+                            </button>
+                            <button type="button" class="btn btn-outline btn-xs subtab-prod-btn" onclick="filterKeysByProduct('SLIDESHOW', this)" style="border-color:var(--primary);color:var(--primary)">
+                                🎬 Slideshow AI (<?= $count_video ?>)
+                            </button>
+                            <button type="button" class="btn btn-outline btn-xs subtab-prod-btn" onclick="filterKeysByProduct('LABS_EXTENSION', this)" style="border-color:var(--info);color:var(--info)">
+                                🖼️ Labs Extension (<?= $count_ext ?>)
+                            </button>
+                        </div>
 
-                <form method="POST">
-                    <input type="hidden" name="action" value="save_broadcast_notice">
-                    <div class="form-grid">
+                        <div class="table-responsive">
+                            <table class="data-table" id="licenses-table">
+                                <thead>
+                                    <tr>
+                                        <th>License Key</th>
+                                        <th>Sản Phẩm</th>
+                                        <th>Gói</th>
+                                        <th>Thời Hạn</th>
+                                        <th>Tài Khoản Sở Hữu</th>
+                                        <th>Trạng Thái</th>
+                                        <th>Thiết Bị (HWID)</th>
+                                        <th>Ghi Chú</th>
+                                        <th>Thao Tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach (array_reverse($licenses_db, true) as $k => $lic): 
+                                        $status = $lic['status'] ?? 'active';
+                                        $tier = $lic['tier'] ?? 'VIP';
+                                        $hwid = $lic['hwid'] ?? '';
+                                        $owner = $lic['owner_user'] ?? '';
+                                        $is_2toolne = ($lic['product'] ?? '') === '2TOOLNE' || strpos($k, '2TOOLNE-') === 0;
+                                        $is_ext = ($lic['product'] ?? '') === 'LABS_EXTENSION' || strpos($k, '2TAMNE-LABS-') === 0;
+                                        $prod_row_tag = $is_2toolne ? '2TOOLNE' : ($is_ext ? 'LABS_EXTENSION' : 'SLIDESHOW');
+                                    ?>
+                                        <tr class="lic-row" data-product="<?= $prod_row_tag ?>" data-search="<?= strtolower(htmlspecialchars($k . ' ' . $owner . ' ' . ($lic['note'] ?? ''))) ?>">
+                                            <td>
+                                                <div style="display:flex;align-items:center;gap:6px">
+                                                    <code class="font-mono text-primary" style="font-size:12.5px;font-weight:600"><?= htmlspecialchars($k) ?></code>
+                                                    <button class="btn btn-outline btn-xs" onclick="copyText('<?= htmlspecialchars($k) ?>')" title="Sao chép">📋</button>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <?php if ($is_2toolne): ?>
+                                                    <span class="badge badge-active">🚀 2toolne</span>
+                                                <?php elseif ($is_ext): ?>
+                                                    <span class="badge badge-info">🖼️ Labs Ext</span>
+                                                <?php else: ?>
+                                                    <span class="badge badge-purple">🎬 Slideshow</span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td><span class="badge <?= $tier === 'TRIAL' ? 'badge-trial' : 'badge-active' ?>"><?= htmlspecialchars($tier) ?></span></td>
+                                            <td style="font-size:12px;color:var(--muted-foreground)">
+                                                <?= $lic['expires_at'] ? (strpos($lic['expires_at'], '2099') !== false ? '👑 Vĩnh viễn' : htmlspecialchars($lic['expires_at'])) : ($lic['duration_days'] . ' ngày') ?>
+                                            </td>
+                                            <td>
+                                                <?php if ($owner): ?>
+                                                    <span class="badge badge-primary">👤 <?= htmlspecialchars($owner) ?></span>
+                                                    <button class="btn btn-outline btn-xs" onclick="openAssignModal('<?= htmlspecialchars($k) ?>', '<?= htmlspecialchars($owner) ?>')">Đổi</button>
+                                                <?php else: ?>
+                                                    <span class="text-subtle" style="font-size:11px">(Chưa gán)</span>
+                                                    <button class="btn btn-outline btn-xs" onclick="openAssignModal('<?= htmlspecialchars($k) ?>', '')">➕ Gán</button>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <span class="badge <?= $status === 'active' ? 'badge-active' : 'badge-danger' ?>">
+                                                    <?= strtoupper($status) ?>
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <?php if ($hwid): ?>
+                                                    <code style="color:var(--info);font-size:11px"><?= substr($hwid, 0, 10) ?>...</code>
+                                                    <form method="POST" style="display:inline" onsubmit="return confirm('Reset HWID cho key này?')">
+                                                        <input type="hidden" name="action" value="reset_hwid">
+                                                        <input type="hidden" name="key" value="<?= htmlspecialchars($k) ?>">
+                                                        <button type="submit" class="btn btn-outline btn-xs" title="Reset HWID">🔄</button>
+                                                    </form>
+                                                <?php else: ?>
+                                                    <span class="text-subtle" style="font-size:11px">Chưa kích hoạt</span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td class="text-muted" style="font-size:11.5px"><?= htmlspecialchars($lic['note'] ?? '') ?></td>
+                                            <td>
+                                                <div style="display:flex;gap:4px">
+                                                    <form method="POST" style="display:inline">
+                                                        <input type="hidden" name="action" value="toggle_ban">
+                                                        <input type="hidden" name="key" value="<?= htmlspecialchars($k) ?>">
+                                                        <button type="submit" class="btn btn-outline btn-xs">
+                                                            <?= $status === 'banned' ? '🔓 Mở' : '🔒 Khóa' ?>
+                                                        </button>
+                                                    </form>
+                                                    <form method="POST" style="display:inline" onsubmit="return confirm('Xác nhận XÓA vĩnh viễn key này?')">
+                                                        <input type="hidden" name="action" value="delete_key">
+                                                        <input type="hidden" name="key" value="<?= htmlspecialchars($k) ?>">
+                                                        <button type="submit" class="btn btn-danger btn-xs">🗑️</button>
+                                                    </form>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ TAB 3: USERS ═══ -->
+            <div id="atab-users" class="admin-tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">👥 Danh Sách Tài Khoản Người Dùng (<?= count($users_db) ?>)</div>
+                    </div>
+                    <div class="card-body" style="padding:0">
+                        <div class="table-responsive">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Tài Khoản</th>
+                                        <th>Họ & Tên</th>
+                                        <th>SĐT / Zalo</th>
+                                        <th>Số Key Sở Hữu</th>
+                                        <th>IP Đăng Ký</th>
+                                        <th>Ngày Tham Gia</th>
+                                        <th>Thao Tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($users_db as $u_name => $u_data): ?>
+                                        <tr>
+                                            <td><b class="text-primary"><?= htmlspecialchars($u_name) ?></b></td>
+                                            <td><?= htmlspecialchars($u_data['fullname'] ?: '(Không có)') ?></td>
+                                            <td><?= htmlspecialchars($u_data['phone'] ?: '(Không có)') ?></td>
+                                            <td>
+                                                <span class="badge badge-active"><?= count($u_data['keys'] ?? []) ?> keys</span>
+                                            </td>
+                                            <td><code><?= htmlspecialchars($u_data['registered_ip'] ?? 'N/A') ?></code></td>
+                                            <td class="text-subtle" style="font-size:12px"><?= htmlspecialchars($u_data['created_at']) ?></td>
+                                            <td>
+                                                <div style="display:flex;gap:4px">
+                                                    <button class="btn btn-outline btn-xs" onclick="openAdminPwModal('<?= htmlspecialchars($u_name) ?>')">🔐 Đổi MK</button>
+                                                    <form method="POST" style="display:inline" onsubmit="return confirm('Xóa vĩnh viễn user <?= htmlspecialchars($u_name) ?>?')">
+                                                        <input type="hidden" name="action" value="admin_delete_user">
+                                                        <input type="hidden" name="target_user" value="<?= htmlspecialchars($u_name) ?>">
+                                                        <button type="submit" class="btn btn-danger btn-xs">🗑️ Xóa</button>
+                                                    </form>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ TAB 4: FEATURE REQUESTS ═══ -->
+            <div id="atab-features" class="admin-tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">💡 Danh Sách Góp Ý Nâng Cấp Tính Năng (<?= count($features_db) ?>)</div>
+                    </div>
+                    <div class="card-body" style="padding:0">
+                        <div class="table-responsive">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Người Gửi</th>
+                                        <th>Tiêu Đề</th>
+                                        <th>Nội Dung Chi Tiết</th>
+                                        <th>Trạng Thái</th>
+                                        <th>Ngày Gửi</th>
+                                        <th>Thao Tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($features_db as $f): ?>
+                                        <tr>
+                                            <td><code><?= htmlspecialchars($f['id']) ?></code></td>
+                                            <td><b><?= htmlspecialchars($f['user']) ?></b></td>
+                                            <td><b><?= htmlspecialchars($f['title']) ?></b></td>
+                                            <td class="text-muted" style="max-width:320px"><?= htmlspecialchars($f['description']) ?></td>
+                                            <td>
+                                                <form method="POST" style="display:inline">
+                                                    <input type="hidden" name="action" value="update_feature_status">
+                                                    <input type="hidden" name="feature_id" value="<?= htmlspecialchars($f['id']) ?>">
+                                                    <select name="status" class="form-select" style="font-size:11.5px;padding:4px 8px" onchange="this.form.submit()">
+                                                        <option value="Đang xem xét" <?= ($f['status']??'') === 'Đang xem xét' ? 'selected' : '' ?>>Đang xem xét</option>
+                                                        <option value="Đang phát triển" <?= ($f['status']??'') === 'Đang phát triển' ? 'selected' : '' ?>>Đang phát triển</option>
+                                                        <option value="Đã hoàn thành" <?= ($f['status']??'') === 'Đã hoàn thành' ? 'selected' : '' ?>>Đã hoàn thành</option>
+                                                        <option value="Từ chối" <?= ($f['status']??'') === 'Từ chối' ? 'selected' : '' ?>>Từ chối</option>
+                                                    </select>
+                                                </form>
+                                            </td>
+                                            <td class="text-subtle" style="font-size:12px"><?= htmlspecialchars($f['created_at']) ?></td>
+                                            <td>
+                                                <form method="POST" style="display:inline" onsubmit="return confirm('Xóa phiếu này?')">
+                                                    <input type="hidden" name="action" value="delete_feature">
+                                                    <input type="hidden" name="feature_id" value="<?= htmlspecialchars($f['id']) ?>">
+                                                    <button type="submit" class="btn btn-danger btn-xs">🗑️</button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ TAB 5: BUG REPORTS ═══ -->
+            <div id="atab-bugs" class="admin-tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">🐞 Danh Sách Báo Cáo Lỗi Kỹ Thuật (<?= count($bugs_db) ?>)</div>
+                    </div>
+                    <div class="card-body" style="padding:0">
+                        <div class="table-responsive">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Người Báo</th>
+                                        <th>Tiêu Đề</th>
+                                        <th>Error Code</th>
+                                        <th>Nội Dung Chi Tiết</th>
+                                        <th>Trạng Thái</th>
+                                        <th>Ngày Báo</th>
+                                        <th>Thao Tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($bugs_db as $b): ?>
+                                        <tr>
+                                            <td><code><?= htmlspecialchars($b['id']) ?></code></td>
+                                            <td><b><?= htmlspecialchars($b['user']) ?></b></td>
+                                            <td><b><?= htmlspecialchars($b['title']) ?></b></td>
+                                            <td><code style="color:var(--danger)"><?= htmlspecialchars($b['error_code'] ?: 'N/A') ?></code></td>
+                                            <td class="text-muted" style="max-width:320px"><?= htmlspecialchars($b['description']) ?></td>
+                                            <td>
+                                                <form method="POST" style="display:inline">
+                                                    <input type="hidden" name="action" value="update_bug_status">
+                                                    <input type="hidden" name="bug_id" value="<?= htmlspecialchars($b['id']) ?>">
+                                                    <select name="status" class="form-select" style="font-size:11.5px;padding:4px 8px" onchange="this.form.submit()">
+                                                        <option value="Đã tiếp nhận" <?= ($b['status']??'') === 'Đã tiếp nhận' ? 'selected' : '' ?>>Đã tiếp nhận</option>
+                                                        <option value="Đang xử lý" <?= ($b['status']??'') === 'Đang xử lý' ? 'selected' : '' ?>>Đang xử lý</option>
+                                                        <option value="Đã sửa xong" <?= ($b['status']??'') === 'Đã sửa xong' ? 'selected' : '' ?>>Đã sửa xong</option>
+                                                    </select>
+                                                </form>
+                                            </td>
+                                            <td class="text-subtle" style="font-size:12px"><?= htmlspecialchars($b['created_at']) ?></td>
+                                            <td>
+                                                <form method="POST" style="display:inline" onsubmit="return confirm('Xóa báo cáo này?')">
+                                                    <input type="hidden" name="action" value="delete_bug">
+                                                    <input type="hidden" name="bug_id" value="<?= htmlspecialchars($b['id']) ?>">
+                                                    <button type="submit" class="btn btn-danger btn-xs">🗑️</button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ TAB 6: VERSION & BROADCASTS ═══ -->
+            <div id="atab-version" class="admin-tab-content">
+                <div class="card" style="margin-bottom:20px">
+                    <div class="card-header">
+                        <div class="card-title">🚀 Cấu Hình Phiên Bản & 1-Click Update Broadcast</div>
+                    </div>
+                    <div class="card-body">
+                        <form method="POST" style="margin-bottom:16px">
+                            <input type="hidden" name="action" value="save_version_config">
+                            <div class="form-grid-3">
+                                <div class="form-group">
+                                    <label class="form-label">PHIÊN BẢN HIỆN TẠI:</label>
+                                    <input type="text" name="app_version" class="form-input" value="<?= htmlspecialchars($sys_config['app_version'] ?? '1.0.0') ?>" required>
+                                </div>
+                                <div class="form-group" style="grid-column: span 2">
+                                    <label class="form-label">ĐƯỜNG DẪN TẢI XUỐNG (DOWNLOAD URL):</label>
+                                    <input type="text" name="download_url" class="form-input" value="<?= htmlspecialchars($sys_config['download_url'] ?? '/downloads/2toolne_macOS_latest.zip') ?>">
+                                </div>
+                                <div class="form-group" style="grid-column: span 3">
+                                    <label class="form-label">GHI CHÚ PHÁT HÀNH (RELEASE NOTES):</label>
+                                    <textarea name="release_notes" class="form-textarea" rows="3"><?= htmlspecialchars($sys_config['release_notes'] ?? '') ?></textarea>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Lưu Cấu Hình Phiên Bản</button>
+                        </form>
+
+                        <form method="POST" onsubmit="return confirm('Phát thông báo cập nhật mới cho TOÀN BỘ người dùng truy cập web?')">
+                            <input type="hidden" name="action" value="send_update_broadcast">
+                            <button type="submit" class="btn btn-emerald">📢 Phát Thông Báo Cập Nhật Mới (1-Click Broadcast)</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- CUSTOM BROADCAST COMPOSER -->
+                <div class="card">
+                    <div class="card-header" style="justify-content:space-between">
+                        <div class="card-title">📢 Soạn Thông Báo Toàn Hệ Thống Tùy Chỉnh</div>
+                        <?php if (!empty($sys_config['broadcast_notice'])): ?>
+                            <form method="POST" style="display:inline">
+                                <input type="hidden" name="action" value="toggle_broadcast_notice">
+                                <button type="submit" class="btn btn-outline btn-xs">
+                                    <?= !empty($sys_config['broadcast_notice']['active']) ? '🔴 Tắt Thông Báo' : '🟢 Bật Thông Báo' ?>
+                                </button>
+                            </form>
+                        <?php endif; ?>
+                    </div>
+                    <div class="card-body">
+                        <form method="POST">
+                            <input type="hidden" name="action" value="save_broadcast_notice">
+                            <div class="form-grid-3">
+                                <div class="form-group" style="grid-column: span 2">
+                                    <label class="form-label">TIÊU ĐỀ THÔNG BÁO:</label>
+                                    <input type="text" name="notice_title" class="form-input" placeholder="Ví dụ: 🛠️ Bảo trì máy chủ..." required>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">LOẠI THÔNG BÁO:</label>
+                                    <select name="notice_type" class="form-select">
+                                        <option value="info">📢 Thông tin (Info)</option>
+                                        <option value="update">🚀 Cập nhật (Update)</option>
+                                        <option value="alert">⚠️ Khẩn cấp (Alert)</option>
+                                        <option value="maintenance">🛠️ Bảo trì (Maintenance)</option>
+                                        <option value="promo">🎁 Khuyến mại (Promo)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="grid-column: span 3">
+                                    <label class="form-label">NỘI DUNG THÔNG BÁO:</label>
+                                    <textarea name="notice_content" class="form-textarea" rows="4" placeholder="Nhập nội dung chi tiết..." required></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">CHỮ NÚT BẤM (TÙY CHỌN):</label>
+                                    <input type="text" name="button_text" class="form-input" placeholder="Ví dụ: Tải Ngay">
+                                </div>
+                                <div class="form-group" style="grid-column: span 2">
+                                    <label class="form-label">LINK NÚT BẤM (TÙY CHỌN):</label>
+                                    <input type="text" name="button_url" class="form-input" placeholder="https://...">
+                                </div>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+                                <input type="checkbox" name="is_active" id="is_active_cb" value="1" checked>
+                                <label for="is_active_cb" style="font-size:13px;cursor:pointer">Kích hoạt và phát ngay lập tức trên website</label>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Lưu & Phát Thông Báo</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- ═══ ADMIN MODALS ═══ -->
+
+        <!-- MODAL ASSIGN KEY TO USER -->
+        <div id="modal-admin-assign" class="modal-backdrop">
+            <div class="modal-dialog" style="max-width:420px">
+                <div class="modal-header">
+                    <div class="modal-title">👤 Gán / Đổi User Cho Key</div>
+                    <button class="modal-close" onclick="closeModal('modal-admin-assign')">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form method="POST">
+                        <input type="hidden" name="action" value="assign_user">
+                        <input type="hidden" name="key" id="assign-key-input">
                         <div class="form-group">
-                            <label>LOẠI THÔNG BÁO:</label>
-                            <select name="notice_type">
-                                <option value="update" <?= $notice_type === 'update' ? 'selected' : '' ?>>🚀 Bản Cập Nhật Mới (Update)</option>
-                                <option value="alert" <?= $notice_type === 'alert' ? 'selected' : '' ?>>⚠️ Thông Báo Khẩn / Lưu Ý</option>
-                                <option value="maintenance" <?= $notice_type === 'maintenance' ? 'selected' : '' ?>>🛠️ Bảo Trì Hệ Thống</option>
-                                <option value="promo" <?= $notice_type === 'promo' ? 'selected' : '' ?>>🎁 Ưu Đãi / Khuyến Mãi</option>
-                                <option value="info" <?= $notice_type === 'info' ? 'selected' : '' ?>>ℹ️ Tin Tức Chung</option>
+                            <label class="form-label">LICENSE KEY:</label>
+                            <code id="assign-key-label" class="font-mono text-primary" style="font-weight:700">...</code>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">CHỌN USER SỞ HỮU:</label>
+                            <select name="new_owner" id="assign-user-select" class="form-select">
+                                <option value="">-- (Gỡ gán / Không gán) --</option>
+                                <?php foreach ($users_db as $u_id => $u_data): ?>
+                                    <option value="<?= htmlspecialchars($u_id) ?>">
+                                        <?= htmlspecialchars($u_id) ?> (<?= htmlspecialchars($u_data['fullname'] ?: 'No name') ?>)
+                                    </option>
+                                <?php endforeach; ?>
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label>TIÊU ĐỀ THÔNG BÁO:</label>
-                            <input type="text" name="notice_title" value="<?= htmlspecialchars($notice['title'] ?? '') ?>" placeholder="Ví dụ: 🎉 NÂNG CẤP HỆ THỐNG TẠO VIDEO 4K" required>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label>NỘI DUNG THÔNG BÁO CHI TIẾT:</label>
-                        <textarea name="notice_content" rows="4" style="width:100%;padding:10px 12px;background:#0b0f19;border:1px solid #334155;border-radius:6px;color:#fff;font-size:12.5px;outline:none" placeholder="Nhập nội dung thông báo gửi xuống toàn bộ user..." required><?= htmlspecialchars($notice['content'] ?? '') ?></textarea>
-                    </div>
-
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label>CHỮ NÚT BẤM KÈM THEO (TÙY CHỌN):</label>
-                            <input type="text" name="button_text" value="<?= htmlspecialchars($notice['button_text'] ?? '') ?>" placeholder="Ví dụ: Tải Ngay / Xem Chi Tiết">
-                        </div>
-                        <div class="form-group">
-                            <label>ĐƯỜNG LINK KHI BẤM NÚT (TÙY CHỌN):</label>
-                            <input type="text" name="button_url" value="<?= htmlspecialchars($notice['button_url'] ?? '') ?>" placeholder="Ví dụ: /downloads/... hoặc https://...">
-                        </div>
-                    </div>
-
-                    <div style="margin:12px 0">
-                        <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer">
-                            <input type="checkbox" name="is_active" value="1" <?= $is_notice_active ? 'checked' : '' ?> style="width:auto">
-                            <span style="font-size:13px;font-weight:700;color:#fff">KÍCH HOẠT HIỂN THỊ POPUP NGAY LẬP TỨC CHO MỌI USER</span>
-                        </label>
-                    </div>
-
-                    <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
-                        <button type="submit" class="btn btn-primary">📢 Phát / Cập Nhật Thông Báo</button>
-                        <?php if (!empty($notice['title'])): ?>
-                            <button type="button" class="btn btn-outline" onclick="openPreviewNoticeModal()">👁️ Xem Thử Popup</button>
-                        <?php endif; ?>
-                    </div>
-                </form>
-
-                <?php if (!empty($notice['title'])): ?>
-                <div style="margin-top:20px;padding-top:16px;border-top:1px solid #1e293b;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
-                    <span style="font-size:12px;color:#64748b">Mã thông báo: <code><?= htmlspecialchars($notice['id'] ?? '') ?></code> · Ngày tạo: <?= $notice['created_at'] ?? '—' ?></span>
-                    <form method="POST" style="display:inline">
-                        <input type="hidden" name="action" value="toggle_broadcast_notice">
-                        <button type="submit" class="btn <?= $is_notice_active ? 'btn-danger' : 'btn-success' ?>" style="font-size:11.5px">
-                            <?= $is_notice_active ? '🛑 Tắt Thông Báo Này' : '🟢 Bật Lại Thông Báo Này' ?>
-                        </button>
+                        <button type="submit" class="btn btn-emerald" style="width:100%">Lưu Gán User</button>
                     </form>
                 </div>
-                <?php endif; ?>
             </div>
-
-            <!-- 3. NHẬT KÝ TỔNG HỢP PHIẾU BÁO LỖI & PHIẾU FTUPDATE (AUDIT LOGS) -->
-            <?php
-            $audit_logs = [];
-            foreach ($features_db as $fi) {
-                $audit_logs[] = [
-                    'type' => 'feature',
-                    'id' => $fi['id'] ?? '',
-                    'user' => $fi['user'] ?? '',
-                    'title' => $fi['title'] ?? '',
-                    'description' => $fi['description'] ?? '',
-                    'extra' => '',
-                    'created_at' => $fi['created_at'] ?? '',
-                    'status' => $fi['status'] ?? 'Đang xem xét'
-                ];
-            }
-            foreach ($bugs_db as $bi) {
-                $audit_logs[] = [
-                    'type' => 'bug',
-                    'id' => $bi['id'] ?? '',
-                    'user' => $bi['user'] ?? '',
-                    'title' => $bi['title'] ?? '',
-                    'description' => $bi['description'] ?? '',
-                    'extra' => $bi['error_code'] ?? '',
-                    'created_at' => $bi['created_at'] ?? '',
-                    'status' => $bi['status'] ?? 'Đã tiếp nhận'
-                ];
-            }
-            usort($audit_logs, function($a, $b) {
-                return strcmp($b['created_at'], $a['created_at']);
-            });
-            ?>
-            <div class="card">
-                <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
-                    <span>📋 NHẬT KÝ TỔNG HỢP PHIẾU BÁO LỖI & FTUPDATE CỦA USER (<?= count($audit_logs) ?> phiếu)</span>
-                    <div style="display:flex;gap:8px">
-                        <span class="badge" style="background:rgba(99,102,241,0.2);color:#a5b4fc">🌟 <?= count($features_db) ?> Feature</span>
-                        <span class="badge" style="background:rgba(239,68,68,0.2);color:#f87171">🐞 <?= count($bugs_db) ?> Bug</span>
-                    </div>
-                </div>
-
-                <?php if (empty($audit_logs)): ?>
-                    <div style="background:#0b0f19;padding:18px;border-radius:10px;text-align:center;color:#64748b;font-size:13px">
-                        Chưa có phiếu báo lỗi hoặc feature update nào từ khách hàng.
-                    </div>
-                <?php else: ?>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Loại Phiếu</th>
-                                <th>Khách Hàng</th>
-                                <th>Tiêu Đề</th>
-                                <th>Chi Tiết Nội Dung</th>
-                                <th>Mã Lỗi</th>
-                                <th>Thời Gian</th>
-                                <th>Trạng Thái</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($audit_logs as $log): ?>
-                                <tr>
-                                    <td>
-                                        <?php if ($log['type'] === 'feature'): ?>
-                                            <span class="badge" style="background:rgba(99,102,241,0.2);color:#818cf8">🌟 Feature Update</span>
-                                        <?php else: ?>
-                                            <span class="badge" style="background:rgba(239,68,68,0.2);color:#f87171">🐞 Báo Lỗi</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td><span class="badge-user">👤 <?= htmlspecialchars($log['user']) ?></span></td>
-                                    <td><b><?= htmlspecialchars($log['title']) ?></b></td>
-                                    <td style="color:#94a3b8;max-width:320px;font-size:11.5px"><?= nl2br(htmlspecialchars($log['description'])) ?></td>
-                                    <td>
-                                        <?php if ($log['extra']): ?>
-                                            <code style="color:#f87171"><?= htmlspecialchars($log['extra']) ?></code>
-                                        <?php else: ?>
-                                            <span style="color:#64748b">—</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td style="font-size:11px;color:#64748b"><?= $log['created_at'] ?></td>
-                                    <td>
-                                        <span class="badge badge-trial"><?= htmlspecialchars($log['status']) ?></span>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                <?php endif; ?>
-            </div>
-
-        </div><!-- /atab-version -->
-
-
-    <!-- MODAL CHI TIẾT USER -->
-    <div id="modal-user-detail" class="modal" style="align-items:flex-start;padding:30px 16px;overflow-y:auto">
-        <div class="modal-card" style="max-width:700px;width:100%;max-height:90vh;overflow-y:auto">
-            <button class="modal-close" onclick="closeUserDetailModal()">&times;</button>
-            <h3 style="font-size:16px;font-weight:900;color:#818cf8;margin-bottom:16px">👤 CHI TIẾT TÀI KHOẢN: <span id="udm-uid" style="color:#fff"></span></h3>
-
-            <!-- Basic info -->
-            <div style="background:#0b0f19;padding:14px 18px;border-radius:10px;font-size:12.5px;margin-bottom:14px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
-                <div>Họ tên: <b id="udm-fullname" style="color:#fff"></b></div>
-                <div>SĐT/Zalo: <b id="udm-phone" style="color:#38bdf8"></b></div>
-                <div>IP đăng ký: <code id="udm-ip" style="color:#94a3b8"></code></div>
-                <div>Ngày đăng ký: <span id="udm-date" style="color:#94a3b8"></span></div>
-            </div>
-
-            <!-- Keys section -->
-            <h4 style="font-size:13px;font-weight:800;color:#cbd5e1;margin-bottom:8px">🔑 License Keys</h4>
-            <div id="udm-keys" style="margin-bottom:14px"></div>
-
-            <!-- Orders section -->
-            <h4 style="font-size:13px;font-weight:800;color:#cbd5e1;margin-bottom:8px">🛒 Lịch Sử Giao Dịch</h4>
-            <div id="udm-orders" style="margin-bottom:14px"></div>
-
-            <!-- Change password -->
-            <h4 style="font-size:13px;font-weight:800;color:#cbd5e1;margin-bottom:8px">🔐 Đặt Lại Mật Khẩu</h4>
-            <form method="POST" style="background:#0b0f19;padding:14px 18px;border-radius:10px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
-                <input type="hidden" name="action" value="admin_change_user_pw">
-                <input type="hidden" name="target_user" id="udm-pw-uid">
-                <div style="flex:1;min-width:180px">
-                    <label style="display:block;font-size:10px;font-weight:700;color:#64748b;margin-bottom:4px;text-transform:uppercase">Mật Khẩu Mới (≥6 ký tự):</label>
-                    <input type="text" name="new_password" placeholder="Nhập mật khẩu mới..." required minlength="6" style="width:100%">
-                </div>
-                <button type="submit" class="btn btn-success" onclick="return confirm('Xác nhận đặt lại mật khẩu cho user này?')">🔐 Đặt Lại</button>
-            </form>
-
-            <!-- Delete user -->
-            <form method="POST" style="margin-top:12px;text-align:right" onsubmit="return confirm('⚠️ XÓA VĨNH VIỄN tài khoản này? Hành động không thể hoàn tác!')">
-                <input type="hidden" name="action" value="admin_delete_user">
-                <input type="hidden" name="target_user" id="udm-del-uid">
-                <button type="submit" class="btn btn-danger" style="font-size:12px">🗑️ Xóa Tài Khoản Vĩnh Viễn</button>
-            </form>
         </div>
-    </div>
 
-    <!-- MODAL GÁN USER -->
-    <div id="modal-assign" class="modal">
-        <div class="modal-card">
-            <button class="modal-close" onclick="closeAssignModal()">&times;</button>
-            <h3 style="font-size:15px;font-weight:800;margin-bottom:14px;color:#fff">👤 GÁN KEY CHO TÀI KHOẢN</h3>
-            <form method="POST">
-                <input type="hidden" name="action" value="assign_user">
-                <input type="hidden" name="key" id="assign-key-val">
-                
-                <div class="form-group">
-                    <label>MÃ LICENSE KEY:</label>
-                    <input type="text" id="assign-key-display" readonly style="color:#38bdf8;font-weight:800">
+        <!-- MODAL ADMIN CHANGE USER PW -->
+        <div id="modal-admin-pw" class="modal-backdrop">
+            <div class="modal-dialog" style="max-width:400px">
+                <div class="modal-header">
+                    <div class="modal-title">🔐 Đổi Mật Khẩu User</div>
+                    <button class="modal-close" onclick="closeModal('modal-admin-pw')">&times;</button>
                 </div>
-                
-                <div class="form-group">
-                    <label>CHỌN TÀI KHOẢN USER:</label>
-                    <select name="new_owner" id="assign-user-select">
-                        <option value="">-- (Hủy gán / Cấp ngoài) --</option>
-                        <?php foreach ($users_db as $u_id => $u_data): ?>
-                            <option value="<?= htmlspecialchars($u_id) ?>">
-                                <?= htmlspecialchars($u_id) ?> (<?= htmlspecialchars($u_data['fullname'] ?: 'No name') ?> - <?= htmlspecialchars($u_data['phone'] ?: 'No phone') ?>)
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                
-                <button type="submit" class="btn btn-primary" style="width:100%;margin-top:10px">💾 LƯU GÁN TÀI KHOẢN</button>
-            </form>
-        </div>
-    </div>
-
-    <script>
-        // Admin tab switching
-        const ADMIN_TAB_MAP = {
-            'atab-orders':   'atab-btn-orders',
-            'atab-keys':     'atab-btn-keys',
-            'atab-features': 'atab-btn-features',
-            'atab-bugs':     'atab-btn-bugs',
-            'atab-users':    'atab-btn-users',
-            'atab-version':  'atab-btn-version'
-        };
-        
-        // Filter License Keys By Product (Extensible Sub-tabs)
-        function filterKeysByProduct(prodType, btnEl) {
-            document.querySelectorAll('.subtab-prod-btn').forEach(b => {
-                b.classList.remove('active');
-                b.classList.remove('btn-primary');
-                b.classList.add('btn-outline');
-            });
-            btnEl.classList.add('active');
-            btnEl.classList.add('btn-primary');
-            btnEl.classList.remove('btn-outline');
-
-            document.querySelectorAll('.lic-row').forEach(row => {
-                if (prodType === 'ALL' || row.getAttribute('data-product') === prodType) {
-                    row.style.display = '';
-                } else {
-                    row.style.display = 'none';
-                }
-            });
-        }
-
-        function switchAdminTab(tabId, btnId) {
-            document.querySelectorAll('.admin-tab-content').forEach(el => el.classList.remove('active'));
-            document.querySelectorAll('.admin-tab-btn').forEach(el => el.classList.remove('active'));
-            if (document.getElementById(tabId)) document.getElementById(tabId).classList.add('active');
-            if (document.getElementById(btnId)) document.getElementById(btnId).classList.add('active');
-        }
-        // Auto-open tab from URL ?tab= (PRG redirect)
-        (function() {
-            const tabFromUrl = new URLSearchParams(location.search).get('tab');
-            const adminTabMap = {
-                'orders':   ['atab-orders',   'atab-btn-orders'],
-                'keys':     ['atab-keys',     'atab-btn-keys'],
-                'features': ['atab-features', 'atab-btn-features'],
-                'bugs':     ['atab-bugs',     'atab-btn-bugs'],
-                'users':    ['atab-users',    'atab-btn-users'],
-                'version':  ['atab-version',  'atab-btn-version'],
-            };
-            if (tabFromUrl && adminTabMap[tabFromUrl]) {
-                window.addEventListener('DOMContentLoaded', () => {
-                    switchAdminTab(...adminTabMap[tabFromUrl]);
-                });
-            }
-        })();
-
-        // Auto-refresh pending orders count every 30s
-        setInterval(function() {
-            fetch('license_admin.php?ajax=pending_count')
-            .then(r => r.json())
-            .then(data => {
-                const badge = document.querySelector('#atab-btn-orders .badge-count');
-                if (data.count > 0) {
-                    if (badge) { badge.textContent = data.count; }
-                    else {
-                        const btn = document.getElementById('atab-btn-orders');
-                        const sp = document.createElement('span');
-                        sp.className = 'badge-count';
-                        sp.textContent = data.count;
-                        btn.appendChild(sp);
-                    }
-                } else if (badge) {
-                    badge.remove();
-                }
-            }).catch(() => {});
-        }, 30000);
-
-        // User detail modal
-        function openUserDetailModal(data) {
-            document.getElementById('udm-uid').textContent      = data.uid;
-            document.getElementById('udm-fullname').textContent = data.fullname || '—';
-            document.getElementById('udm-phone').textContent    = data.phone || '—';
-            document.getElementById('udm-ip').textContent       = data.registered_ip || '—';
-            document.getElementById('udm-date').textContent     = data.created_at || '—';
-            document.getElementById('udm-pw-uid').value         = data.uid;
-            document.getElementById('udm-del-uid').value        = data.uid;
-
-            // Keys
-            const keysEl = document.getElementById('udm-keys');
-            if (!data.keys || data.keys.length === 0) {
-                keysEl.innerHTML = '<div style="color:#64748b;font-size:12px;padding:10px;background:#0b0f19;border-radius:8px">Chưa có key nào.</div>';
-            } else {
-                let khtml = '<div style="display:flex;flex-direction:column;gap:6px">';
-                data.keys.forEach(k => {
-                    const tierColor = k.tier === 'TRIAL' ? '#f59e0b' : k.tier === 'LIFETIME' ? '#a78bfa' : '#34d399';
-                    const statusBg  = k.status === 'active' ? 'rgba(16,185,129,.12)' : 'rgba(239,68,68,.12)';
-                    const exp = k.expires_at ? (k.expires_at.includes('2099') ? '👑 Vĩnh viễn' : k.expires_at) : (k.duration_days + ' ngày (chưa kích hoạt)');
-                    const dev = k.hwid ? ('✅ ' + (k.device_name || 'Desktop')) : '⭕ Chưa kích hoạt';
-                    const prodTag = k.product === 'LABS_EXTENSION' ? '<span style="background:rgba(56,189,248,0.2);color:#38bdf8;padding:2px 6px;border-radius:6px;font-size:10px;font-weight:800;margin-right:4px">🖼️ Labs Ext</span>' : '<span style="background:rgba(99,102,241,0.2);color:#a5b4fc;padding:2px 6px;border-radius:6px;font-size:10px;font-weight:800;margin-right:4px">🎬 Video Tool</span>';
-                    khtml += `<div style="background:${statusBg};border:1px solid #1e293b;border-radius:8px;padding:10px 14px;font-size:12px">
-                        <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px">
-                            <div>${prodTag}<span style="font-family:monospace;font-weight:800;color:#a5f3fc">${k.key}</span></div>
-                            <span style="background:rgba(0,0,0,.3);color:${tierColor};padding:2px 8px;border-radius:8px;font-size:10px;font-weight:900">${k.tier}</span>
+                <div class="modal-body">
+                    <form method="POST">
+                        <input type="hidden" name="action" value="admin_change_user_pw">
+                        <input type="hidden" name="target_user" id="admin-target-user-input">
+                        <div class="form-group">
+                            <label class="form-label">TÀI KHOẢN:</label>
+                            <b id="admin-target-user-label" class="text-primary">...</b>
                         </div>
-                        <div style="color:#94a3b8;margin-top:4px">Thời hạn: ${exp} · Thiết bị: ${dev}</div>
-                    </div>`;
-                });
-                khtml += '</div>';
-                keysEl.innerHTML = khtml;
-            }
-
-            // Orders
-            const ordEl = document.getElementById('udm-orders');
-            if (!data.orders || data.orders.length === 0) {
-                ordEl.innerHTML = '<div style="color:#64748b;font-size:12px;padding:10px;background:#0b0f19;border-radius:8px">Chưa có giao dịch nào.</div>';
-            } else {
-                let ohtml = '<table style="width:100%;border-collapse:collapse;font-size:11.5px"><thead><tr style="background:#0b0f19"><th style="padding:8px;text-align:left;color:#64748b">Mã Đơn</th><th style="padding:8px;text-align:left;color:#64748b">Gói</th><th style="padding:8px;text-align:left;color:#64748b">Số Tiền</th><th style="padding:8px;text-align:left;color:#64748b">Ngày Tạo</th><th style="padding:8px;text-align:left;color:#64748b">Trạng Thái</th></tr></thead><tbody>';
-                [...data.orders].reverse().forEach(o => {
-                    const stMap = { pending: ['#fcd34d','rgba(245,158,11,.15)','⏳ Chờ duyệt'], approved: ['#34d399','rgba(16,185,129,.15)','✅ Đã duyệt'], rejected: ['#f87171','rgba(239,68,68,.15)','❌ Đã hủy'] };
-                    const [sColor, sBg, sLabel] = stMap[o.status] || ['#94a3b8','rgba(0,0,0,.2)', o.status];
-                    ohtml += `<tr style="border-bottom:1px solid #1e293b">
-                        <td style="padding:8px"><code style="color:#94a3b8;font-size:10px">${o.id}</code></td>
-                        <td style="padding:8px;font-weight:700;color:#38bdf8">${o.package_name}</td>
-                        <td style="padding:8px;color:#34d399;font-weight:800">${o.package_price}</td>
-                        <td style="padding:8px;color:#64748b;font-size:10px">${o.created_at}</td>
-                        <td style="padding:8px"><span style="background:${sBg};color:${sColor};padding:2px 8px;border-radius:8px;font-size:10px;font-weight:800">${sLabel}</span></td>
-                    </tr>`;
-                });
-                ohtml += '</tbody></table>';
-                ordEl.innerHTML = ohtml;
-            }
-
-            document.getElementById('modal-user-detail').style.display = 'flex';
-        }
-        function closeUserDetailModal() {
-            document.getElementById('modal-user-detail').style.display = 'none';
-        }
-
-        function openAssignModal(key, curUser) {
-            document.getElementById('assign-key-val').value = key;
-            document.getElementById('assign-key-display').value = key;
-            document.getElementById('assign-user-select').value = curUser;
-            document.getElementById('modal-assign').style.display = 'flex';
-        }
-        function closeAssignModal() {
-            document.getElementById('modal-assign').style.display = 'none';
-        }
-        window.onclick = function(e) {
-            if (e.target.classList.contains('modal')) {
-                closeAssignModal();
-                closeUserDetailModal();
-            }
-        }
-    </script>
-    <!-- MODAL XEM THỬ POPUP THÔNG BÁO -->
-    <div id="modal-preview-notice" class="modal" style="background:rgba(0,0,0,0.88);backdrop-filter:blur(8px)">
-        <div class="modal-card" style="max-width:540px;width:95%;border:2px solid #6366f1;box-shadow:0 25px 60px rgba(99,102,241,0.35);padding:28px;text-align:center">
-            <button class="modal-close" onclick="closePreviewNoticeModal()">&times;</button>
-            <div style="margin-bottom:12px">
-                <span class="badge badge-active" style="font-size:11.5px">👁️ XEM THỬ POPUP PHÍA USER</span>
+                        <div class="form-group">
+                            <label class="form-label">MẬT KHẨU MỚI (TỐI THIỂU 6 KÝ TỰ):</label>
+                            <input type="password" name="new_password" class="form-input" required minlength="6">
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="width:100%">Cập Nhật Mật Khẩu</button>
+                    </form>
+                </div>
             </div>
-            <h3 style="font-size:18px;font-weight:900;color:#fff;margin-bottom:12px"><?= htmlspecialchars($notice['title'] ?? '') ?></h3>
-            <div style="background:#0b0f19;border:1px solid #1e293b;border-radius:10px;padding:14px 18px;font-size:13px;color:#cbd5e1;line-height:1.6;margin-bottom:16px;text-align:left;white-space:pre-wrap"><?= htmlspecialchars($notice['content'] ?? '') ?></div>
-            <?php if (!empty($notice['button_text'])): ?>
-                <a href="<?= htmlspecialchars($notice['button_url'] ?? '#') ?>" target="_blank" class="btn btn-outline" style="width:100%;padding:10px;justify-content:center;margin-bottom:10px;border-color:#6366f1;color:#818cf8"><?= htmlspecialchars($notice['button_text']) ?></a>
-            <?php endif; ?>
-            <button type="button" class="btn btn-primary" onclick="closePreviewNoticeModal()" style="width:100%;padding:12px;font-size:13px;justify-content:center">
-                ✅ Tôi Đã Đọc & Hiểu
-            </button>
         </div>
-    </div>
 
-    <script>
-        function openPreviewNoticeModal() {
-            document.getElementById('modal-preview-notice').style.display = 'flex';
-        }
-        function closePreviewNoticeModal() {
-            document.getElementById('modal-preview-notice').style.display = 'none';
-        }
-    </script>
+        <!-- TOAST -->
+        <div id="toast">📋 Đã sao chép!</div>
 
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-    const spotlightCards = document.querySelectorAll('.stat-card, .card, .liquid-glass, .login-card');
-    spotlightCards.forEach(card => {
-        card.addEventListener('mousemove', e => {
-            const rect = card.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            card.style.setProperty('--mouse-x', `${x}px`);
-            card.style.setProperty('--mouse-y', `${y}px`);
-        });
-    });
-});
-</script>
+        <script>
+            function openModal(id) {
+                const el = document.getElementById(id);
+                if (el) el.classList.add('active');
+            }
+            function closeModal(id) {
+                const el = document.getElementById(id);
+                if (el) el.classList.remove('active');
+            }
+            function showToast(text) {
+                const t = document.getElementById('toast');
+                if (t) {
+                    t.textContent = text;
+                    t.style.display = 'flex';
+                    setTimeout(() => { t.style.display = 'none'; }, 2200);
+                }
+            }
+            function copyText(txt) {
+                navigator.clipboard.writeText(txt).then(() => {
+                    showToast('📋 Đã sao chép: ' + txt);
+                }).catch(() => {
+                    showToast('📋 Đã sao chép: ' + txt);
+                });
+            }
+
+            function openAssignModal(key, currentOwner) {
+                document.getElementById('assign-key-input').value = key;
+                document.getElementById('assign-key-label').textContent = key;
+                document.getElementById('assign-user-select').value = currentOwner || '';
+                openModal('modal-admin-assign');
+            }
+
+            function openAdminPwModal(username) {
+                document.getElementById('admin-target-user-input').value = username;
+                document.getElementById('admin-target-user-label').textContent = username;
+                openModal('modal-admin-pw');
+            }
+
+            function switchAdminTab(tabId, btnId) {
+                document.querySelectorAll('.admin-tab-content').forEach(el => el.classList.remove('active'));
+                document.querySelectorAll('.admin-tab-btn').forEach(el => el.classList.remove('active'));
+                const t = document.getElementById(tabId);
+                const b = document.getElementById(btnId);
+                if (t) t.classList.add('active');
+                if (b) b.classList.add('active');
+            }
+
+            function filterKeysByProduct(prodType, btnEl) {
+                document.querySelectorAll('.subtab-prod-btn').forEach(b => {
+                    b.classList.remove('active', 'btn-primary');
+                    b.classList.add('btn-outline');
+                });
+                btnEl.classList.add('active', 'btn-primary');
+                btnEl.classList.remove('btn-outline');
+
+                document.querySelectorAll('.lic-row').forEach(row => {
+                    if (prodType === 'ALL' || row.getAttribute('data-product') === prodType) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+            }
+
+            function filterKeyTable() {
+                const q = document.getElementById('key-search-input').value.toLowerCase().trim();
+                document.querySelectorAll('.lic-row').forEach(row => {
+                    const searchStr = row.getAttribute('data-search') || '';
+                    if (!q || searchStr.includes(q)) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+            }
+
+            // Auto-open tab from URL ?tab=
+            (function() {
+                const urlTab = new URLSearchParams(location.search).get('tab');
+                const tabMap = {
+                    'orders':   ['atab-orders', 'atab-btn-orders'],
+                    'keys':     ['atab-keys', 'atab-btn-keys'],
+                    'users':    ['atab-users', 'atab-btn-users'],
+                    'features': ['atab-features', 'atab-btn-features'],
+                    'bugs':     ['atab-bugs', 'atab-btn-bugs'],
+                    'version':  ['atab-version', 'atab-btn-version']
+                };
+                if (urlTab && tabMap[urlTab]) {
+                    window.addEventListener('DOMContentLoaded', () => switchAdminTab(tabMap[urlTab][0], tabMap[urlTab][1]));
+                }
+            })();
+
+            window.addEventListener('click', function(e) {
+                if (e.target.classList.contains('modal-backdrop')) {
+                    e.target.classList.remove('active');
+                }
+            });
+        </script>
+    <?php endif; ?>
 
 </body>
 </html>
