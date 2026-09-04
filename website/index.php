@@ -1030,7 +1030,7 @@ if (isset($_GET['registered'])) {
                                 </div>
 
                                 <!-- ALL DOWNLOAD OPTIONS (PRIMARY & SECONDARY) -->
-                                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;border-top:1px solid rgba(255,255,255,0.08);padding-top:16px">
+                                <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:16px;border-top:1px solid rgba(255,255,255,0.08);padding-top:16px">
                                     <!-- WINDOWS SUITE -->
                                     <div class="os-option-box os-box-windows" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:var(--radius-sm);padding:12px">
                                         <div style="display:flex;align-items:center;gap:6px;font-weight:700;color:var(--foreground);font-size:13px;margin-bottom:6px">
@@ -1089,7 +1089,7 @@ if (isset($_GET['registered'])) {
                                 </div>
 
                                 <!-- ALL DOWNLOAD OPTIONS (PRIMARY & SECONDARY) -->
-                                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;border-top:1px solid rgba(255,255,255,0.08);padding-top:16px">
+                                <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:16px;border-top:1px solid rgba(255,255,255,0.08);padding-top:16px">
                                     <!-- WINDOWS SUITE -->
                                     <div class="os-option-box os-box-windows" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:var(--radius-sm);padding:12px">
                                         <div style="display:flex;align-items:center;gap:6px;font-weight:700;color:var(--foreground);font-size:13px;margin-bottom:6px">
@@ -1292,6 +1292,10 @@ if (isset($_GET['registered'])) {
                                 </div>
                                 <button class="btn btn-accent" onclick="openQrPayment('Extension Google Labs (Vĩnh Viễn)', '100.000đ', 36500, 'LIFETIME', 'LABS_EXTENSION')">
                                     ⚡ Mua Key Extension (100k)
+                                </button>
+                            </div>
+                        </div>
+
                         <!-- TOKEN PACKAGES SHORTCUT -->
                         <div class="card" style="margin-top:24px;border-color:rgba(234, 179, 8, 0.35);background:linear-gradient(135deg, rgba(234, 179, 8, 0.08) 0%, var(--surface-1) 100%)">
                             <div class="card-header">
@@ -1874,7 +1878,7 @@ if (isset($_GET['registered'])) {
                         </div>
 
                         <!-- ALL DOWNLOAD OPTIONS -->
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;border-top:1px solid rgba(255,255,255,0.08);padding-top:16px">
+                        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:16px;border-top:1px solid rgba(255,255,255,0.08);padding-top:16px">
                             <!-- WINDOWS -->
                             <div class="os-option-box os-box-windows" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:var(--radius-sm);padding:12px">
                                 <div style="display:flex;align-items:center;gap:6px;font-weight:700;color:var(--foreground);font-size:13px;margin-bottom:6px">
@@ -1928,7 +1932,7 @@ if (isset($_GET['registered'])) {
                         </div>
 
                         <!-- ALL DOWNLOAD OPTIONS -->
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;border-top:1px solid rgba(255,255,255,0.08);padding-top:16px">
+                        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:16px;border-top:1px solid rgba(255,255,255,0.08);padding-top:16px">
                             <!-- WINDOWS -->
                             <div class="os-option-box os-box-windows" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:var(--radius-sm);padding:12px">
                                 <div style="display:flex;align-items:center;gap:6px;font-weight:700;color:var(--foreground);font-size:13px;margin-bottom:6px">

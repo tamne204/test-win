@@ -203,7 +203,7 @@ if ($admin_logged_in && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['a
             $days = intval($ord_item['duration_days'] ?? 30);
             $tier = $ord_item['tier'] ?? 'VIP';
             
-            $is_token_order = ($ord_item['product'] ?? '') === 'TOKEN_WALLET' || stripos($ord_item['package_name'] ?? '', 'Token') !== false;
+            $is_token_order = ($ord_item['product'] ?? '') === 'TOKEN_WALLET' || stripos($ord_item['package_name'] ?? '', 'Token') !== false || stripos($ord_item['package_name'] ?? '', 'Unlimited') !== false;
             if ($is_token_order) {
                 if (!adm_can('tokens.approve_order')) {
                     adm_redirect('error', '❌ Bạn không có quyền duyệt đơn nạp token!', 'orders');
@@ -217,27 +217,52 @@ if ($admin_logged_in && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['a
             $is_ext_order = ($ord_item['product'] ?? '') === 'LABS_EXTENSION' || ($ord_item['tier'] ?? '') === 'LABS_EXTENSION' || stripos($ord_item['package_name'] ?? '', 'Extension') !== false || strpos($ord_item['package_price'] ?? '', '100.000') !== false;
             
             if ($is_token_order) {
+                $admin_name = $_SESSION['admin_user'] ?? ($_SESSION['admin_auth_user'] ?? 'super_admin');
                 $pkg_n = $ord_item['package_name'] ?? '';
                 if (stripos($pkg_n, 'Unlimited') !== false || stripos($pkg_n, '1.800.000') !== false) {
-                    db_adjust_user_wallet($u, 0, "Duyệt đơn {$ord_id}: {$pkg_n} (Unlimited)", 'ADMIN_ADJUST', $admin_user);
-                    $pdo = db_connect();
+                    db_ensure_user_wallet($u, 0);
+                    $pdo = get_db();
                     if ($pdo) {
-                        $st = $pdo->prepare("UPDATE credit_wallets SET credit_mode = 'UNLIMITED', plan = 'studio' WHERE user_id = :u OR user_id = (SELECT id FROM users WHERE username = :u2)");
-                        $st->execute([':u' => $u, ':u2' => $u]);
+                        $user_rec = db_get_user($u);
+                        $uid = $user_rec['id'] ?? null;
+                        if ($uid) {
+                            $ent = $pdo->prepare("SELECT id FROM license_entitlements WHERE user_id = ? LIMIT 1");
+                            $ent->execute([$uid]);
+                            if ($ent->fetch()) {
+                                $st = $pdo->prepare("UPDATE license_entitlements SET credit_mode = 'UNLIMITED', plan = 'STUDIO' WHERE user_id = ?");
+                                $st->execute([$uid]);
+                            } else {
+                                $licId = 'lic_' . bin2hex(random_bytes(12));
+                                $st = $pdo->prepare("INSERT INTO license_entitlements (id, user_id, plan, credit_mode, max_devices, created_at) VALUES (?, ?, 'STUDIO', 'UNLIMITED', 3, NOW())");
+                                $st->execute([$licId, $uid]);
+                            }
+                            $txId = 'tx_' . bin2hex(random_bytes(12));
+                            $w = db_get_user_wallet($uid);
+                            $curBal = $w['balance'] ?? 0;
+                            $pdo->prepare("INSERT INTO credit_transactions (id, user_id, amount, balance_after, type, reference_id, description, created_by, created_at) VALUES (?, ?, 0, ?, 'UPGRADE', ?, ?, ?, NOW())")
+                                ->execute([$txId, $uid, $curBal, $ord_id, "Kích hoạt gói {$pkg_n} qua đơn {$ord_id}", $admin_name]);
+                        }
                     }
-                    $assigned_label = 'UNLIMITED-TOKEN';
+                    $assigned_label = 'UNLIMITED-STUDIO';
                 } else {
                     $tokens_to_add = 1000;
-                    if (stripos($pkg_n, '10.000') !== false || stripos($pkg_n, 'Studio') !== false || stripos($pkg_n, '700.000') !== false) {
+                    if (preg_match('/(\d+[\.,]?\d*)\s*Token/ui', $pkg_n, $m)) {
+                        $raw_num = str_replace(['.', ','], '', $m[1]);
+                        if (intval($raw_num) > 0) {
+                            $tokens_to_add = intval($raw_num);
+                        }
+                    } elseif (stripos($pkg_n, '10.000') !== false || stripos($pkg_n, '700.000') !== false) {
                         $tokens_to_add = 10000;
-                    } elseif (stripos($pkg_n, '3.000') !== false || stripos($pkg_n, 'Pro') !== false || stripos($pkg_n, '250.000') !== false) {
+                    } elseif (stripos($pkg_n, '3.000') !== false || stripos($pkg_n, '250.000') !== false) {
                         $tokens_to_add = 3000;
+                    } elseif (stripos($pkg_n, '1.000') !== false || stripos($pkg_n, '100.000') !== false) {
+                        $tokens_to_add = 1000;
                     }
-                    db_adjust_user_wallet($u, $tokens_to_add, "Duyệt đơn {$ord_id}: {$pkg_n} (+{$tokens_to_add} Tokens)", 'ADMIN_ADJUST', $admin_user);
-                    $assigned_label = "+{$tokens_to_add} TOKENS";
+                    db_adjust_user_wallet($u, $tokens_to_add, "Duyệt đơn {$ord_id}: {$pkg_n} (+{$tokens_to_add} Tokens)", $admin_name);
+                    $assigned_label = "+" . number_format($tokens_to_add) . " TOKENS";
                 }
                 db_approve_order($ord_id, $assigned_label);
-                adm_redirect('success', "🎉 Đã duyệt đơn nạp token <b>{$ord_id}</b> và cộng <b>{$assigned_label}</b> cho <b>{$u}</b>!", 'orders');
+                adm_redirect('success', "🎉 Đã duyệt đơn nạp token <b>{$ord_id}</b> và kích hoạt <b>{$assigned_label}</b> cho <b>{$u}</b>!", 'orders');
             } elseif ($is_2toolne) {
                 $prod_tag = '2TOOLNE';
                 $tier_tag = $tier;
@@ -797,9 +822,17 @@ $count_ext     = count(array_filter($licenses_db, fn($x) => ($x['product']??'') 
         $can_bugs     = adm_can('bugs.manage');
         $can_version  = adm_can('broadcast.manage');
 
+        $tab_perm_map = [
+            'orders'   => 'orders.view',
+            'keys'     => 'keys.view',
+            'users'    => 'users.view',
+            'features' => 'features.manage',
+            'bugs'     => 'bugs.manage',
+            'version'  => 'broadcast.manage'
+        ];
         $active_tab = 'orders';
         $req_tab = $_GET['tab'] ?? '';
-        if ($req_tab && adm_can($req_tab === 'version' ? 'broadcast.manage' : ($req_tab . '.view'))) {
+        if ($req_tab && isset($tab_perm_map[$req_tab]) && adm_can($tab_perm_map[$req_tab])) {
             $active_tab = $req_tab;
         } elseif (!$can_orders) {
             if ($can_keys) $active_tab = 'keys';
@@ -971,7 +1004,7 @@ $count_ext     = count(array_filter($licenses_db, fn($x) => ($x['product']??'') 
                                                 </td>
                                                 <td>
                                                     <?php if ($st === 'pending'): 
-                                                        $is_tok_ord = ($ord['product'] ?? '') === 'TOKEN_WALLET' || stripos($ord['package_name'] ?? '', 'Token') !== false;
+                                                        $is_tok_ord = ($ord['product'] ?? '') === 'TOKEN_WALLET' || stripos($ord['package_name'] ?? '', 'Token') !== false || stripos($ord['package_name'] ?? '', 'Unlimited') !== false;
                                                         $can_approve = $is_tok_ord ? adm_can('tokens.approve_order') : adm_can('orders.approve');
                                                     ?>
                                                         <div style="display:flex;gap:6px">
@@ -996,7 +1029,17 @@ $count_ext     = count(array_filter($licenses_db, fn($x) => ($x['product']??'') 
                                                             <?php endif; ?>
                                                         </div>
                                                     <?php else: ?>
-                                                        <span class="text-subtle" style="font-size:11.5px">Đã xử lý</span>
+                                                        <?php if ($st === 'approved'): ?>
+                                                            <?php if (!empty($ord['issued_key'])): ?>
+                                                                <code class="font-mono" style="font-size:11px;color:var(--emerald)"><?= htmlspecialchars($ord['issued_key']) ?></code>
+                                                            <?php else: ?>
+                                                                <span class="badge badge-active" style="font-size:10px">ĐÃ DUYỆT</span>
+                                                            <?php endif; ?>
+                                                        <?php elseif ($st === 'rejected'): ?>
+                                                            <span class="badge badge-danger" style="font-size:10px">ĐÃ HỦY</span>
+                                                        <?php else: ?>
+                                                            <span class="text-subtle" style="font-size:11.5px">Đã xử lý</span>
+                                                        <?php endif; ?>
                                                     <?php endif; ?>
                                                 </td>
                                             </tr>
@@ -2007,7 +2050,7 @@ $count_ext     = count(array_filter($licenses_db, fn($x) => ($x['product']??'') 
                 'keys'               => $u_keys,
                 'orders'             => $u_orders,
                 'token_balance'      => (int)($u_wallet['balance'] ?? 0),
-                'token_reserved'     => (int)($u_wallet['reserved'] ?? 0),
+                'token_reserved'     => (int)($u_wallet['reserved_balance'] ?? ($u_wallet['reserved'] ?? 0)),
                 'credit_mode'        => $u_wallet['credit_mode'] ?? 'METERED',
                 'plan'               => $u_wallet['plan'] ?? 'free',
                 'token_transactions' => $u_txs
@@ -2335,7 +2378,7 @@ $count_ext     = count(array_filter($licenses_db, fn($x) => ($x['product']??'') 
                             <td><b>${o.package_name}</b></td>
                             <td style="color:var(--emerald);font-weight:600">${o.package_price}</td>
                             <td>${stBadge}</td>
-                            <td>${o.assigned_key ? `<code class="font-mono" style="color:var(--info);font-size:11px">${o.assigned_key}</code>` : '<span class="text-subtle">-</span>'}</td>
+                            <td>${(o.issued_key || o.assigned_key) ? `<code class="font-mono" style="color:var(--info);font-size:11px">${o.issued_key || o.assigned_key}</code>` : '<span class="text-subtle">-</span>'}</td>
                             <td class="text-subtle" style="font-size:11.5px">${o.created_at}</td>
                         </tr>`;
                     }).join('');
@@ -2348,22 +2391,22 @@ $count_ext     = count(array_filter($licenses_db, fn($x) => ($x['product']??'') 
                         tokensTbody.innerHTML = '<tr><td colspan="6" class="empty-state" style="padding:24px;text-align:center">Chưa có giao dịch token nào cho user này.</td></tr>';
                     } else {
                         tokensTbody.innerHTML = tokenTxs.map(t => {
-                            const delta = Number(t.delta || 0);
+                            const delta = Number(t.amount !== undefined ? t.amount : (t.delta || 0));
                             const deltaStr = (delta > 0 ? '+' : '') + delta.toLocaleString('vi-VN');
                             const deltaClass = delta > 0 ? 'text-emerald' : (delta < 0 ? 'text-danger' : 'text-subtle');
                             const afterBal = Number(t.balance_after || 0).toLocaleString('vi-VN');
                             let tTypeBadge = `<span class="badge badge-outline">${escapeHtml(t.type || 'N/A')}</span>`;
                             if (t.type === 'COMMIT') tTypeBadge = '<span class="badge badge-purple">COMMIT</span>';
                             else if (t.type === 'RESERVE') tTypeBadge = '<span class="badge badge-warning">RESERVE</span>';
-                            else if (t.type === 'RELEASE') tTypeBadge = '<span class="badge badge-info">RELEASE</span>';
-                            else if (t.type === 'ADMIN_ADJUST' || t.type === 'PROMOTION') tTypeBadge = '<span class="badge badge-emerald">' + escapeHtml(t.type) + '</span>';
+                            else if (t.type === 'RELEASE' || t.type === 'REFUND') tTypeBadge = '<span class="badge badge-info">' + escapeHtml(t.type) + '</span>';
+                            else if (t.type === 'ADMIN_ADJUST' || t.type === 'ADMIN_ADJUSTMENT' || t.type === 'PROMOTION' || t.type === 'UPGRADE') tTypeBadge = '<span class="badge badge-emerald">' + escapeHtml(t.type) + '</span>';
 
                             return `<tr>
                                 <td><code style="font-size:11px">#${escapeHtml(t.id)}</code></td>
                                 <td>${tTypeBadge}</td>
                                 <td class="${deltaClass}" style="font-weight:700">${deltaStr}</td>
                                 <td><b>${afterBal}</b></td>
-                                <td style="max-width:240px;word-break:break-word;font-size:12px">${escapeHtml(t.reason || t.metadata_json || '-')}</td>
+                                <td style="max-width:240px;word-break:break-word;font-size:12px">${escapeHtml(t.description || t.reason || t.metadata_json || '-')}</td>
                                 <td class="text-subtle" style="font-size:11px">${escapeHtml(t.created_at || '-')}</td>
                             </tr>`;
                         }).join('');
