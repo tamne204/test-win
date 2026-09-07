@@ -42,10 +42,10 @@ def _create_temp_wav(duration_s: float = 5.0) -> str:
 
 
 def test_pipeline_defaults_and_initialization():
-    """Verify default pipeline configuration is LEGACY with shadow_mode=True."""
+    """Verify default pipeline configuration is HIERARCHICAL_V1 with shadow_mode=False."""
     pipeline = ScriptToSrtPipeline()
-    assert pipeline.options.engine == AlignmentEngineType.LEGACY
-    assert pipeline.options.shadow_mode is True
+    assert pipeline.options.engine == AlignmentEngineType.HIERARCHICAL_V1
+    assert pipeline.options.shadow_mode is False
     assert pipeline.options.allow_degraded is False
 
 

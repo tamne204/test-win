@@ -262,7 +262,8 @@ class SubtitleCue:
 class AlignmentOptions:
     """
     Configuration parameters for alignment and subtitle segmentation.
-    Validation Phase: defaults to LEGACY active with shadow mode enabled.
+    Production Default: HIERARCHICAL_V1 active, shadow_mode disabled.
+    LEGACY engine is retained strictly as an emergency rollback path.
     """
     language: str = "AUTO"
     max_words_per_cue: int = 12
@@ -271,8 +272,8 @@ class AlignmentOptions:
     max_duration_s: float = 5.0
     min_gap_s: float = 0.05
     model_size: str = "base"
-    engine: AlignmentEngineType = AlignmentEngineType.LEGACY
-    shadow_mode: bool = True
+    engine: AlignmentEngineType = AlignmentEngineType.HIERARCHICAL_V1
+    shadow_mode: bool = False
     allow_degraded: bool = False
 
 
