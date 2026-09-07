@@ -30,8 +30,16 @@ class PlannedShotInterval:
     cue_ids: List[int]
     paragraph_ids: List[int]
     sentence_ids: List[int]
-    cost: float
+    cost: float = 0.0
     is_internal_split: bool = False
+
+    @property
+    def start_s(self) -> float:
+        return self.start_us / 1_000_000.0
+
+    @property
+    def end_s(self) -> float:
+        return self.end_us / 1_000_000.0
 
 
 @dataclass
@@ -229,22 +237,30 @@ class VisualShotPlanner:
         If physical images are scarce, shifts target upward to reduce shot count naturally.
         """
         if physical_image_count is None or physical_image_count <= 0:
-            return self.duration_policy.target_min_s, self.duration_policy.target_max_s
+            return 5.4, 7.6
 
         supply_ratio = spoken_duration_s / float(physical_image_count)
 
-        # If supply ratio is high (> 7.0s per image), shortage exists: shift target up
+        # High shortage (> 7.0s per image)
         if supply_ratio > 7.0:
             t_min = min(self.duration_policy.soft_max_s, max(self.duration_policy.target_min_s, supply_ratio - 1.5))
             t_max = min(self.duration_policy.hard_max_s, max(self.duration_policy.target_max_s, supply_ratio + 1.5))
             return t_min, t_max
 
-        # If supply ratio is low (< 3.5s per image), surplus exists: shift target toward target_min
+        # Surplus (< 3.5s per image)
         if supply_ratio < 3.5:
             return self.duration_policy.soft_min_s, self.duration_policy.target_min_s
 
-        # Balanced supply (standard 4.0s - 6.5s)
-        return self.duration_policy.target_min_s, self.duration_policy.target_max_s
+        # Targeted ratio guidance (3.5 <= supply_ratio <= 7.0)
+        # Center target band around supply_ratio to align with available asset count
+        if supply_ratio >= 6.0:
+            t_min = min(self.duration_policy.soft_max_s - 0.5, max(self.duration_policy.target_min_s, round(supply_ratio, 1)))
+            t_max = min(self.duration_policy.soft_max_s, max(self.duration_policy.target_max_s, supply_ratio + 2.5))
+            return t_min, t_max
+
+        t_min = max(self.duration_policy.target_min_s, min(self.duration_policy.soft_max_s - 1.0, round(supply_ratio, 1)))
+        t_max = min(self.duration_policy.soft_max_s, max(self.duration_policy.target_max_s, supply_ratio + 1.6))
+        return t_min, t_max
 
     def _compute_edge_cost(
         self,
