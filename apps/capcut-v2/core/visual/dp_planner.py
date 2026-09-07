@@ -247,9 +247,9 @@ class VisualShotPlanner:
             t_max = min(self.duration_policy.hard_max_s, max(self.duration_policy.target_max_s, supply_ratio + 1.5))
             return t_min, t_max
 
-        # Surplus (< 3.5s per image)
-        if supply_ratio < 3.5:
-            return self.duration_policy.soft_min_s, self.duration_policy.target_min_s
+        # Surplus (<= 4.0s per image)
+        if supply_ratio <= 4.0:
+            return self.duration_policy.soft_min_s, min(self.duration_policy.target_max_s, max(self.duration_policy.target_min_s, supply_ratio + 1.0))
 
         # Targeted ratio guidance (3.5 <= supply_ratio <= 7.0)
         # Center target band around supply_ratio to align with available asset count

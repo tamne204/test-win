@@ -161,8 +161,8 @@ class VisualShot:
 @dataclass
 class VisualPlannerOptions:
     """Runtime configuration for visual planning."""
-    engine: VisualPlannerEngine = VisualPlannerEngine.LEGACY
-    shadow_mode: bool = True
+    engine: VisualPlannerEngine = VisualPlannerEngine.HIERARCHICAL_DP_V1
+    shadow_mode: bool = False
     duration_policy: ShotDurationPolicy = field(default_factory=ShotDurationPolicy)
     tail_policy: TailDurationPolicy = field(default_factory=TailDurationPolicy)
     min_reuse_distance_s: float = 60.0
