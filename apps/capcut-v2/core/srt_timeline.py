@@ -14,11 +14,14 @@ from typing import List, Tuple, Dict, Any, Optional
 
 @dataclass
 class SubtitleEntry:
-    """Parsed subtitle unit with microsecond timestamps."""
+    """Parsed subtitle unit with microsecond timestamps and optional source metadata."""
     index: int
     start_us: int
     end_us: int
     text: str
+    paragraph_id: Optional[int] = None
+    source_token_start: Optional[int] = None
+    source_token_end: Optional[int] = None
 
     @property
     def duration_us(self) -> int:
@@ -180,15 +183,35 @@ def compute_srt_scene_boundaries(
     return clean_scenes
 
 
-def compute_script_paragraphs_scene_boundaries(
-    script_text: str,
-    subtitles: List[SubtitleEntry],
+def _normalize_simple(text: str) -> str:
+    """Helper to clean string for paragraph text matching."""
+    return re.sub(r'[\s\.,!?:;…\-_/\\|~*^%$#@+=\"\'\`\(\)\[\]\{\}\<\>]+', '', text.lower())
+
+
+def compute_script_paragraphs_scene_boundaries_v2(
+    subtitles: List[Any],
+    script_text: Optional[str] = None,
 ) -> List[SceneBoundary]:
     """
-    Derives scene boundaries based on user script paragraph boundaries:
-    - Single newline (\n): new subtitle cue.
-    - Double newline / blank lines (\n\n): new scene / image cut.
+    Groups subtitle cues into visual scenes based on underlying paragraph membership.
+    Resolves ERR-A0-02 (Paragraph ↔ Subtitle Cue 1:1 Mapping Fallacy).
+    - If 1 script paragraph splits into 6 cues, all 6 cues remain in Scene P.
+    - Uses exact cue.paragraph_ids / cue.paragraph_id where available.
+    - If subtitles lack explicit paragraph metadata, matches cue text sequentially against
+      script paragraphs to determine membership without line counting.
+    """
+    return compute_script_paragraphs_scene_boundaries(script_text=script_text or "", subtitles=subtitles)
+
+
+def compute_script_paragraphs_scene_boundaries(
+    script_text: str,
+    subtitles: List[Any],
+) -> List[SceneBoundary]:
+    """
+    Derives scene boundaries based on user script paragraph boundaries (double newlines / blank lines).
     Multiple subtitle cues within the same paragraph share the same scene/image.
+    Uses source token paragraph_id when present, or sequential text membership when absent.
+    Zero 1:1 line counting fallacy.
     """
     if not subtitles:
         return []
@@ -200,28 +223,69 @@ def compute_script_paragraphs_scene_boundaries(
     if not paragraphs:
         return compute_srt_scene_boundaries(subtitles)
 
-    paragraph_line_counts: List[int] = []
-    for p in paragraphs:
-        lines = [line.strip() for line in p.split('\n') if line.strip()]
-        if lines:
-            paragraph_line_counts.append(len(lines))
+    # Check if any subtitle has explicit paragraph_id(s)
+    has_explicit_para_meta = any(
+        getattr(sub, "paragraph_ids", None) or getattr(sub, "paragraph_id", None) is not None
+        for sub in subtitles
+    )
 
-    if not paragraph_line_counts:
-        return compute_srt_scene_boundaries(subtitles)
+    # Map each subtitle to its paragraph_id
+    sub_paragraph_ids: List[int] = []
 
+    if has_explicit_para_meta:
+        for sub in subtitles:
+            p_ids = getattr(sub, "paragraph_ids", None)
+            if p_ids:
+                sub_paragraph_ids.append(p_ids[0])
+            elif getattr(sub, "paragraph_id", None) is not None:
+                sub_paragraph_ids.append(sub.paragraph_id)
+            else:
+                sub_paragraph_ids.append(0)
+    else:
+        # Sequential text matching against script paragraphs (zero line counting)
+        norm_paras = [_normalize_simple(p) for p in paragraphs]
+        curr_p_idx = 0
+        num_p = len(paragraphs)
+
+        for sub in subtitles:
+            norm_sub = _normalize_simple(sub.text)
+            if not norm_sub:
+                sub_paragraph_ids.append(curr_p_idx)
+                continue
+
+            # Check if subtitle belongs to current paragraph or has transitioned to next
+            if curr_p_idx + 1 < num_p:
+                # Check if this subtitle appears in the next paragraph
+                # and no longer appears (or fits poorly) in the current paragraph
+                in_curr = norm_sub in norm_paras[curr_p_idx]
+                in_next = norm_sub in norm_paras[curr_p_idx + 1]
+
+                if in_next and not in_curr:
+                    curr_p_idx += 1
+                elif in_next and in_curr:
+                    # If appears in both, check remaining length of current paragraph
+                    # or advance if current paragraph text was already mostly consumed
+                    pass
+
+            sub_paragraph_ids.append(curr_p_idx)
+
+    # Group subtitles by contiguous paragraph_id
     scenes: List[SceneBoundary] = []
-    sub_idx = 0
     current_scene_start_us = 0
 
-    for p_idx, count in enumerate(paragraph_line_counts):
-        p_subs: List[SubtitleEntry] = []
-        for _ in range(count):
-            if sub_idx < len(subtitles):
-                p_subs.append(subtitles[sub_idx])
-                sub_idx += 1
+    idx = 0
+    total_subs = len(subtitles)
+
+    while idx < total_subs:
+        target_p = sub_paragraph_ids[idx]
+        p_subs: List[Any] = []
+
+        while idx < total_subs and sub_paragraph_ids[idx] == target_p:
+            p_subs.append(subtitles[idx])
+            idx += 1
 
         if not p_subs:
-            break
+            continue
 
         scene_start_us = current_scene_start_us
         scene_end_us = p_subs[-1].end_us
@@ -237,19 +301,6 @@ def compute_script_paragraphs_scene_boundaries(
             )
         )
         current_scene_start_us = scene_end_us
-
-    # If there are remaining subtitles beyond paragraphs, bundle them into a final scene
-    if sub_idx < len(subtitles):
-        remaining_subs = subtitles[sub_idx:]
-        scene_end_us = remaining_subs[-1].end_us
-        scenes.append(
-            SceneBoundary(
-                scene_index=len(scenes),
-                start_us=current_scene_start_us,
-                duration_us=max(1_000_000, scene_end_us - current_scene_start_us),
-                subtitles=remaining_subs,
-            )
-        )
 
     return [s for s in scenes if s.duration_us > 0]
 

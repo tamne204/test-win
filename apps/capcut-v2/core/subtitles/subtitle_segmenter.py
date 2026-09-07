@@ -57,7 +57,13 @@ class SubtitleSegmenter:
 
             should_break = False
 
+            # Hard Paragraph Invariant: A subtitle cue may not cross a strong script paragraph boundary
+            is_para_boundary = (i + 1 < total_tokens) and (token.script_token.paragraph_id != aligned_tokens[i + 1].script_token.paragraph_id)
+
             if is_last:
+                should_break = True
+            elif is_para_boundary:
+                # Inviolable break at paragraph transition
                 should_break = True
             elif tok_count >= max_words:
                 should_break = True
@@ -73,7 +79,8 @@ class SubtitleSegmenter:
             # Dangling word prevention:
             # If breaking now leaves exactly 1 token remaining for the next cue,
             # and we haven't hit strict hard limits, absorb the next token or defer the break.
-            if should_break and not is_last:
+            # Never defer across a paragraph boundary.
+            if should_break and not is_last and not is_para_boundary:
                 remaining_tokens = total_tokens - (i + 1)
                 if remaining_tokens == 1 and tok_count < max_words + 2:
                     # Defer break to include the final dangling word
@@ -91,7 +98,8 @@ class SubtitleSegmenter:
 
     def _build_cue(self, cue_index: int, tokens: List[AlignedToken]) -> SubtitleCue:
         """
-        Reconstruct subtitle text verbatim from original ScriptTokens.
+        Reconstruct subtitle text verbatim from original ScriptTokens
+        and preserve source token & paragraph metadata (A0-02 resolution).
         """
         start_s = tokens[0].start_s
         end_s = tokens[-1].end_s
@@ -110,6 +118,7 @@ class SubtitleSegmenter:
             ConfidenceLevel.HIGH: 1.0,
             ConfidenceLevel.MEDIUM: 0.7,
             ConfidenceLevel.LOW: 0.3,
+            ConfidenceLevel.OMITTED: 0.0,
             ConfidenceLevel.UNMATCHED: 0.0,
         }
         avg_score = sum(conf_scores.get(t.confidence, 0.5) for t in tokens) / max(1, len(tokens))
@@ -121,6 +130,15 @@ class SubtitleSegmenter:
         else:
             cue_conf = ConfidenceLevel.LOW
 
+        # Mathematical alignment confidence and source metadata
+        token_confs = [getattr(t, "token_confidence", 0.8) for t in tokens]
+        math_conf = sum(token_confs) / max(1, len(token_confs))
+
+        src_start = tokens[0].script_token.original_index
+        src_end = tokens[-1].script_token.original_index
+        para_ids = sorted(list({t.script_token.paragraph_id for t in tokens}))
+        sent_ids = sorted(list({t.script_token.sentence_id for t in tokens}))
+
         return SubtitleCue(
             index=cue_index,
             start_s=round(start_s, 3),
@@ -128,6 +146,11 @@ class SubtitleSegmenter:
             text=cue_text,
             confidence=cue_conf,
             tokens=list(tokens),
+            source_token_start=src_start,
+            source_token_end=src_end,
+            paragraph_ids=para_ids,
+            sentence_ids=sent_ids,
+            alignment_confidence=round(math_conf, 3),
         )
 
     def _enforce_timing_hygiene(
