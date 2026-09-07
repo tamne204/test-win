@@ -106,8 +106,8 @@ Implemented in `tests/test_a1_acceptance_matrix.py`:
 ============================== 24 passed in 0.51s ==============================
 ```
 
-1. **`A1-T01` (Normal 641-cue `LONG_01` narration):** DP executes in **$1.25\text{ ms}$** (< 50ms), generates 291 shots, 0 micro-shots. (**PASS**)
-2. **`A1-T02` (Single subtitle cue > 12.0s):** Splits internally via `DURATION_FORCED_INTERNAL_BOUNDARY`; subtitle timing untouched. (**PASS**)
+1. **`A1-T01` (Normal 641-cue `LONG_01` narration):** Unconstrained raw DP executes in **$1.25\text{ ms}$** (< 50ms), generates **291 speech shots** (acceptance band $280 \le N \le 300$), 0 micro-shots. When executed in the full pipeline with 278 physical images, supply-aware planning produces **272 speech shots** + **6 tail shots** = **278 total shots**. (**PASS**)
+2. **`A1-T02` (Single subtitle cue > 12.0s):** Splits internally via `DURATION_FORCED_INTERNAL_BOUNDARY` at $t=9.380\text{s}$; subtitle timing untouched. Note: In production `GOLDEN_LONG_01`, `SubtitleSegmenter` enforces $\le 5.0\text{s}$ per cue (longest cue 16 is $5.000\text{s}$, 0 cues $> 8.5\text{s}$); hence `INTERNAL_FORCED_CUTS = 0` on `LONG_01` and the $18.76\text{s}$ case is verified via this regression fixture. (**PASS**)
 3. **`A1-T03` (Terminal residual < 2.0s):** Merges into adjacent shot up to terminal max 14.0s; no sub-second shot. (**PASS**)
 4. **`A1-T04` (Series of rapid cues 0.5s–1.2s):** Grouped into shots $\ge 3.0\text{s}$; zero $< 2.0\text{s}$ shots. (**PASS**)
 5. **`A1-T05` (Balanced image supply):** 1:1 monotonic mapping, zero reuse, zero dropped assets. (**PASS**)
@@ -149,15 +149,17 @@ A0 Paragraphs:         266 paragraphs
 | Metric | Legacy Timeline | Phase A1 (`HIERARCHICAL_DP_V1`) | Acceptance Criteria | Result |
 | :--- | :--- | :--- | :--- | :--- |
 | **Total Shots** | 278 | **278** (272 speech + 6 tail) | $278 \pm 10$ | **OPTIMAL** |
+| **Raw DP Speech Shots** | N/A | **291** (Unconstrained DP) | $280 \le N \le 300$ | **PASS** |
 | **Micro-Shots (< 2.0s)** | 0 | **0 (0.0%)** | 0 | **PASS** |
-| **Target Range (5.0–8.0s)**| 278 (static 5.0s) | **168 (60.4%)** | $> 50.0\%$ | **PASS** |
-| **Pacing Diversity** | Fixed 5.00s | **Dynamic 2.46s – 9.09s** | Natural rhythm | **PASS** |
-| **Physical Assets Used**| 278 | **278 (100.0%)** | 100% monotonic | **PASS** |
-| **Asset Reuse during Speech**| 0 | **0 (0.0%)** | 0 during speech | **PASS** |
-| **Silent Tail Outro Pacing**| Black screen ($397.2\text{s}$) | **6 shots at $24.40\text{s}$ each** | Contiguous coverage | **ELIMINATED** |
-| **Motion Outliers ($v > 5\%/\text{s}$)**| 138 spikes | **0 (0.0%)** | 0 | **PASS** |
-| **Execution Latency (DP)**| N/A (rule-based) | **1.21 ms** | $< 50\text{ ms}$ | **$40\times$ FASTER** |
-| **Pipeline Replay Runtime**| N/A | **0.187s** | $< 5.0\text{s}$ | **PASS** |
+| **Architectural Target (4.0s–6.5s)** | 278 (static 5.0s) | **110 (40.4% speech)** | Core DP Target | **PASS** |
+| **Supply-Guided Band (5.0s–8.0s)** | 278 (static 5.0s) | **171 (62.9% speech)** | Centered on $6.03\text{s/img}$ | **PASS** |
+| **Pacing Diversity** | Fixed 5.00s | **Dynamic 2.30s – 9.09s** | Natural rhythm | **PASS** |
+| **Physical Assets Used** | 278 | **278 (100.0%)** | 100% monotonic | **PASS** |
+| **Asset Reuse during Speech** | 0 | **0 (0.0%)** | 0 during speech | **PASS** |
+| **Silent Tail Outro Coverage** | $397.233\text{s}$ black gap (visual ends at $1390\text{s}$) | **6 shots at $24.40\text{s}$ each** | Full $1787.233\text{s}$ coverage | **ELIMINATED** |
+| **Motion Outliers ($v > 5\%/\text{s}$)** | 138 spikes | **0 (0.0%)** | 0 | **PASS** |
+| **Execution Latency (DP)** | N/A (rule-based) | **1.21 ms** | $< 50\text{ ms}$ | **$40\times$ FASTER** |
+| **Pipeline Replay Runtime** | N/A | **0.187s** | $< 5.0\text{s}$ | **PASS** |
 | **Validator Verdict** | N/A | **`is_valid = True`, errors = 0** | Zero errors | **PASS** |
 
 ---

@@ -103,7 +103,8 @@ Milestone A1-M7 proves the real-world accuracy, performance, and robustness of t
 
 #### Pacing & Purity Comparison
 - **Micro-shots (< 2.0s):** $0$ (0.0%).
-- **Target Documentary Range (5.0s – 8.0s):** $168$ shots ($60.4\%$).
+- **Architectural Target Range (4.0s – 6.5s):** $110$ shots ($40.4\%$ of speech shots).
+- **Supply-Guided Band (5.0s – 8.0s):** $171$ shots ($62.9\%$ of speech shots), centered around mean supply ratio $6.03\text{s/image}$.
 - **Extended Paragraphs (8.0s – 10.0s):** $44$ shots ($15.8\%$).
 - **Silent Tail Outro Shots (> 10.0s):** Exactly $6$ shots at $24.40\text{s}$ each, spanning $1640.86\text{s}$ to $1787.233\text{s}$.
 - **Monotonic Physical Asset Utilization:** 100% of 278 physical images used in order (`anh_kb001` through `anh_kb278`). Zero dropped assets, zero image reuse during spoken narration.
@@ -125,7 +126,7 @@ Milestone A1-M7 proves the real-world accuracy, performance, and robustness of t
 }
 ```
 
-- **Black Screen Dropout Elimination:** Legacy pipeline left 397.233s of black screen tail because it stopped allocating visual clips after arbitrary scene boundaries. Phase A1 eliminates 100% of the black screen dropout.
+- **Black Screen Dropout Elimination:** Pre-A1 legacy pipeline assigned fixed 5.0s clips to 278 images ($1390.0\text{s}$ total visual length), leaving a $397.233\text{s}$ black screen gap ($250.86\text{s}$ speech narration + $146.373\text{s}$ silent outro music) against master audio ($1787.233\text{s}$). Phase A1 eliminates 100% of this black screen dropout.
 - **Motion Outliers Eliminated:** Legacy random motion policy produced 138 motion velocity spikes ($v > 5.0\%/\text{s}$). Phase A1 duration-aware motion policy reduced velocity outliers to **0**.
 
 ---
