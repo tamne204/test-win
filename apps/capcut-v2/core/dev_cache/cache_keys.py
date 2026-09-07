@@ -20,6 +20,11 @@ DEFAULT_VISUAL_PLANNER_VERSION = "visual_shot_v1"
 DEFAULT_MOTION_ENGINE_VERSION = "ken_burns_v2"
 DEFAULT_CAPCUT_ADAPTER_VERSION = "capcut_adapter_9_3_v2"
 
+# Phase A1 Visual Engine Versions
+VISUAL_PLANNER_ENGINE_VERSION = "hierarchical_dp_v1"
+MOTION_POLICY_VERSION = "duration_aware_velocity_v1"
+VALIDATOR_VERSION = "visual_accuracy_validator_v1"
+
 
 class CacheStage(str, Enum):
     """Stages in the AutoEdit V2 generation pipeline."""
@@ -134,15 +139,17 @@ def build_visual_shot_key(
     subtitle_artifact_hash: str,
     image_manifest_hash: str,
     planner_version: str = DEFAULT_VISUAL_PLANNER_VERSION,
-    visual_settings: Optional[Dict[str, Any]] = None
+    visual_settings: Optional[Dict[str, Any]] = None,
+    validator_version: str = VALIDATOR_VERSION,
 ) -> str:
-    """SUBTITLE_HASH + IMAGE_MANIFEST_HASH + VISUAL_PLANNER_VERSION + VISUAL_SETTINGS_HASH -> VISUAL_SHOT_KEY"""
+    """SUBTITLE_HASH + IMAGE_MANIFEST_HASH + VISUAL_PLANNER_VERSION + VALIDATOR_VERSION + VISUAL_SETTINGS_HASH -> VISUAL_SHOT_KEY"""
     return _combine_hashes(
         CacheStage.VISUAL_SHOT,
         {
             "subtitle_artifact_hash": subtitle_artifact_hash,
             "image_manifest_hash": image_manifest_hash,
             "planner_version": planner_version,
+            "validator_version": validator_version,
             "visual_settings_hash": compute_content_hash(visual_settings or {})
         }
     )
@@ -151,7 +158,7 @@ def build_visual_shot_key(
 def build_editplan_key(
     visual_shot_artifact_hash: str,
     motion_settings: Optional[Dict[str, Any]] = None,
-    motion_engine_version: str = DEFAULT_MOTION_ENGINE_VERSION
+    motion_engine_version: str = MOTION_POLICY_VERSION,
 ) -> str:
     """VISUAL_SHOT_HASH + MOTION_SETTINGS_HASH -> EDITPLAN_KEY"""
     return _combine_hashes(

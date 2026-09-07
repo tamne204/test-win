@@ -23,6 +23,7 @@ from .validator import (
     ValidationIssue,
     ValidationReport,
 )
+from .pipeline_adapter import VisualPipelineAdapter
 
 __all__ = [
     "VisualBoundaryType",
@@ -46,4 +47,5 @@ __all__ = [
     "ValidationSeverity",
     "ValidationIssue",
     "ValidationReport",
+    "VisualPipelineAdapter",
 ]

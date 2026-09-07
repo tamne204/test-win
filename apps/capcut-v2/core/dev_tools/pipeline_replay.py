@@ -47,6 +47,7 @@ from core.subtitles.script_normalizer import tokenize_script, detect_language
 from core.subtitles.srt_generator import generate_srt
 from core.subtitles.subtitle_segmenter import SubtitleSegmenter
 from core.timeline_builder import TimelineBuilder, TIMING_MODE_SRT_DRIVEN
+from core.visual.models import VisualPlannerOptions
 from adapters.capcut.adapter import CapCutAdapter
 
 
@@ -110,6 +111,7 @@ class PipelineReplayHarness:
         preset: Optional[RulePreset] = None,
         draft_target_dir: Optional[str] = None,
         use_cache: bool = True,
+        visual_options: Optional[VisualPlannerOptions] = None,
     ) -> ReplayResult:
         """
         Replay pipeline from ASR stage:
@@ -233,8 +235,11 @@ class PipelineReplayHarness:
             images=images,
             audio_path=audio_path,
             srt_source=srt_content,
+            subtitle_cues=sub_cues,
+            audio_duration_s=audio_duration_s,
             script_text=script_text,
             timing_mode=TIMING_MODE_SRT_DRIVEN,
+            visual_options=visual_options,
         )
         plan_dict = edit_plan.to_dict()
         plan_hash = compute_content_hash(plan_dict)
@@ -293,8 +298,10 @@ class PipelineReplayHarness:
         images: List[str],
         script_text: Optional[str] = None,
         audio_path: Optional[str] = None,
+        audio_duration_s: Optional[float] = None,
         preset: Optional[RulePreset] = None,
         draft_target_dir: Optional[str] = None,
+        visual_options: Optional[VisualPlannerOptions] = None,
     ) -> ReplayResult:
         """
         Replay pipeline from existing SRT:
@@ -318,8 +325,10 @@ class PipelineReplayHarness:
             images=images,
             audio_path=audio_path,
             srt_source=srt_content,
+            audio_duration_s=audio_duration_s,
             script_text=script_text,
             timing_mode=TIMING_MODE_SRT_DRIVEN,
+            visual_options=visual_options,
         )
         plan_dict = edit_plan.to_dict()
         plan_hash = compute_content_hash(plan_dict)
