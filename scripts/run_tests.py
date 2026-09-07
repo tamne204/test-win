@@ -35,6 +35,7 @@ FAST_SUITES = [
     "tests/test_capcut_v2_core.py",
     "tests/test_visual_boundary_builder.py",
     "tests/test_visual_dp_planner.py",
+    "tests/test_visual_image_and_tail.py",
 ]
 
 INTEGRATION_SUITES = [
