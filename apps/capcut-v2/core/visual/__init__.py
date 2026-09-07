@@ -13,6 +13,7 @@ from .models import (
     VisualPlannerOptions,
 )
 from .boundary_builder import VisualBoundaryCandidateBuilder
+from .dp_planner import VisualShotPlanner, PlannedShotInterval, VisualShotBoundaryPath
 
 __all__ = [
     "VisualBoundaryType",
@@ -24,4 +25,7 @@ __all__ = [
     "VisualPlannerEngine",
     "VisualPlannerOptions",
     "VisualBoundaryCandidateBuilder",
+    "VisualShotPlanner",
+    "PlannedShotInterval",
+    "VisualShotBoundaryPath",
 ]
