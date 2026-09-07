@@ -37,6 +37,7 @@ FAST_SUITES = [
     "tests/test_visual_dp_planner.py",
     "tests/test_visual_image_and_tail.py",
     "tests/test_visual_motion_policy.py",
+    "tests/test_visual_validator.py",
 ]
 
 INTEGRATION_SUITES = [

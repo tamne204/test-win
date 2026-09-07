@@ -17,6 +17,12 @@ from .dp_planner import VisualShotPlanner, PlannedShotInterval, VisualShotBounda
 from .image_allocator import ImageAllocationPolicy, AllocationResult, ProjectValidationError
 from .tail_allocator import SilentTailAllocator
 from .motion_policy import DurationAwareMotionPolicy
+from .validator import (
+    VisualAccuracyValidator,
+    ValidationSeverity,
+    ValidationIssue,
+    ValidationReport,
+)
 
 __all__ = [
     "VisualBoundaryType",
@@ -36,4 +42,8 @@ __all__ = [
     "ProjectValidationError",
     "SilentTailAllocator",
     "DurationAwareMotionPolicy",
+    "VisualAccuracyValidator",
+    "ValidationSeverity",
+    "ValidationIssue",
+    "ValidationReport",
 ]
