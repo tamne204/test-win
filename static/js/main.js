@@ -3694,7 +3694,20 @@ async function executeRenderVideo(e) {
       showToast(`📦 [Bước 2/4] Đang gửi ${countLabel} sang máy chủ...`, 'info', 3000);
     }
 
-    const res = await fetch('/render', { method: 'POST', body: fd });
+    let res;
+    try {
+      res = await fetch('/render', { method: 'POST', body: fd });
+    } catch (networkErr) {
+      showErrorModal({
+        code: 'ERR_SERVER_CONNECTION_FAILED',
+        message: 'Không thể kết nối đến máy chủ ứng dụng (localhost:8080)',
+        details: `Lỗi kết nối mạng nội bộ: ${networkErr.message || networkErr}.\nNguyên nhân: Máy chủ Flask backend có thể đã bị dừng hoặc chưa được khởi động.`,
+        suggestion: 'Vui lòng kiểm tra cửa sổ dòng lệnh đen (CMD start_windows.bat / run.bat). Nếu cửa sổ đã bị tắt, hãy khởi động lại ứng dụng.'
+      });
+      errorModalShown = true;
+      throw new Error(`Mất kết nối máy chủ backend: ${networkErr.message || networkErr}`);
+    }
+
     let data;
     try {
       data = await res.json();
@@ -3702,7 +3715,6 @@ async function executeRenderVideo(e) {
       throw new Error(`Máy chủ trả về dữ liệu không hợp lệ (${res.status}): ${res.statusText || 'No response'}`);
     }
 
-    let errorModalShown = false;
     if (!res.ok || (data && data.error)) {
       const errMsg = (data && data.error) ? data.error : `HTTP Status: ${res.status}`;
       showErrorModal({
@@ -3720,16 +3732,22 @@ async function executeRenderVideo(e) {
 
   } catch (err) {
     console.error('❌ executeRenderVideo catch:', err);
-    showToast(`❌ Lỗi Render: ${err.message}`, 'error', 7000);
-    if (typeof errorModalShown !== 'undefined' && !errorModalShown) {
+    const isFailedFetch = err && (err.message || '').includes('Failed to fetch');
+    const displayMsg = isFailedFetch ? 'Không thể kết nối đến máy chủ backend (localhost:8080)' : err.message;
+    showToast(`❌ Lỗi Render: ${displayMsg}`, 'error', 7000);
+    if (!errorModalShown) {
       showErrorModal({
-        code: 'ERR_RENDER_CLIENT_EXCEPTION',
-        message: 'Có sự cố trong quá trình chuẩn bị dữ liệu render',
-        details: `${err.name || 'Error'}: ${err.message || err}\n${err.stack || ''}`,
-        suggestion: 'Vui lòng làm mới trang (F5) hoặc kiểm tra lại file âm thanh / phụ đề.'
+        code: isFailedFetch ? 'ERR_SERVER_OFFLINE' : 'ERR_RENDER_CLIENT_EXCEPTION',
+        message: isFailedFetch ? 'Mất kết nối đến máy chủ Slideshow Studio' : 'Có sự cố trong quá trình chuẩn bị dữ liệu render',
+        details: isFailedFetch
+          ? 'Không thể gửi yêu cầu render tới máy chủ nội bộ. Cửa sổ Command Prompt (start_windows.bat hoặc run.bat) có thể đã bị đóng hoặc ứng dụng gặp lỗi khi khởi động.'
+          : `${err.name || 'Error'}: ${err.message || err}\n${err.stack || ''}`,
+        suggestion: isFailedFetch
+          ? 'Vui lòng mở lại cửa sổ start_windows.bat hoặc run.bat để khởi động lại máy chủ backend, sau đó thử render lại.'
+          : 'Vui lòng làm mới trang (F5) hoặc kiểm tra lại file âm thanh / phụ đề.'
       });
     }
-    showError(err.message);
+    showError(displayMsg);
     setRendering(false);
   } finally {
     isExecutingRender = false;
@@ -3799,10 +3817,10 @@ function startRenderSSE(jobId) {
     showErrorModal({
       code: 'ERR_SSE_CONNECTION_LOST',
       message: 'Mất kết nối luồng tiến trình với máy chủ',
-      details: `EventSource endpoint /progress/${jobId} bị ngắt kết nối.`,
-      suggestion: 'Kiểm tra terminal máy chủ xem Flask có bị dừng đột ngột không.'
+      details: `EventSource endpoint /progress/${jobId} bị ngắt kết nối.\nMáy chủ có thể đã bị dừng đột ngột (thường do FFmpeg chưa được cài đặt hoặc thiếu bộ nhớ RAM).`,
+      suggestion: 'Kiểm tra cửa sổ dòng lệnh (terminal/CMD) xem thông báo lỗi chi tiết, hoặc đảm bảo máy đã cài đặt FFmpeg đầy đủ.'
     });
-    showError('Connection lost during render.');
+    showError('Mất kết nối với máy chủ trong quá trình render.');
     setRendering(false);
     es.close();
   };

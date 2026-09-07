@@ -1,0 +1,20 @@
+{
+  "current_head": "b1752fbc06c6f20f63656ed89790b5dee0d6246a",
+  "current_branch": "main",
+  "working_tree": "CLEAN",
+  "total_features": 44,
+  "production_ready_features": 8,
+  "functional_features": 19,
+  "partial_features": 4,
+  "not_wired_features": 2,
+  "test_only_features": 1,
+  "planned_only_features": 2,
+  "broken_features": 0,
+  "missing_features": 8,
+  "dead_code_features": 0,
+  "p0_blockers": 1,
+  "p1_release_requirements": 7,
+  "p2_post_release": 4,
+  "p3_optional": 1,
+  "final_verdict": "2TOOLNE_AUTOEDIT_CAPCUT_V2_RELEASE_CANDIDATE"
+}

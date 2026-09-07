@@ -1,7 +1,7 @@
 # 📋 TÀI LIỆU BÀN GIAO DỰ ÁN (PROJECT HANDOVER)
 **Dự án**: Slideshow Builder AI (Slideshow Studio)  
-**Phiên bản hiện tại**: `v2.2.3`  
-**Ngày bàn giao**: 28/08/2026  
+**Phiên bản hiện tại**: `v2.3.9`  
+**Ngày bàn giao**: 06/09/2026  
 
 ---
 
@@ -29,8 +29,17 @@
 ### D. File Cấu Hình & Endpoint Cập Nhật Trực Tuyến
 - **API Check Update**: `https://www.2tamne.site/api/license/check_update.php?client_platform={windows|mac}`
 - **File System Config trên Server**: `/public_html/storage/system_config.json`
-- **Link tải gói cài đặt Windows**: `https://www.2tamne.site/downloads/SlideshowBuilder_Windows_v2.2.3.zip` (Alias: `SlideshowBuilder_Windows_latest.zip`)
-- **Link tải gói cài đặt macOS**: `https://www.2tamne.site/downloads/SlideshowBuilder_macOS_v2.2.3.zip` (Alias: `SlideshowBuilder_macOS_latest.zip`)
+- **Link tải gói cài đặt Windows**: `https://www.2tamne.site/downloads/SlideshowBuilder_Windows_v2.3.9.zip` (Alias: `SlideshowBuilder_Windows_latest.zip`)
+- **Link tải gói cài đặt macOS**: `https://www.2tamne.site/downloads/SlideshowBuilder_macOS_v2.3.9.zip` (Alias: `SlideshowBuilder_macOS_latest.zip`)
+
+### E. Thông Tin Google Cloud & OAuth 2.0 Client (Web & Cloud Storage)
+- **Project ID**: `toolne-cloud`
+- **Client ID**: `672703700939-vovbmvjtakmah8p1ge6c05etfos54uo2.apps.googleusercontent.com`
+- **Client Secret**: `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`
+- **Auth URI**: `https://accounts.google.com/o/oauth2/auth`
+- **Token URI**: `https://oauth2.googleapis.com/token`
+- **Auth Provider Cert URL**: `https://www.googleapis.com/oauth2/v1/certs`
+- **Redirect URI**: `https://www.2tamne.site/api/v1/admin/cloud/google/callback`
 
 ---
 
@@ -45,6 +54,7 @@
 >    - Bản Windows: Chứa `start_windows.bat`, `run.bat`, `SlideshowStudio.vbs`; loại trừ `start_mac.command`.
 >    - Bản macOS: Chứa `start_mac.command` (ưu tiên `.venv/bin/python3`); loại trừ các file `.bat` và `.vbs`.
 > 5. **Tôn trọng lựa chọn của người dùng**: Khi user chọn chế độ nào (Cloud hoặc Offline), hệ thống phải thực thi đúng chế độ đó, không được tự ý chuyển đổi qua lại.
+> 6. **Bắt buộc đánh số phiên bản mới cho mọi update (Mandatory Version Bump)**: Bất kỳ cập nhật, sửa lỗi hay bản vá nào dù lớn hay nhỏ đều **bắt buộc phải tăng số phiên bản mới** (Semantic Versioning: ví dụ `2.3.2` -> `2.3.3` -> `2.3.4`). Tuyệt đối không được giữ nguyên số phiên bản cũ khi cập nhật code để đảm bảo khách hàng và hệ thống phân biệt rành mạch, triệt tiêu lỗi lưu cache của trình duyệt và file tải về.
 
 ---
 

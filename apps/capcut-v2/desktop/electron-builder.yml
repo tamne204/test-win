@@ -1,0 +1,51 @@
+appId: site.2tamne.autoedit
+productName: 2TOOLNE AutoEdit
+copyright: Copyright © 2026 2TOOLNE Team
+
+directories:
+  output: dist
+  buildResources: assets
+
+files:
+  - "**/*"
+  - "!dist/**"
+  - "!tests/**"
+
+extraResources:
+  - from: "../packaging/dist/autoedit-core"
+    to: "autoedit-core"
+    filter:
+      - "**/*"
+
+mac:
+  category: public.app-category.video
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+    - target: zip
+      arch:
+        - arm64
+        - x64
+  hardenedRuntime: true
+  gatekeeperAssess: false
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+  requestedExecutionLevel: asInvoker
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: 2TOOLNE AutoEdit
+  uninstallDisplayName: 2TOOLNE AutoEdit
+  artifactName: "${productName}-Setup-${version}.${ext}"

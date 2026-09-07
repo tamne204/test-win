@@ -2,6 +2,27 @@
 session_start();
 require_once __DIR__ . '/storage/db.php';
 
+// App Auth Flow Check
+if (isset($_GET['cancel_auth'])) {
+    unset($_SESSION['pending_app_auth']);
+    unset($_SESSION['app_auth_approved']);
+    header('Location: index.php');
+    exit;
+}
+if (isset($_GET['app_auth'])) {
+    $existing = $_SESSION['pending_app_auth'] ?? [];
+    $new_sess = trim($_GET['session'] ?? '');
+    $new_chal = trim($_GET['challenge'] ?? '');
+    $new_port = intval($_GET['port'] ?? 0);
+
+    $_SESSION['pending_app_auth'] = [
+        'session'   => (!empty($new_sess)) ? $new_sess : ($existing['session'] ?? ''),
+        'challenge' => (!empty($new_chal)) ? $new_chal : ($existing['challenge'] ?? ''),
+        'port'      => ($new_port > 0) ? $new_port : ($existing['port'] ?? 0),
+    ];
+}
+$pending_app_auth = (!empty($_SESSION['pending_app_auth']['session'])) ? $_SESSION['pending_app_auth'] : null;
+
 // Check GET logout
 if (isset($_GET['logout'])) {
     unset($_SESSION['user']);
@@ -26,6 +47,23 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'poll_orders') {
     exit;
 }
 
+// ── AJAX ENDPOINT: Get My Token Balance ─────────────────────────────
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'get_my_balance') {
+    header('Content-Type: application/json; charset=utf-8');
+    $u = $_SESSION['user'] ?? '';
+    if (!$u) { echo json_encode(['status' => 'error', 'balance' => 0]); exit; }
+    $w = db_get_user_wallet($u);
+    $bal = (int)($w['balance'] ?? 0);
+    echo json_encode([
+        'status' => 'success',
+        'balance' => $bal,
+        'formatted' => number_format($bal, 0, ',', '.'),
+        'credit_mode' => $w['credit_mode'] ?? 'METERED',
+        'plan' => $w['plan'] ?? 'free'
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 // ── AJAX ENDPOINT: Mark Broadcast Notice Read ───────────────────────
 if (isset($_GET['ajax']) && $_GET['ajax'] === 'mark_notice_read') {
     $nid = trim($_GET['id'] ?? '');
@@ -42,6 +80,31 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'mark_notice_read') {
     exit;
 }
 
+// ── AJAX ENDPOINT: Get Team Details & Members ───────────────────────────
+if (isset($_GET['ajax']) && $_GET['ajax'] === 'get_team_details') {
+    header('Content-Type: application/json; charset=utf-8');
+    $team_id = trim($_GET['team_id'] ?? '');
+    $u = $_SESSION['user'] ?? '';
+    $u_info = $u ? db_get_user($u) : null;
+    if (!$u_info || empty($u_info['id']) || empty($team_id)) {
+        echo json_encode(['status' => 'error', 'message' => 'Vui lòng đăng nhập!']); exit;
+    }
+    $my_role = db_get_team_user_role($team_id, $u_info['id']);
+    if (!$my_role && !in_array($u_info['role'] ?? '', ['admin', 'super_admin'], true)) {
+        echo json_encode(['status' => 'error', 'message' => 'Bạn không phải là thành viên trong nhóm này!']); exit;
+    }
+    $team = db_get_team($team_id);
+    $members = db_get_team_members($team_id);
+    echo json_encode([
+        'status'  => 'success',
+        'team'    => $team,
+        'members' => $members,
+        'my_role' => $my_role ?: 'ADMIN',
+        'current_user_id' => $u_info['id']
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 // Load databases from MySQL
 $users_db    = db_get_users();
 $licenses_db = db_get_licenses();
@@ -50,12 +113,18 @@ $features_db = db_get_features();
 $bugs_db     = db_get_bugs();
 $sys_config  = db_get_system_config();
 
-$current_user   = $_SESSION['user'] ?? null;
-$user_info      = $current_user ? db_get_user($current_user) : null;
-$user_wallet    = $current_user ? db_get_user_wallet($current_user) : null;
+// Current User State
+$current_user = $_SESSION['user'] ?? '';
+$user_info = $current_user ? db_get_user($current_user) : null;
+$user_licenses = $current_user ? array_filter($licenses_db, fn($l) => strtolower($l['owner_user'] ?? '') === strtolower($current_user)) : [];
+$user_wallet = $current_user ? db_get_user_wallet($current_user) : ['balance' => 0, 'reserved' => 0, 'credit_mode' => 'METERED', 'plan' => 'free'];
+$user_orders = $current_user ? array_filter($orders_db, fn($o) => strtolower($o['user'] ?? ($o['username'] ?? '')) === strtolower($current_user)) : [];
+$user_pending_orders = array_filter($user_orders, fn($o) => ($o['status'] ?? '') === 'pending');
 $user_tokens_tx = $current_user ? db_get_user_token_transactions($current_user, 30) : [];
 $token_packages = db_get_token_packages();
 $client_ip      = $_SERVER['REMOTE_ADDR'] ?? '';
+$user_cloud_spaces = ($user_info && !empty($user_info['id'])) ? db_get_cloud_spaces_for_user($user_info['id']) : [];
+$user_pending_invites = ($user_info && !empty($user_info['id'])) ? db_get_user_pending_invites($user_info['id']) : [];
 
 // ── PRG Flash Messages (Post-Redirect-Get) ──────────────────────────
 $msg_success = '';
@@ -63,7 +132,42 @@ $msg_error   = '';
 if (isset($_SESSION['flash_success'])) { $msg_success = $_SESSION['flash_success']; unset($_SESSION['flash_success']); }
 if (isset($_SESSION['flash_error']))   { $msg_error   = $_SESSION['flash_error'];   unset($_SESSION['flash_error']);   }
 
+if (isset($_GET['payment_status'])) {
+    $p_st = $_GET['payment_status'];
+    $p_ord = htmlspecialchars($_GET['order_id'] ?? '');
+    $order_info = $p_ord ? db_get_order($p_ord) : null;
+    $is_token_order = $order_info && (($order_info['product'] ?? '') === 'TOKEN_WALLET' || stripos($order_info['package_name'] ?? '', 'Token') !== false);
+
+    if ($p_st === 'success') {
+        if ($is_token_order) {
+            $msg_success = "🎉 <b>Thanh toán thành công!</b> Đơn hàng <b>{$p_ord}</b> đã hoàn tất. Số <b>lượt phóng to ảnh AI (Token)</b> đã được cộng trực tiếp vào ví tài khoản của bạn!";
+        } elseif ($order_info) {
+            $msg_success = "🎉 <b>Thanh toán thành công!</b> Đơn hàng <b>{$p_ord}</b> đã hoàn tất. <b>Bản quyền phần mềm (License Key)</b> của bạn đã được kích hoạt thành công! Quý khách vui lòng kiểm tra tab <b>Bản Quyền Của Tôi</b>.";
+        } else {
+            $msg_success = "🎉 <b>Thanh toán thành công!</b> Đơn hàng <b>{$p_ord}</b> đã được ghi nhận. Hệ thống đang tiến hành kích hoạt dịch vụ cho bạn trong giây lát!";
+        }
+    } elseif ($p_st === 'cancel') {
+        $msg_error = "Bạn đã hủy giao dịch thanh toán cho đơn hàng <b>{$p_ord}</b>.";
+    } elseif ($p_st === 'error') {
+        $msg_error = "Giao dịch thanh toán cho đơn hàng <b>{$p_ord}</b> không thành công hoặc đã bị gián đoạn. Vui lòng thử lại hoặc liên hệ hỗ trợ.";
+    }
+}
+
 function flash_redirect($type, $msg, $tab = '') {
+    $is_ajax = !empty($_POST['ajax']) 
+        || !empty($_GET['ajax'])
+        || (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false)
+        || (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+    if ($is_ajax) {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'status' => $type === 'success' ? 'success' : 'error',
+            'message' => strip_tags($msg),
+            'html_message' => $msg,
+            'tab' => $tab
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
     $_SESSION["flash_{$type}"] = $msg;
     $url = 'index.php' . ($tab ? "?tab={$tab}" : '');
     header("Location: {$url}");
@@ -100,6 +204,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
 
             $_SESSION['user'] = $u;
+            if (!empty($_SESSION['pending_app_auth']['session'])) {
+                $p_auth = $_SESSION['pending_app_auth'];
+                $qs = http_build_query([
+                    'app_auth'  => 1,
+                    'session'   => $p_auth['session'],
+                    'challenge' => $p_auth['challenge'],
+                    'port'      => $p_auth['port'],
+                ]);
+                header("Location: index.php?" . $qs);
+                exit;
+            }
             header("Location: index.php?registered=" . ($got_trial ? '1' : '0'));
             exit;
         }
@@ -113,10 +228,81 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         if ($user_row && password_verify($p, $user_row['password_hash'])) {
             $_SESSION['user'] = $u;
+            if (!empty($_SESSION['pending_app_auth']['session'])) {
+                $p_auth = $_SESSION['pending_app_auth'];
+                $qs = http_build_query([
+                    'app_auth'  => 1,
+                    'session'   => $p_auth['session'],
+                    'challenge' => $p_auth['challenge'],
+                    'port'      => $p_auth['port'],
+                ]);
+                header("Location: index.php?" . $qs);
+                exit;
+            }
             header("Location: index.php");
             exit;
         } else {
             $msg_error = 'Sai tên đăng nhập hoặc mật khẩu!';
+        }
+    }
+
+    // 2.5 APPROVE APP AUTH
+    elseif ($act === 'approve_app_auth' && $current_user) {
+        $sess_id   = trim($_POST['session_id'] ?? ($_SESSION['pending_app_auth']['session'] ?? ''));
+        $port      = intval($_POST['port'] ?? ($_SESSION['pending_app_auth']['port'] ?? 0));
+        $challenge = trim($_POST['challenge'] ?? ($_SESSION['pending_app_auth']['challenge'] ?? ''));
+
+        $user_row = db_get_user($current_user);
+        if ($user_row && !empty($sess_id)) {
+            $uid = (string)$user_row['id'];
+            $token = hash_hmac('sha256', $uid . time(), '2toolne_jwt_auth_secret_token_key_2026');
+
+            $db = get_db();
+            $stmt = $db->prepare('
+                SELECT l.plan, l.credit_mode, l.expires_at, w.balance as token_balance
+                FROM users u
+                LEFT JOIN license_entitlements l ON u.id = l.user_id
+                LEFT JOIN credit_wallets w ON u.id = w.user_id
+                WHERE u.id = ?
+            ');
+            $stmt->execute([$uid]);
+            $extra = $stmt->fetch() ?: [];
+
+            $user_data = [
+                'id' => $uid,
+                'username' => $user_row['username'],
+                'email' => $user_row['email'] ?: $user_row['username'],
+                'full_name' => $user_row['fullname'] ?? '',
+                'role' => $user_row['role'] ?? 'user',
+                'plan' => $extra['plan'] ?? 'PRO',
+                'credit_mode' => $extra['credit_mode'] ?? 'METERED',
+                'token_balance' => (int)($extra['token_balance'] ?? 0),
+                'expires_at' => $extra['expires_at'] ?? null,
+            ];
+
+            $stmt = $db->prepare('
+                UPDATE app_auth_sessions
+                SET status = "APPROVED", user_id = ?, token = ?, payload = ?
+                WHERE id = ?
+            ');
+            $stmt->execute([$uid, $token, json_encode($user_data), $sess_id]);
+
+            unset($_SESSION['pending_app_auth']);
+
+            $_SESSION['app_auth_approved'] = [
+                'username'  => $user_row['username'],
+                'plan'      => $user_data['plan'],
+                'balance'   => $user_data['token_balance'],
+                'port'      => $port,
+                'session'   => $sess_id,
+                'token'     => $token,
+                'uid'       => $uid,
+                'email'     => $user_data['email'],
+                'challenge' => $challenge,
+            ];
+
+            header("Location: index.php?app_auth_approved=1");
+            exit;
         }
     }
 
@@ -160,8 +346,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         );
         $target_tab = ($pkg_prod === 'TOKEN_WALLET') ? 'wallet' : 'keys';
         $success_msg = ($pkg_prod === 'TOKEN_WALLET') 
-            ? '🎉 Đã ghi nhận thông tin thanh toán nạp Token! Admin sẽ duyệt và cộng Token vào ví ngay khi nhận được thanh toán.' 
-            : '🎉 Đã ghi nhận thông tin thanh toán! Đơn hàng đang được Admin duyệt để cấp Key.';
+            ? '🎉 Đã ghi nhận thông tin thanh toán nạp lượt ảnh! Hệ thống sẽ kiểm tra và cộng lượt vào tài khoản ngay khi xác nhận thanh toán.' 
+            : '🎉 Đã ghi nhận yêu cầu mua bản quyền phần mềm! Đơn hàng sẽ được kích hoạt ngay sau khi xác nhận thanh toán.';
+
+        $is_ajax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') 
+                   || (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false)
+                   || isset($_POST['is_ajax']);
+
+        if ($is_ajax) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'status' => 'success',
+                'message' => $success_msg,
+                'order_id' => $ord_id,
+                'target_tab' => $target_tab
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
         flash_redirect('success', $success_msg, $target_tab);
     }
 
@@ -185,7 +387,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 flash_redirect('error', 'Bạn đã gửi tối đa 3 phiếu mong muốn update trong tháng này!', 'features');
             } else {
                 db_create_feature(uniqid('ft_'), $current_user, $title, $desc);
-                flash_redirect('success', '✅ Đã gửi phiếu mong muốn update! Admin sẽ xem xét bổ sung vào bản cập nhật tới.', 'features');
+                flash_redirect('success', '✅ Đã gửi phiếu mong muốn update! Đội ngũ phát triển 2TOOL sẽ ghi nhận và xem xét bổ sung vào bản cập nhật tới.', 'features');
             }
         }
     }
@@ -221,6 +423,83 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             flash_redirect('success', '🐞 Đã gửi báo cáo lỗi! Đội ngũ kỹ thuật sẽ kiểm tra và khắc phục sớm nhất.', 'bugs');
         }
     }
+
+    // 9. RESPOND TEAM INVITE
+    elseif ($act === 'respond_team_invite' && $user_info) {
+        $invite_id = trim($_POST['invite_id'] ?? '');
+        $decision = strtoupper(trim($_POST['decision'] ?? ''));
+        $res = db_respond_team_invite($invite_id, $user_info['id'], $decision);
+        if (!empty($res['success'])) {
+            if ($decision === 'ACCEPT') {
+                flash_redirect('success', '🎉 Chúc mừng! Bạn đã tham gia Team Cloud thành công. Dung lượng nhóm đã được liên kết vào tài khoản của bạn!', 'cloud-storage');
+            } else {
+                flash_redirect('success', 'Đã từ chối lời mời tham gia nhóm.', 'cloud-storage');
+            }
+        } else {
+            flash_redirect('error', '❌ ' . ($res['error'] ?? 'Không thể xử lý lời mời'), 'cloud-storage');
+        }
+    }
+
+    // 10. SEND TEAM INVITE
+    elseif ($act === 'send_team_invite' && $user_info) {
+        $team_id = trim($_POST['team_id'] ?? '');
+        $target_u = trim($_POST['target_username'] ?? '');
+        $my_role = db_get_team_user_role($team_id, $user_info['id']);
+        if (!in_array($my_role, ['OWNER', 'ADMIN'])) {
+            flash_redirect('error', '❌ Bạn không có quyền mời thành viên vào nhóm này!', 'cloud-storage');
+        }
+        $res = db_invite_team_member($team_id, $target_u, $user_info['id']);
+        if (!empty($res['success'])) {
+            flash_redirect('success', "🎉 Đã gửi lời mời tham gia Team tới tài khoản <b>@{$target_u}</b> thành công!", 'cloud-storage');
+        } else {
+            flash_redirect('error', '❌ ' . ($res['error'] ?? 'Không thể gửi lời mời'), 'cloud-storage');
+        }
+    }
+
+    // 11. REMOVE TEAM MEMBER
+    elseif ($act === 'user_remove_team_member' && $user_info) {
+        $team_id = trim($_POST['team_id'] ?? '');
+        $target_uid = trim($_POST['member_user_id'] ?? '');
+        $my_role = db_get_team_user_role($team_id, $user_info['id']);
+        $target_role = db_get_team_user_role($team_id, $target_uid);
+
+        $can_remove = false;
+        if ($my_role === 'OWNER' && $target_uid !== $user_info['id']) {
+            $can_remove = true;
+        } elseif ($my_role === 'ADMIN' && $target_role === 'MEMBER') {
+            $can_remove = true;
+        }
+
+        if (!$can_remove) {
+            flash_redirect('error', '❌ Bạn không có quyền xóa thành viên này!', 'cloud-storage');
+        }
+
+        $res = db_remove_team_member($team_id, $target_uid);
+        if (!empty($res['success'])) {
+            flash_redirect('success', '✅ Đã xóa thành viên khỏi Team!', 'cloud-storage');
+        } else {
+            flash_redirect('error', '❌ ' . ($res['error'] ?? 'Lỗi xóa thành viên'), 'cloud-storage');
+        }
+    }
+
+    // 12. UPDATE TEAM MEMBER ROLE (PHÂN QUYỀN VAI TRÒ)
+    elseif ($act === 'user_update_team_role' && $user_info) {
+        $team_id = trim($_POST['team_id'] ?? '');
+        $target_uid = trim($_POST['member_user_id'] ?? '');
+        $new_role = strtoupper(trim($_POST['role'] ?? ''));
+        $my_role = db_get_team_user_role($team_id, $user_info['id']);
+
+        if ($my_role !== 'OWNER') {
+            flash_redirect('error', '❌ Chỉ Trưởng nhóm (Owner) mới có quyền phân quyền vai trò thành viên!', 'cloud-storage');
+        }
+
+        $res = db_update_team_member_role($team_id, $target_uid, $new_role);
+        if (!empty($res['success'])) {
+            flash_redirect('success', "✅ {$res['message']}", 'cloud-storage');
+        } else {
+            flash_redirect('error', '❌ ' . ($res['error'] ?? 'Lỗi phân quyền thành viên'), 'cloud-storage');
+        }
+    }
 }
 
 // Refresh databases and pending orders for user
@@ -234,14 +513,8 @@ $user_info      = $current_user ? db_get_user($current_user) : null;
 $user_wallet    = $current_user ? db_get_user_wallet($current_user) : null;
 $user_tokens_tx = $current_user ? db_get_user_token_transactions($current_user, 30) : [];
 
-$user_pending_orders = [];
-if ($user_info) {
-    foreach ($orders_db as $ord) {
-        if (($ord['user'] ?? '') === $current_user && ($ord['status'] ?? '') === 'pending') {
-            $user_pending_orders[] = $ord;
-        }
-    }
-}
+$user_orders = $current_user ? array_filter($orders_db, fn($o) => strtolower($o['user'] ?? ($o['username'] ?? '')) === strtolower($current_user)) : [];
+$user_pending_orders = array_filter($user_orders, fn($o) => ($o['status'] ?? '') === 'pending');
 
 if (isset($_GET['flash_out'])) {
     $msg_success = '👋 Bạn đã đăng xuất thành công. Hẹn gặp lại!';
@@ -249,9 +522,9 @@ if (isset($_GET['flash_out'])) {
 
 if (isset($_GET['registered'])) {
     if ($_GET['registered'] === '1') {
-        $msg_success = '🎉 Chúc mừng bạn đã đăng ký thành công! Bạn được <b>TẶNG NGAY 1 KEY DÙNG THỬ 3 NGÀY</b> + <b>50 TOKENS MIỄN PHÍ</b> vào ví!';
+        $msg_success = '🎉 Chúc mừng bạn đã đăng ký thành công! Bạn được <b>TẶNG NGAY 1 KHÓA DÙNG THỬ 3 NGÀY</b> + <b>50 LƯỢT PHÓNG TO ẢNH (TOKEN) MIỄN PHÍ</b>!';
     } else {
-        $msg_success = '🎉 Đăng ký tài khoản thành công! Bạn đã được <b>TẶNG NGAY 50 TOKENS MIỄN PHÍ</b> vào ví!';
+        $msg_success = '🎉 Đăng ký tài khoản thành công! Bạn đã được <b>TẶNG NGAY 50 LƯỢT PHÓNG TO ẢNH (TOKEN) MIỄN PHÍ</b> vào ví!';
     }
 }
 ?>
@@ -264,7 +537,7 @@ if (isset($_GET['registered'])) {
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="globals.css">
+    <link rel="stylesheet" href="globals.css?v=<?= filemtime(__DIR__ . '/globals.css') ?>">
     <style>
         /* ── Specific View Layout Adjustments ──────────────────────────────── */
         .site-nav {
@@ -553,20 +826,569 @@ if (isset($_GET['registered'])) {
             animation: modalFadeIn 0.2s ease;
         }
 
-        @media (max-width: 900px) {
+        /* ── Responsive Utilities & Mobile Navigation ──────────────────────── */
+        .desktop-only {
+            display: flex;
+        }
+        .mobile-only {
+            display: none;
+        }
+        .mobile-nav-drawer {
+            position: absolute;
+            top: 60px;
+            left: 0;
+            right: 0;
+            background: rgba(18, 18, 21, 0.98);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border-strong);
+            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            opacity: 0;
+            transform: translateY(-8px);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            max-height: calc(100vh - 60px);
+            max-height: calc(100dvh - 60px);
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .mobile-nav-drawer.open {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .mobile-nav-content {
+            padding: 16px;
+        }
+        .mobile-nav-links {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .mobile-nav-link {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 11px 14px;
+            border-radius: var(--radius-sm);
+            font-size: 13.5px;
+            font-weight: 500;
+            color: var(--foreground);
+            background: var(--surface-1);
+            border: 1px solid var(--border);
+            text-decoration: none;
+            transition: all 0.15s ease;
+        }
+        .mobile-nav-link:hover, .mobile-nav-link:active {
+            background: var(--surface-hover);
+            border-color: var(--border-strong);
+            color: #ffffff;
+        }
+        .pricing-card .btn {
+            width: 100%;
+            height: 42px;
+            font-size: 13.5px;
+            font-weight: 600;
+        }
+
+        @media (max-width: 860px) {
+            .desktop-only {
+                display: none !important;
+            }
+            .mobile-only {
+                display: flex !important;
+            }
             .dash-layout {
                 grid-template-columns: 1fr;
+                gap: 14px;
+                margin-top: 14px;
+                min-height: auto;
+            }
+            .dash-sidebar {
+                padding: 10px 12px;
+                position: sticky;
+                top: 60px;
+                z-index: 90;
+                background: rgba(18, 18, 21, 0.96);
+                backdrop-filter: blur(12px);
+                -webkit-backdrop-filter: blur(12px);
+                border-radius: var(--radius-sm);
+                border: 1px solid var(--border);
+            }
+            .dash-user-card {
+                display: none;
+            }
+            .dash-nav {
+                flex-direction: row;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                gap: 6px;
+                padding-bottom: 2px;
+                scrollbar-width: none;
+            }
+            .dash-nav::-webkit-scrollbar {
+                display: none;
+            }
+            .dash-nav-btn {
+                width: auto;
+                flex-shrink: 0;
+                padding: 7px 12px;
+                font-size: 12.5px;
+                border-radius: 20px;
+                background: var(--surface-2);
+                border: 1px solid var(--border);
+                white-space: nowrap;
+            }
+            .dash-nav-btn.active {
+                background: var(--primary);
+                color: #ffffff;
+                border-color: var(--primary);
+                font-weight: 600;
+                box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);
+            }
+            .hero-section {
+                padding: 44px 0 32px;
             }
             .hero-title {
-                font-size: 32px;
+                font-size: 28px;
+                line-height: 1.25;
+            }
+            .hero-desc {
+                font-size: 14px;
+                margin-bottom: 24px;
+            }
+            .hero-actions .btn {
+                width: 100%;
+                height: 42px;
+            }
+            #toast {
+                left: 16px;
+                right: 16px;
+                bottom: 16px;
+                max-width: calc(100% - 32px);
+                justify-content: center;
+                text-align: center;
             }
         }
-        @media (max-width: 768px) {
+        @media (max-width: 640px) {
+            .pricing-grid {
+                grid-template-columns: 1fr;
+            }
+            .feature-grid {
+                grid-template-columns: 1fr;
+            }
             .smart-download-container {
                 width: 100%;
             }
             .smart-download-btn {
                 width: 100%;
+            }
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           2TOOLNE CLOUD STORAGE V2 DESIGN SYSTEM (INLINE PROTECTED)
+           ═══════════════════════════════════════════════════════════════════════════ */
+        .cloud-header-box {
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.85) 0%, rgba(17, 24, 39, 0.95) 100%) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            border-radius: var(--radius-lg) !important;
+            padding: 18px 22px !important;
+            margin-bottom: 16px !important;
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+        }
+        .cloud-header-bar {
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            flex-wrap: wrap !important;
+            gap: 14px !important;
+        }
+        .cloud-status-pulse {
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 6px !important;
+            background: rgba(16, 185, 129, 0.12) !important;
+            border: 1px solid rgba(16, 185, 129, 0.35) !important;
+            color: #34d399 !important;
+            padding: 3px 10px !important;
+            border-radius: 999px !important;
+            font-size: 11px !important;
+            font-weight: 700 !important;
+        }
+        .cloud-pulse-dot {
+            width: 7px;
+            height: 7px;
+            background: #10b981;
+            border-radius: 50%;
+            box-shadow: 0 0 8px #10b981;
+            animation: pulseDot 2s infinite ease-in-out;
+        }
+        @keyframes pulseDot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.35; transform: scale(0.8); }
+        }
+        .cloud-space-selector-wrap {
+            display: flex !important;
+            align-items: center !important;
+            gap: 8px !important;
+            background: rgba(255, 255, 255, 0.04) !important;
+            padding: 6px 12px !important;
+            border-radius: var(--radius-md) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        }
+        .cloud-space-selector {
+            background: transparent !important;
+            border: none !important;
+            color: var(--foreground) !important;
+            font-size: 13px !important;
+            font-weight: 600 !important;
+            outline: none !important;
+            cursor: pointer !important;
+        }
+        .cloud-space-selector option {
+            background: #0f172a;
+            color: #f1f5f9;
+        }
+        /* Sleek Quota Strip (1 Horizontal Compact Bar) */
+        .cloud-quota-strip {
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            background: rgba(17, 24, 39, 0.65) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            border-radius: var(--radius-md) !important;
+            padding: 10px 18px !important;
+            margin-bottom: 14px !important;
+            gap: 16px !important;
+            flex-wrap: wrap !important;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        .cloud-quota-strip-left {
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 6px !important;
+            min-width: 240px !important;
+            flex: 1.2 !important;
+        }
+        .cloud-quota-track-strip {
+            width: 100% !important;
+            height: 6px !important;
+            background: rgba(255, 255, 255, 0.08) !important;
+            border-radius: 999px !important;
+            overflow: hidden !important;
+        }
+        .cloud-quota-strip-right {
+            display: flex !important;
+            align-items: center !important;
+            gap: 10px !important;
+            flex-wrap: wrap !important;
+            flex: 1 !important;
+            justify-content: flex-end !important;
+        }
+        .cloud-chip-compact {
+            background: rgba(255, 255, 255, 0.04) !important;
+            border: 1px solid rgba(255, 255, 255, 0.06) !important;
+            border-radius: 6px !important;
+            padding: 5px 10px !important;
+            font-size: 12px !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 6px !important;
+        }
+        .cloud-quota-dashboard {
+            display: grid !important;
+            grid-template-columns: 1.3fr 1fr !important;
+            gap: 16px !important;
+            background: rgba(17, 24, 39, 0.7) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            border-radius: var(--radius-lg) !important;
+            padding: 16px 20px !important;
+            margin-bottom: 16px !important;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        .cloud-quota-track {
+            width: 100% !important;
+            height: 8px !important;
+            background: rgba(255, 255, 255, 0.06) !important;
+            border-radius: 999px !important;
+            overflow: hidden !important;
+            margin: 10px 0 6px 0 !important;
+            border: 1px solid rgba(255, 255, 255, 0.04) !important;
+        }
+        .cloud-quota-fill {
+            height: 100% !important;
+            border-radius: 999px !important;
+            background: linear-gradient(90deg, #10b981 0%, #06b6d4 50%, #3b82f6 100%) !important;
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.4) !important;
+            transition: width 0.4s ease !important;
+        }
+        .cloud-quota-fill.over-quota {
+            background: linear-gradient(90deg, #f59e0b 0%, #ef4444 100%) !important;
+        }
+        .cloud-stat-chips {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+            gap: 8px !important;
+        }
+        .cloud-chip {
+            background: rgba(255, 255, 255, 0.03) !important;
+            border: 1px solid rgba(255, 255, 255, 0.06) !important;
+            border-radius: var(--radius-md) !important;
+            padding: 8px 12px !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 10px !important;
+        }
+        .cloud-chip-icon {
+            font-size: 18px !important;
+        }
+        .cloud-chip-label {
+            font-size: 10.5px !important;
+            color: var(--muted-foreground) !important;
+            text-transform: uppercase !important;
+            font-weight: 700 !important;
+            letter-spacing: 0.03em !important;
+        }
+        .cloud-chip-val {
+            font-size: 13.5px !important;
+            font-weight: 700 !important;
+            color: var(--foreground) !important;
+            font-family: var(--font-mono) !important;
+        }
+        .cloud-toolbar-v2 {
+            background: rgba(17, 24, 39, 0.6) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            border-radius: var(--radius-md) !important;
+            padding: 10px 14px !important;
+            margin-bottom: 16px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            gap: 12px !important;
+            flex-wrap: wrap !important;
+            backdrop-filter: blur(8px);
+        }
+        .cloud-toolbar-row1 {
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            flex-wrap: wrap !important;
+            gap: 10px !important;
+        }
+        .cloud-toolbar-row2 {
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            flex-wrap: wrap !important;
+            gap: 10px !important;
+            padding-top: 10px !important;
+            border-top: 1px solid rgba(255, 255, 255, 0.05) !important;
+        }
+        .cloud-breadcrumbs {
+            display: flex !important;
+            align-items: center !important;
+            gap: 6px !important;
+            font-size: 13px !important;
+            flex-wrap: wrap !important;
+        }
+        .cloud-crumb {
+            color: var(--muted-foreground) !important;
+            cursor: pointer !important;
+            padding: 3px 8px !important;
+            border-radius: var(--radius-sm) !important;
+            transition: all 0.15s !important;
+        }
+        .cloud-crumb:hover {
+            color: #38bdf8 !important;
+            background: rgba(56, 189, 248, 0.08) !important;
+        }
+        .cloud-crumb.active {
+            color: var(--foreground) !important;
+            font-weight: 600 !important;
+            cursor: default !important;
+            background: rgba(255, 255, 255, 0.06) !important;
+        }
+        .cloud-search-box {
+            display: flex !important;
+            align-items: center !important;
+            background: rgba(0, 0, 0, 0.25) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            border-radius: var(--radius-md) !important;
+            padding: 4px 10px !important;
+            gap: 8px !important;
+            min-width: 220px !important;
+        }
+        .cloud-search-input {
+            background: transparent !important;
+            border: none !important;
+            outline: none !important;
+            color: var(--foreground) !important;
+            font-size: 12.5px !important;
+            width: 100% !important;
+        }
+        .cloud-filter-pills {
+            display: flex !important;
+            align-items: center !important;
+            gap: 6px !important;
+            flex-wrap: wrap !important;
+        }
+        .cloud-filter-pill {
+            padding: 4px 10px !important;
+            border-radius: 999px !important;
+            font-size: 11.5px !important;
+            font-weight: 500 !important;
+            color: var(--muted-foreground) !important;
+            background: rgba(255, 255, 255, 0.03) !important;
+            border: 1px solid rgba(255, 255, 255, 0.06) !important;
+            cursor: pointer !important;
+            transition: all 0.15s ease !important;
+        }
+        .cloud-filter-pill:hover {
+            color: var(--foreground) !important;
+            border-color: rgba(255, 255, 255, 0.15) !important;
+        }
+        .cloud-filter-pill.active {
+            color: #38bdf8 !important;
+            background: rgba(56, 189, 248, 0.12) !important;
+            border-color: rgba(56, 189, 248, 0.4) !important;
+            font-weight: 600 !important;
+        }
+        .cloud-view-toggle {
+            display: inline-flex !important;
+            background: rgba(0, 0, 0, 0.25) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            border-radius: var(--radius-sm) !important;
+            padding: 2px !important;
+        }
+        .cloud-view-btn {
+            padding: 4px 8px !important;
+            border: none !important;
+            background: transparent !important;
+            color: var(--muted-foreground) !important;
+            cursor: pointer !important;
+            border-radius: 4px !important;
+            font-size: 13px !important;
+        }
+        .cloud-view-btn.active {
+            background: rgba(255, 255, 255, 0.1) !important;
+            color: var(--foreground) !important;
+        }
+        .cloud-empty-dropzone, .cloud-dropzone {
+            border: 2px dashed rgba(56, 189, 248, 0.3) !important;
+            border-radius: var(--radius-lg) !important;
+            padding: 44px 20px !important;
+            text-align: center !important;
+            background: rgba(15, 23, 42, 0.45) !important;
+            backdrop-filter: blur(8px) !important;
+            cursor: pointer !important;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        }
+        .cloud-empty-dropzone:hover, .cloud-empty-dropzone.dragover,
+        .cloud-dropzone:hover, .cloud-dropzone.dragover {
+            border-color: #38bdf8 !important;
+            background: rgba(56, 189, 248, 0.08) !important;
+            box-shadow: 0 0 25px rgba(56, 189, 248, 0.15) !important;
+            transform: translateY(-2px) !important;
+        }
+        .cloud-dropzone-icon {
+            font-size: 44px !important;
+            margin-bottom: 10px !important;
+            filter: drop-shadow(0 4px 12px rgba(56, 189, 248, 0.3)) !important;
+        }
+        .cloud-table-wrap {
+            background: rgba(17, 24, 39, 0.7) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            border-radius: var(--radius-md) !important;
+            overflow: hidden !important;
+        }
+        .cloud-table-v2 {
+            width: 100% !important;
+            border-collapse: collapse !important;
+            margin: 0 !important;
+            font-size: 13px !important;
+        }
+        .cloud-table-v2 th {
+            padding: 12px 14px !important;
+            text-align: left !important;
+            font-size: 11px !important;
+            font-weight: 700 !important;
+            text-transform: uppercase !important;
+            color: var(--muted-foreground) !important;
+            background: rgba(0, 0, 0, 0.2) !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+        }
+        .cloud-table-v2 td {
+            padding: 12px 14px !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
+            color: var(--foreground) !important;
+            vertical-align: middle !important;
+        }
+        .cloud-table-v2 tr:hover td {
+            background: rgba(255, 255, 255, 0.02) !important;
+        }
+        .cloud-file-badge {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 32px !important;
+            height: 32px !important;
+            border-radius: var(--radius-sm) !important;
+            font-size: 16px !important;
+            flex-shrink: 0 !important;
+        }
+        .cloud-badge-img { background: rgba(16, 185, 129, 0.15) !important; color: #34d399 !important; }
+        .cloud-badge-vid { background: rgba(56, 189, 248, 0.15) !important; color: #38bdf8 !important; }
+        .cloud-badge-zip { background: rgba(245, 158, 11, 0.15) !important; color: #fbbf24 !important; }
+        .cloud-badge-doc { background: rgba(168, 85, 247, 0.15) !important; color: #c084fc !important; }
+        .cloud-grid {
+            display: grid !important;
+            grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)) !important;
+            gap: 12px !important;
+            margin-bottom: 20px !important;
+        }
+        .cloud-card-item {
+            background: rgba(17, 24, 39, 0.8) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            border-radius: var(--radius-md) !important;
+            padding: 14px !important;
+            cursor: pointer !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: space-between !important;
+            min-height: 105px !important;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        }
+        .cloud-card-item:hover {
+            border-color: rgba(56, 189, 248, 0.4) !important;
+            background: rgba(30, 41, 59, 0.85) !important;
+            transform: translateY(-2px) !important;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35) !important;
+        }
+
+        @media (max-width: 900px) {
+            .cloud-quota-dashboard {
+                grid-template-columns: 1fr !important;
+            }
+        }
+        @media (max-width: 768px) {
+            .cloud-header-bar {
+                flex-direction: column !important;
+                align-items: stretch !important;
+            }
+            .cloud-space-selector-wrap {
+                width: 100% !important;
+            }
+            .cloud-toolbar-v2 {
+                flex-direction: column !important;
+                align-items: stretch !important;
+            }
+            .cloud-stat-chips {
+                grid-template-columns: 1fr 1fr !important;
             }
         }
     </style>
@@ -579,27 +1401,31 @@ if (isset($_GET['registered'])) {
             <a href="index.php" class="nav-brand">
                 <div class="nav-brand-logo">2</div>
                 <span>2tamne.site</span>
-                <span class="badge" style="font-size:10px;padding:1px 6px">v1.0-rc</span>
+                <span class="badge desktop-only" style="font-size:10px;padding:1px 6px">v1.0-rc</span>
             </a>
 
-            <nav class="nav-menu">
+            <!-- DESKTOP NAV MENU -->
+            <nav class="nav-menu desktop-only">
                 <?php if ($user_info): ?>
                     <a href="#tab-buy-key" class="nav-item" onclick="switchMainTab('tab-buy-key')">Sản Phẩm</a>
                     <a href="#tab-downloads" class="nav-item" onclick="switchMainTab('tab-downloads')">Tải Về</a>
-                    <a href="#tab-wallet-view" class="nav-item" onclick="switchMainTab('tab-wallet-view')">Ví Token</a>
+                    <a href="#tab-wallet-view" class="nav-item" onclick="switchMainTab('tab-wallet-view')">Ví Lượt Ảnh (Upscale)</a>
+                    <a href="#tab-cloud-storage" class="nav-item" onclick="switchMainTab('tab-cloud-storage')">Cloud Lưu Trữ</a>
                     <a href="#tab-buy-key" class="nav-item" onclick="switchMainTab('tab-buy-key')">Bảng Giá</a>
                 <?php else: ?>
                     <a href="#products" class="nav-item">Sản Phẩm</a>
+                    <a href="#products" class="nav-item" onclick="switchProductTab('ptab-cloud', 'ptab-btn-cloud'); location.href='#products'">Cloud Lưu Trữ</a>
                     <a href="#downloads" class="nav-item">Tải Về</a>
                     <a href="#pricing" class="nav-item">Bảng Giá</a>
                 <?php endif; ?>
                 <a href="https://zalo.me/0326649304" target="_blank" class="nav-item" style="color:var(--emerald)">Hỗ Trợ Zalo</a>
             </nav>
 
-            <div style="display:flex;align-items:center;gap:10px">
+            <!-- DESKTOP ACTIONS -->
+            <div class="desktop-only" style="align-items:center;gap:10px">
                 <?php if ($user_info): ?>
-                    <a href="#tab-wallet-view" onclick="switchMainTab('tab-wallet-view')" class="badge" style="background:rgba(234, 179, 8, 0.15);border:1px solid rgba(234, 179, 8, 0.45);color:#facc15;font-weight:700;font-size:12px;padding:4px 10px;text-decoration:none;display:inline-flex;align-items:center;gap:6px;border-radius:20px;cursor:pointer" title="Số dư token: Bấm để nạp thêm hoặc xem lịch sử">
-                        🪙 <span id="nav-token-balance"><?= number_format($user_wallet['balance'] ?? 0, 0, ',', '.') ?></span> Tokens
+                    <a href="#tab-wallet-view" onclick="switchMainTab('tab-wallet-view')" class="badge" style="background:rgba(234, 179, 8, 0.15);border:1px solid rgba(234, 179, 8, 0.45);color:#facc15;font-weight:700;font-size:12px;padding:4px 10px;text-decoration:none;display:inline-flex;align-items:center;gap:6px;border-radius:20px;cursor:pointer" title="Số dư lượt phóng to ảnh AI (Tokens): Bấm để nạp thêm hoặc xem lịch sử">
+                        🪙 <span id="nav-token-balance"><?= number_format($user_wallet['balance'] ?? 0, 0, ',', '.') ?></span> Lượt ảnh
                     </a>
                     <?php if (in_array($user_info['role'] ?? '', ['admin', 'super_admin', 'sales', 'tech_support', 'content_manager', 'custom'])): ?>
                         <a href="license_admin.php" class="btn btn-outline btn-xs" style="border-color:var(--primary);color:var(--primary)" title="Trang Quản Trị Hệ Thống">
@@ -611,7 +1437,64 @@ if (isset($_GET['registered'])) {
                     </a>
                 <?php else: ?>
                     <button class="btn btn-outline btn-sm" onclick="openModal('modal-login')">Đăng Nhập</button>
-                    <button class="btn btn-primary btn-sm" onclick="openModal('modal-register')">🎁 Nhận Key + 50 Token</button>
+                    <button class="btn btn-primary btn-sm" onclick="openModal('modal-register')">🎁 Nhận Key + 50 Lượt Ảnh</button>
+                <?php endif; ?>
+            </div>
+
+            <!-- MOBILE NAV CONTROLS -->
+            <div class="mobile-only" style="align-items:center;gap:8px">
+                <?php if ($user_info): ?>
+                    <a href="#tab-wallet-view" onclick="switchMainTab('tab-wallet-view')" class="badge" style="background:rgba(234, 179, 8, 0.15);border:1px solid rgba(234, 179, 8, 0.45);color:#facc15;font-weight:700;font-size:11.5px;padding:3px 8px;text-decoration:none;display:inline-flex;align-items:center;gap:4px;border-radius:16px">
+                        🪙 <span id="nav-token-balance-mobile"><?= number_format($user_wallet['balance'] ?? 0, 0, ',', '.') ?></span>
+                    </a>
+                <?php endif; ?>
+                <button type="button" class="btn btn-outline btn-sm" id="btn-mobile-menu-toggle" onclick="toggleMobileMenu()" aria-label="Menu" style="padding:0 10px;height:34px">
+                    <span id="mobile-menu-icon" style="font-size:16px;line-height:1">☰</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- MOBILE DROPDOWN DRAWER -->
+        <div id="mobile-nav-panel" class="mobile-nav-drawer" style="display:none">
+            <div class="mobile-nav-content">
+                <?php if ($user_info): ?>
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--surface-2);border-radius:var(--radius-sm);margin-bottom:12px;border:1px solid var(--border)">
+                        <div>
+                            <div style="font-weight:600;font-size:13.5px;color:var(--foreground)">👤 <?= htmlspecialchars($user_info['fullname'] ?: $user_info['username']) ?></div>
+                            <div style="font-size:11.5px;color:var(--muted-foreground)">@<?= htmlspecialchars($user_info['username']) ?></div>
+                        </div>
+                        <span class="badge badge-active" style="font-size:11px"><?= strtoupper(htmlspecialchars($user_info['role'] ?? 'USER')) ?></span>
+                    </div>
+                    <nav class="mobile-nav-links">
+                        <a href="#tab-my-keys" class="mobile-nav-link" onclick="mobileSwitchTab('tab-my-keys')">🔑 Bản Quyền Của Tôi</a>
+                        <a href="#tab-orders-history" class="mobile-nav-link" onclick="mobileSwitchTab('tab-orders-history')">🧾 Lịch Sử Giao Dịch (<?= count($user_orders) ?>)</a>
+                        <a href="#tab-wallet-view" class="mobile-nav-link" onclick="mobileSwitchTab('tab-wallet-view')">🪙 Ví Lượt Ảnh (<?= number_format($user_wallet['balance'] ?? 0, 0, ',', '.') ?>)</a>
+                        <a href="#tab-cloud-storage" class="mobile-nav-link" onclick="mobileSwitchTab('tab-cloud-storage')">☁️ 2TOOLNE Cloud (Lưu Trữ)</a>
+                        <a href="#tab-buy-key" class="mobile-nav-link" onclick="mobileSwitchTab('tab-buy-key')">🛒 Mua Gói Bản Quyền & Bảng Giá</a>
+                        <a href="#tab-downloads" class="mobile-nav-link" onclick="mobileSwitchTab('tab-downloads')">📥 Tải Về Phần Mềm</a>
+                        <a href="#tab-features-view" class="mobile-nav-link" onclick="mobileSwitchTab('tab-features-view')">💡 Góp Ý Tính Năng</a>
+                        <a href="#tab-bugs-view" class="mobile-nav-link" onclick="mobileSwitchTab('tab-bugs-view')">🐞 Báo Lỗi Phần Mềm</a>
+                        <a href="#tab-settings" class="mobile-nav-link" onclick="mobileSwitchTab('tab-settings')">⚙️ Cài Đặt Tài Khoản</a>
+                        <a href="https://zalo.me/0326649304" target="_blank" class="mobile-nav-link" style="color:var(--emerald)">💬 Hỗ Trợ Zalo Kỹ Thuật (0326649304)</a>
+                        <?php if (in_array($user_info['role'] ?? '', ['admin', 'super_admin', 'sales', 'tech_support', 'content_manager', 'custom'])): ?>
+                            <a href="license_admin.php" class="mobile-nav-link" style="color:#60a5fa">👑 Trang Quản Trị Hệ Thống</a>
+                        <?php endif; ?>
+                    </nav>
+                    <div style="margin-top:14px;display:flex;gap:8px">
+                        <a href="?logout=1" class="btn btn-outline" style="width:100%;height:38px;color:var(--danger)">Đăng Xuất</a>
+                    </div>
+                <?php else: ?>
+                    <nav class="mobile-nav-links">
+                        <a href="#products" class="mobile-nav-link" onclick="toggleMobileMenu()">🚀 Sản Phẩm Phần Mềm</a>
+                        <a href="#products" class="mobile-nav-link" onclick="toggleMobileMenu();switchProductTab('ptab-cloud', 'ptab-btn-cloud')">☁️ 2TOOLNE Cloud (Lưu Trữ)</a>
+                        <a href="#downloads" class="mobile-nav-link" onclick="toggleMobileMenu()">📥 Tải Về Bộ Cài Đặt</a>
+                        <a href="#pricing" class="mobile-nav-link" onclick="toggleMobileMenu()">🏷️ Bảng Giá Dịch Vụ</a>
+                        <a href="https://zalo.me/0326649304" target="_blank" class="mobile-nav-link" style="color:var(--emerald)">💬 Hỗ Trợ Zalo Kỹ Thuật</a>
+                    </nav>
+                    <div style="margin-top:16px;display:flex;flex-direction:column;gap:10px">
+                        <button class="btn btn-outline" style="width:100%;height:40px" onclick="toggleMobileMenu();openModal('modal-login')">🔐 Đăng Nhập Tài Khoản</button>
+                        <button class="btn btn-primary" style="width:100%;height:40px" onclick="toggleMobileMenu();openModal('modal-register')">🎁 Nhận Key + 50 Lượt Ảnh</button>
+                    </div>
                 <?php endif; ?>
             </div>
         </div>
@@ -633,15 +1516,59 @@ if (isset($_GET['registered'])) {
             
             <!-- PENDING ORDERS POLLING BANNER -->
             <?php if (!empty($user_pending_orders)): ?>
-                <?php foreach ($user_pending_orders as $p_ord): ?>
+                <?php foreach ($user_pending_orders as $p_ord): 
+                    $is_tok = (($p_ord['product'] ?? '') === 'TOKEN_WALLET' || stripos($p_ord['package_name'] ?? '', 'Token') !== false);
+                ?>
                     <div class="alert alert-warning" style="margin-top:20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
                         <div>
-                            ⏳ <b>Đơn hàng đang chờ duyệt:</b> Đơn mua <b><?= htmlspecialchars($p_ord['package_name']) ?> (<?= htmlspecialchars($p_ord['package_price']) ?>)</b>.
-                            Key sẽ tự động xuất hiện tại mục "Bản Quyền". Tự động kiểm tra sau <b id="poll-sec">10</b>s...
+                            ⏳ <b>Đơn hàng đang chờ xử lý:</b> Đơn mua <b><?= htmlspecialchars($p_ord['package_name']) ?> (<?= htmlspecialchars($p_ord['package_price']) ?>)</b>.<br>
+                            <?php if ($is_tok): ?>
+                                🪙 Lượt phóng to ảnh sẽ tự động được cộng vào <b>"Ví Lượt Ảnh (Upscale)"</b> ngay khi hoàn tất.
+                            <?php else: ?>
+                                🔑 Khóa bản quyền sẽ tự động xuất hiện tại mục <b>"Bản Quyền Của Tôi"</b> ngay khi hoàn tất.
+                            <?php endif; ?>
+                            (Hệ thống tự động kiểm tra sau <b id="poll-sec">10</b>s...)
                         </div>
                         <a href="https://zalo.me/0326649304" target="_blank" class="btn btn-outline btn-xs" style="border-color:var(--warning);color:var(--warning)">
-                            💬 Nhắn Admin Duyệt Gấp
+                            💬 Hỗ Trợ Kích Hoạt Nhanh
                         </a>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+
+            <!-- PENDING TEAM INVITES BANNER -->
+            <?php if (!empty($user_pending_invites)): ?>
+                <?php foreach ($user_pending_invites as $invite): ?>
+                    <div class="alert alert-info" style="margin-top:20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;background:linear-gradient(135deg, rgba(56,189,248,0.12), rgba(16,185,129,0.12));border:1px solid rgba(56,189,248,0.35);border-radius:12px;padding:14px 18px">
+                        <div style="display:flex;align-items:center;gap:12px">
+                            <span style="font-size:26px">👥</span>
+                            <div>
+                                <div style="font-size:14px;font-weight:700;color:var(--foreground)">
+                                    🎉 Bạn nhận được lời mời tham gia Đội Nhóm: <span style="color:#38bdf8"><?= htmlspecialchars($invite['team_name']) ?></span>
+                                </div>
+                                <div style="font-size:12.5px;color:var(--muted-foreground);margin-top:2px">
+                                    Lời mời từ Trưởng nhóm <b><?= htmlspecialchars($invite['owner_fullname'] ?: $invite['owner_username']) ?></b> (@<?= htmlspecialchars($invite['owner_username']) ?>). Khi tham gia, bạn sẽ được dùng chung bộ nhớ Cloud và không gian làm việc của Team!
+                                </div>
+                            </div>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:8px">
+                            <form method="POST" style="margin:0">
+                                <input type="hidden" name="action" value="respond_team_invite">
+                                <input type="hidden" name="invite_id" value="<?= htmlspecialchars($invite['invite_id']) ?>">
+                                <input type="hidden" name="decision" value="ACCEPT">
+                                <button type="submit" class="btn btn-emerald btn-sm" style="font-weight:700">
+                                    <span>✅</span> Đồng Ý Tham Gia
+                                </button>
+                            </form>
+                            <form method="POST" style="margin:0" onsubmit="return confirm('Bạn có chắc chắn muốn từ chối lời mời vào nhóm này?')">
+                                <input type="hidden" name="action" value="respond_team_invite">
+                                <input type="hidden" name="invite_id" value="<?= htmlspecialchars($invite['invite_id']) ?>">
+                                <input type="hidden" name="decision" value="REJECT">
+                                <button type="submit" class="btn btn-outline btn-sm" style="color:var(--danger);border-color:var(--danger)">
+                                    <span>❌</span> Từ Chối
+                                </button>
+                            </form>
+                        </div>
                     </div>
                 <?php endforeach; ?>
             <?php endif; ?>
@@ -657,8 +1584,14 @@ if (isset($_GET['registered'])) {
                         <button class="dash-nav-btn active" id="btn-tab-keys" onclick="switchMainTab('tab-my-keys')">
                             <span>🔑</span> Bản Quyền Của Tôi
                         </button>
+                        <button class="dash-nav-btn" id="btn-tab-orders" onclick="switchMainTab('tab-orders-history')">
+                            <span>🧾</span> Lịch Sử Giao Dịch (<?= count($user_orders) ?>)
+                        </button>
                         <button class="dash-nav-btn" id="btn-tab-wallet" onclick="switchMainTab('tab-wallet-view')">
-                            <span>🪙</span> Ví Token (<?= number_format($user_wallet['balance'] ?? 0, 0, ',', '.') ?>)
+                            <span>🪙</span> Ví Lượt Ảnh Upscale (<?= number_format($user_wallet['balance'] ?? 0, 0, ',', '.') ?>)
+                        </button>
+                        <button class="dash-nav-btn" id="btn-tab-cloud" onclick="switchMainTab('tab-cloud-storage')">
+                            <span>☁️</span> 2TOOLNE Cloud (Lưu Trữ)
                         </button>
                         <button class="dash-nav-btn" id="btn-tab-downloads" onclick="switchMainTab('tab-downloads')">
                             <span>📥</span> Tải Phần Mềm
@@ -685,8 +1618,8 @@ if (isset($_GET['registered'])) {
                     <div id="tab-my-keys" class="tab-pane active">
                         <div class="card">
                             <div class="card-header">
-                                <div class="card-title">🔑 Danh Sách License Key Đã Sở Hữu</div>
-                                <button class="btn btn-emerald btn-sm" onclick="switchMainTab('tab-buy-key')">+ Mua Thêm Key</button>
+                                <div class="card-title">🔑 Danh Sách Bản Quyền Đã Sở Hữu</div>
+                                <button class="btn btn-emerald btn-sm" onclick="switchMainTab('tab-buy-key')">+ Mua Bản Quyền Mới</button>
                             </div>
                             <div class="card-body" style="padding:0">
                                 <?php 
@@ -695,20 +1628,20 @@ if (isset($_GET['registered'])) {
                                 ?>
                                     <div class="empty-state">
                                         <div class="empty-state-icon">🔑</div>
-                                        <div class="empty-state-title">Chưa Có License Key Nào</div>
-                                        <div class="empty-state-desc">Bạn chưa kích hoạt license nào trên tài khoản. Hãy bấm sang tab "Mua Gói Bản Quyền" để chọn gói phù hợp.</div>
+                                        <div class="empty-state-title">Chưa Có Bản Quyền Phần Mềm Nào</div>
+                                        <div class="empty-state-desc">Bạn chưa kích hoạt mã bản quyền nào trên tài khoản. Hãy bấm sang tab "Mua Gói Bản Quyền" để lựa chọn phần mềm phù hợp.</div>
                                     </div>
                                 <?php else: ?>
                                     <div class="table-responsive">
                                         <table class="data-table">
                                             <thead>
                                                 <tr>
-                                                    <th>License Key</th>
+                                                    <th>Khóa Bản Quyền</th>
                                                     <th>Sản Phẩm</th>
-                                                    <th>Gói</th>
+                                                    <th>Gói Dịch Vụ</th>
                                                     <th>Thời Hạn</th>
                                                     <th>Trạng Thái</th>
-                                                    <th>Thiết Bị (HWID)</th>
+                                                    <th>Thiết Bị Kích Hoạt</th>
                                                     <th>Thao Tác</th>
                                                 </tr>
                                             </thead>
@@ -719,7 +1652,8 @@ if (isset($_GET['registered'])) {
                                                     $status = $lic['status'] ?? 'active';
                                                     $tier = $lic['tier'] ?? 'VIP';
                                                     $hwid = $lic['hwid'] ?? '';
-                                                    $is_2toolne = ($lic['product'] ?? '') === '2TOOLNE' || strpos($k, '2TOOLNE-') === 0;
+                                                    $is_capcut = ($lic['product'] ?? '') === '2toolne.capcut.v2' || ($lic['product'] ?? '') === 'CAPCUT_V2' || strpos($k, '2TL-CAP-') === 0;
+                                                    $is_2toolne = !$is_capcut && (($lic['product'] ?? '') === '2TOOLNE' || strpos($k, '2TOOLNE-') === 0);
                                                     $is_ext = ($lic['product'] ?? '') === 'LABS_EXTENSION' || strpos($k, '2TAMNE-LABS-') === 0;
                                                 ?>
                                                     <tr>
@@ -730,7 +1664,9 @@ if (isset($_GET['registered'])) {
                                                             </div>
                                                         </td>
                                                         <td>
-                                                            <?php if ($is_2toolne): ?>
+                                                            <?php if ($is_capcut): ?>
+                                                                <span class="badge" style="background:#7c3aed;color:#fff">🎬 CapCut AutoEdit V2</span>
+                                                            <?php elseif ($is_2toolne): ?>
                                                                 <span class="badge badge-active">🚀 2toolne Studio</span>
                                                             <?php elseif ($is_ext): ?>
                                                                 <span class="badge badge-info">🖼️ Labs Extension</span>
@@ -739,40 +1675,43 @@ if (isset($_GET['registered'])) {
                                                             <?php endif; ?>
                                                         </td>
                                                         <td>
-                                                            <span class="badge <?= $tier === 'TRIAL' ? 'badge-trial' : 'badge-active' ?>"><?= htmlspecialchars($tier) ?></span>
+                                                            <span class="badge <?= $tier === 'TRIAL' ? 'badge-trial' : 'badge-active' ?>"><?= $tier === 'TRIAL' ? 'DÙNG THỬ' : ($tier === 'LIFETIME' ? 'VĨNH VIỄN' : htmlspecialchars($tier)) ?></span>
                                                         </td>
                                                         <td style="font-size:12px;color:var(--muted-foreground)">
                                                             <?= $lic['expires_at'] ? (strpos($lic['expires_at'], '2099') !== false ? '👑 Vĩnh viễn' : htmlspecialchars($lic['expires_at'])) : ($lic['duration_days'] . ' ngày') ?>
                                                         </td>
                                                         <td>
                                                             <span class="badge <?= $status === 'active' ? 'badge-active' : 'badge-danger' ?>">
-                                                                <?= strtoupper($status) ?>
+                                                                <?= $status === 'active' ? 'ĐANG DÙNG' : 'HẾT HẠN' ?>
                                                             </span>
                                                         </td>
                                                         <td>
                                                             <?php if ($hwid): ?>
                                                                 <div style="font-size:11.5px">
                                                                     <code style="color:var(--info)"><?= substr($hwid, 0, 10) ?>...</code>
-                                                                    <div style="color:var(--muted-subtle)"><?= htmlspecialchars($lic['device_name'] ?: 'Desktop') ?></div>
+                                                                    <div style="color:var(--muted-subtle)"><?= htmlspecialchars($lic['device_name'] ?: 'Máy tính cá nhân') ?></div>
                                                                 </div>
                                                             <?php else: ?>
-                                                                <span style="color:var(--emerald);font-size:12px">Chưa kích hoạt</span>
+                                                                <span style="color:var(--emerald);font-size:12px">Chưa kích hoạt (Sẵn sàng)</span>
                                                             <?php endif; ?>
                                                         </td>
                                                         <td>
                                                             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-                                                                <?php if ($is_2toolne): ?>
+                                                                <?php if ($is_capcut): ?>
+                                                                    <a href="/downloads/2toolne_AutoEdit_macOS_latest.dmg" class="btn btn-emerald btn-xs" title="Tải 2toolne AutoEdit cho macOS (.dmg)">🍎 Mac</a>
+                                                                    <a href="/downloads/2toolne_AutoEdit_Setup_latest.exe" class="btn btn-accent btn-xs" title="Tải 2toolne AutoEdit cho Windows (.exe)">🪟 Win</a>
+                                                                <?php elseif ($is_2toolne): ?>
                                                                     <a href="/downloads/2toolne_macOS_latest.zip" class="btn btn-emerald btn-xs" title="Tải 2toolne cho macOS">🍎 Mac</a>
                                                                     <a href="/downloads/2toolne_Windows_latest.zip" class="btn btn-accent btn-xs" title="Tải 2toolne cho Windows">🪟 Win</a>
                                                                 <?php elseif ($is_ext): ?>
                                                                     <a href="/downloads/2tamne_Labs_Extension_latest.zip" class="btn btn-outline btn-xs" title="Tải Labs Extension">🧩 Extension</a>
                                                                 <?php else: ?>
-                                                                    <a href="/downloads/SlideshowBuilder_macOS_latest.zip" class="btn btn-emerald btn-xs" title="Tải Slideshow AI cho macOS">🍎 Mac</a>
-                                                                    <a href="/downloads/SlideshowBuilder_Windows_latest.zip" class="btn btn-accent btn-xs" title="Tải Slideshow AI cho Windows">🪟 Win</a>
+                                                                    <a href="/downloads/SlideshowBuilder_macOS_v2.3.9.zip" class="btn btn-emerald btn-xs" title="Tải Slideshow AI cho macOS">🍎 Mac</a>
+                                                                    <a href="/downloads/SlideshowBuilder_Windows_v2.3.9.zip" class="btn btn-accent btn-xs" title="Tải Slideshow AI cho Windows">🪟 Win</a>
                                                                 <?php endif; ?>
                                                                 <?php if ($hwid): ?>
                                                                     <button type="button" class="btn btn-outline btn-xs" style="color:var(--info);border-color:var(--info)" onclick="openResetHwidModal('<?= htmlspecialchars($k) ?>')">
-                                                                        🔄 Đổi Máy
+                                                                        🔄 Đổi Thiết Bị
                                                                     </button>
                                                                 <?php else: ?>
                                                                     <span class="text-subtle" style="font-size:11px">Sẵn sàng</span>
@@ -789,6 +1728,121 @@ if (isset($_GET['registered'])) {
                         </div>
                     </div>
 
+                    <!-- TAB: USER ORDERS & TRANSACTIONS HISTORY -->
+                    <div id="tab-orders-history" class="tab-pane" style="display:none">
+                        <div class="card">
+                            <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+                                <div style="display:flex;align-items:center;gap:10px">
+                                    <div class="card-title">🧾 Lịch Sử Giao Dịch & Đơn Hàng Của Bạn</div>
+                                    <span class="badge badge-info" id="user-order-filter-status">Tất cả (<?= count($user_orders) ?>)</span>
+                                </div>
+                                <button class="btn btn-emerald btn-xs" onclick="switchMainTab('tab-buy-key')">+ Mua Bản Quyền Mới</button>
+                            </div>
+
+                            <!-- DATE & STATUS FILTER TOOLBAR -->
+                            <div style="padding:12px 16px;background:var(--surface-2);border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between">
+                                <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px">
+                                    <span style="font-size:12px;font-weight:600;color:var(--muted-foreground);display:inline-flex;align-items:center;gap:4px">
+                                        📅 Duyệt theo ngày:
+                                    </span>
+                                    <div style="display:flex;align-items:center;gap:6px">
+                                        <input type="date" id="user-filter-date-from" class="form-input" style="font-size:12px;padding:5px 8px;width:130px" onchange="filterUserOrderTable()" title="Từ ngày">
+                                        <span style="color:var(--muted-foreground);font-size:12px">→</span>
+                                        <input type="date" id="user-filter-date-to" class="form-input" style="font-size:12px;padding:5px 8px;width:130px" onchange="filterUserOrderTable()" title="Đến ngày">
+                                    </div>
+                                    <div style="display:flex;gap:4px;flex-wrap:wrap">
+                                        <button type="button" class="btn btn-outline btn-xs filter-date-preset-user" onclick="setUserDatePreset('today', this)">Hôm nay</button>
+                                        <button type="button" class="btn btn-outline btn-xs filter-date-preset-user" onclick="setUserDatePreset('yesterday', this)">Hôm qua</button>
+                                        <button type="button" class="btn btn-outline btn-xs filter-date-preset-user" onclick="setUserDatePreset('7days', this)">7 ngày qua</button>
+                                        <button type="button" class="btn btn-outline btn-xs filter-date-preset-user" onclick="setUserDatePreset('this_month', this)">Tháng này</button>
+                                        <button type="button" class="btn btn-outline btn-xs filter-date-preset-user active" onclick="setUserDatePreset('all', this)">Tất cả</button>
+                                    </div>
+                                </div>
+
+                                <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px">
+                                    <select id="user-filter-status" class="form-input" style="font-size:12px;padding:5px 8px;width:135px" onchange="filterUserOrderTable()">
+                                        <option value="">Tất cả trạng thái</option>
+                                        <option value="pending">⏳ Chờ duyệt</option>
+                                        <option value="approved">✅ Đã duyệt</option>
+                                        <option value="rejected">❌ Đã hủy</option>
+                                    </select>
+                                    <input type="text" id="user-order-search" class="form-input" style="font-size:12px;padding:5px 10px;width:170px" placeholder="🔍 Tìm mã đơn, gói..." onkeyup="filterUserOrderTable()">
+                                </div>
+                            </div>
+
+                            <div class="card-body" style="padding:0">
+                                <?php if (empty($user_orders)): ?>
+                                    <div class="empty-state" style="padding:32px;text-align:center">
+                                        <div class="empty-state-icon" style="font-size:32px;margin-bottom:8px">🧾</div>
+                                        <div class="empty-state-title" style="font-size:15px;font-weight:700">Chưa Có Lịch Sử Giao Dịch</div>
+                                        <div class="empty-state-desc" style="font-size:13px;color:var(--muted-foreground);margin-top:4px">Bạn chưa phát sinh đơn đặt mua bản quyền phần mềm hoặc nạp token nào.</div>
+                                        <div style="margin-top:14px">
+                                            <button class="btn btn-emerald btn-sm" onclick="switchMainTab('tab-buy-key')">🛒 Mua Bản Quyền Ngay</button>
+                                        </div>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="table-responsive">
+                                        <table class="data-table" id="user-orders-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Mã Đơn</th>
+                                                    <th>Sản Phẩm / Gói</th>
+                                                    <th>Số Tiền</th>
+                                                    <th>Thời Gian Tạo</th>
+                                                    <th>Trạng Thái</th>
+                                                    <th>Kết Quả / Key Cấp</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="user-orders-tbody">
+                                                <?php foreach ($user_orders as $u_ord): 
+                                                    $st = $u_ord['status'] ?? 'pending';
+                                                    $dt = substr($u_ord['created_at'] ?? '', 0, 10);
+                                                    $search_str = strtolower(($u_ord['id'] ?? '') . ' ' . ($u_ord['package_name'] ?? '') . ' ' . ($u_ord['package_price'] ?? '') . ' ' . ($u_ord['issued_key'] ?? '') . ' ' . ($u_ord['product'] ?? ''));
+                                                ?>
+                                                <tr class="user-order-row" data-date="<?= $dt ?>" data-status="<?= htmlspecialchars($st) ?>" data-search="<?= htmlspecialchars($search_str) ?>">
+                                                    <td><code class="font-mono text-primary" style="font-weight:700"><?= htmlspecialchars($u_ord['id']) ?></code></td>
+                                                    <td>
+                                                        <b><?= htmlspecialchars($u_ord['package_name']) ?></b>
+                                                        <div style="font-size:11px"><span class="badge"><?= htmlspecialchars($u_ord['product'] ?? 'SLIDESHOW') ?></span> · <?= $u_ord['duration_days'] ?> ngày</div>
+                                                    </td>
+                                                    <td><b style="color:var(--emerald)"><?= htmlspecialchars($u_ord['package_price']) ?></b></td>
+                                                    <td class="text-subtle" style="font-size:12px"><?= htmlspecialchars($u_ord['created_at']) ?></td>
+                                                    <td>
+                                                        <?php if ($st === 'approved'): ?>
+                                                            <span class="badge badge-active">✅ ĐÃ DUYỆT</span>
+                                                        <?php elseif ($st === 'rejected'): ?>
+                                                            <span class="badge badge-danger">❌ ĐÃ HỦY</span>
+                                                        <?php else: ?>
+                                                            <span class="badge badge-warning" style="animation:pulseGlow 2s infinite">⏳ CHỜ DUYỆT</span>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                    <td>
+                                                        <?php if (!empty($u_ord['issued_key'])): ?>
+                                                            <div style="display:flex;align-items:center;gap:6px">
+                                                                <code class="font-mono" style="font-size:11.5px;color:var(--emerald);font-weight:700"><?= htmlspecialchars($u_ord['issued_key']) ?></code>
+                                                                <button type="button" class="btn btn-outline btn-xs" onclick="copyText('<?= htmlspecialchars($u_ord['issued_key']) ?>')" title="Sao chép Key">📋</button>
+                                                            </div>
+                                                        <?php elseif ($st === 'approved'): ?>
+                                                            <span class="badge badge-active" style="font-size:11px">🪙 ĐÃ CỘNG VÀO VÍ</span>
+                                                        <?php elseif ($st === 'rejected'): ?>
+                                                            <span class="text-subtle" style="font-size:11.5px">Đơn đã bị hủy</span>
+                                                        <?php else: ?>
+                                                            <span class="text-subtle" style="font-size:11.5px;color:var(--warning)">Đang chờ đối soát</span>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                </tr>
+                                                <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div id="user-orders-no-match" class="empty-state" style="display:none;padding:24px;text-align:center;color:var(--muted-foreground);font-size:13px">
+                                        🔍 Không tìm thấy giao dịch nào phù hợp với bộ lọc ngày hoặc từ khóa tìm kiếm.
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- TAB 1.2: WALLET & TOKENS (VÍ & NẠP TOKEN UPSCALE) -->
                     <div id="tab-wallet-view" class="tab-pane" style="display:none">
                         <!-- QUICK DOWNLOAD BANNER FOR UPSCALE APP -->
@@ -797,19 +1851,17 @@ if (isset($_GET['registered'])) {
                                 <div style="flex:1;min-width:280px">
                                     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
                                         <span class="badge" style="background:#facc15;color:#000;font-weight:800">CÀI ĐẶT ỨNG DỤNG</span>
-                                        <span class="badge badge-info">v1.0.0 Stable</span>
+                                        <span class="badge badge-info">v1.1.2 Stable</span>
                                     </div>
                                     <h4 style="font-size:17px;margin:0 0 4px">Tải Ứng Dụng 2toolne Upscale 4K Về Máy Tính</h4>
-                                    <p class="text-muted" style="margin:0;font-size:13px">Sử dụng số dư <?= number_format($user_wallet['balance'] ?? 0, 0, ',', '.') ?> Tokens của bạn để phóng to ảnh 2K & 4K siêu nét bằng AI on-device trên Windows và macOS.</p>
+                                    <p class="text-muted" style="margin:0;font-size:13px">Sử dụng số dư <?= number_format($user_wallet['balance'] ?? 0, 0, ',', '.') ?> lượt ảnh của bạn để phóng to ảnh 2K & 4K siêu nét bằng AI on-device trên Windows và macOS.</p>
                                 </div>
                                 <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
                                     <div style="display:flex;gap:6px">
-                                        <a href="/downloads/2toolne_Upscale_Windows_latest.zip" class="btn btn-accent btn-sm" title="Tải Portable .zip cho Windows">🪟 Windows (.zip)</a>
-                                        <a href="/downloads/2toolne_Upscale_Setup_latest.exe" class="btn btn-outline btn-sm" title="Tải Cài đặt .exe cho Windows">⚙️ .exe</a>
+                                        <a href="/downloads/2toolne_Upscale_Setup_latest.exe?v=1.1.2" class="btn btn-accent btn-sm" title="Tải Cài đặt .exe cho Windows (149 MB)">🪟 Windows (.exe 149 MB)</a>
                                     </div>
                                     <div style="display:flex;gap:6px">
-                                        <a href="/downloads/2toolne_Upscale_macOS_latest.zip" class="btn btn-emerald btn-sm" title="Tải Universal .zip cho Mac">🍏 Mac (.zip)</a>
-                                        <a href="/downloads/2toolne_Upscale_latest.dmg" class="btn btn-outline btn-sm" title="Tải Gói .dmg cho Mac">📦 .dmg</a>
+                                        <a href="/downloads/2toolne_Upscale_latest.dmg?v=1.1.2" class="btn btn-emerald btn-sm" title="Tải Gói .dmg cho Mac (125 MB)">🍏 Mac (.dmg 125 MB)</a>
                                     </div>
                                 </div>
                             </div>
@@ -818,25 +1870,25 @@ if (isset($_GET['registered'])) {
                         <!-- STATS ROW -->
                         <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:16px;margin-bottom:24px">
                             <div class="card" style="padding:18px;border-color:rgba(234, 179, 8, 0.35);background:linear-gradient(135deg, rgba(234, 179, 8, 0.08) 0%, var(--surface-1) 100%)">
-                                <div style="font-size:12px;color:var(--muted-foreground);font-weight:600;text-transform:uppercase;margin-bottom:6px">🪙 Số Dư Khả Dụng</div>
+                                <div style="font-size:12px;color:var(--muted-foreground);font-weight:600;text-transform:uppercase;margin-bottom:6px">🪙 Số Dư Lượt Khả Dụng</div>
                                 <div style="font-size:28px;font-weight:800;color:#facc15">
-                                    <?= number_format($user_wallet['balance'] ?? 0, 0, ',', '.') ?> <span style="font-size:14px;font-weight:600;color:var(--foreground)">Tokens</span>
+                                    <span id="wallet-page-token-balance"><?= number_format($user_wallet['balance'] ?? 0, 0, ',', '.') ?></span> <span style="font-size:14px;font-weight:600;color:var(--foreground)">Tokens (Lượt)</span>
                                 </div>
-                                <div style="font-size:11.5px;color:var(--muted-subtle);margin-top:4px">Dùng để Upscale ảnh 2K & 4K</div>
+                                <div style="font-size:11.5px;color:var(--muted-subtle);margin-top:4px">Dùng để phóng to ảnh 2K & 4K siêu nét</div>
                             </div>
                             <div class="card" style="padding:18px;border-color:var(--border)">
-                                <div style="font-size:12px;color:var(--muted-foreground);font-weight:600;text-transform:uppercase;margin-bottom:6px">⏳ Đang Tạm Giữ (Render)</div>
+                                <div style="font-size:12px;color:var(--muted-foreground);font-weight:600;text-transform:uppercase;margin-bottom:6px">⏳ Đang Xử Lý (Render)</div>
                                 <div style="font-size:28px;font-weight:800;color:var(--info)">
-                                    <?= number_format($user_wallet['reserved'] ?? 0, 0, ',', '.') ?> <span style="font-size:14px;font-weight:600;color:var(--foreground)">Tokens</span>
+                                    <?= number_format($user_wallet['reserved'] ?? 0, 0, ',', '.') ?> <span style="font-size:14px;font-weight:600;color:var(--foreground)">Lượt</span>
                                 </div>
-                                <div style="font-size:11.5px;color:var(--muted-subtle);margin-top:4px">Đang chờ tác vụ hoàn tất</div>
+                                <div style="font-size:11.5px;color:var(--muted-subtle);margin-top:4px">Lượt ảnh đang trong tiến trình xuất</div>
                             </div>
                             <div class="card" style="padding:18px;border-color:var(--border)">
-                                <div style="font-size:12px;color:var(--muted-foreground);font-weight:600;text-transform:uppercase;margin-bottom:6px">🛡️ Chế Độ Trừ Phí</div>
+                                <div style="font-size:12px;color:var(--muted-foreground);font-weight:600;text-transform:uppercase;margin-bottom:6px">🛡️ Hình Thức Trừ Phí</div>
                                 <div style="font-size:24px;font-weight:800;color:<?= ($user_wallet['credit_mode'] ?? '') === 'UNLIMITED' ? 'var(--emerald)' : 'var(--primary)' ?>">
-                                    <?= htmlspecialchars($user_wallet['credit_mode'] ?? 'METERED') ?>
+                                    <?= ($user_wallet['credit_mode'] ?? '') === 'UNLIMITED' ? 'GÓI KHÔNG GIỚI HẠN' : 'THEO LƯỢT ẢNH XUẤT' ?>
                                 </div>
-                                <div style="font-size:11.5px;color:var(--muted-subtle);margin-top:4px"><?= ($user_wallet['credit_mode'] ?? '') === 'UNLIMITED' ? 'Không giới hạn số lượt' : 'Trừ theo ảnh hoàn thành' ?></div>
+                                <div style="font-size:11.5px;color:var(--muted-subtle);margin-top:4px"><?= ($user_wallet['credit_mode'] ?? '') === 'UNLIMITED' ? 'Thoải mái xuất ảnh 24/7' : 'Chỉ trừ khi xuất ảnh thành công' ?></div>
                             </div>
                             <div class="card" style="padding:18px;border-color:var(--border)">
                                 <div style="font-size:12px;color:var(--muted-foreground);font-weight:600;text-transform:uppercase;margin-bottom:6px">👑 Hạng Tài Khoản</div>
@@ -852,12 +1904,12 @@ if (isset($_GET['registered'])) {
                             <div class="card-body">
                                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
                                     <span style="font-size:20px">💡</span>
-                                    <h4 style="font-size:15px;margin:0">Quy Tắc Tiêu Thụ Token & Bảo Đảm Hoàn Tiền</h4>
+                                    <h4 style="font-size:15px;margin:0">Quy Tắc Tính Lượt Phóng To Ảnh & Cam Kết Bảo Đảm Quyền Lợi</h4>
                                 </div>
                                 <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:16px;font-size:13px;color:var(--muted-foreground);margin-top:10px">
-                                    <div>🖼️ <b>Ảnh Độ Phân Giải 2K:</b> Tiêu thụ <b>1 Token</b> / ảnh xuất thành công.</div>
-                                    <div>🌟 <b>Ảnh Độ Phân Giải 4K Ultra HD:</b> Tiêu thụ <b>2 Tokens</b> / ảnh xuất thành công.</div>
-                                    <div>🔒 <b>Chu trình 3 bước an toàn:</b> Khóa tạm (Reserve) ➔ Render xong (Commit) ➔ Hoàn trả 100% nếu lỗi máy/mạng (Release).</div>
+                                    <div>🖼️ <b>Ảnh Phân Giải 2K:</b> Tiêu thụ <b>1 Lượt (Token)</b> / ảnh xuất thành công.</div>
+                                    <div>🌟 <b>Ảnh Phân Giải 4K Ultra HD:</b> Tiêu thụ <b>2 Lượt (Tokens)</b> / ảnh xuất thành công.</div>
+                                    <div>🔒 <b>Cam kết an toàn tuyệt đối:</b> Hệ thống chỉ trừ số dư khi ảnh đã xuất xong về máy tính của bạn. Nếu gặp sự cố mạng hay tắt ứng dụng, toàn bộ lượt đang xử lý sẽ được tự động hoàn lại 100%! Không bao giờ bị trừ oan.</div>
                                 </div>
                             </div>
                         </div>
@@ -865,22 +1917,22 @@ if (isset($_GET['registered'])) {
                         <!-- TOKEN PACKAGES -->
                         <div class="card" style="margin-bottom:24px">
                             <div class="card-header">
-                                <div class="card-title">🛒 Mua Gói Nạp Token Upscale 4K</div>
-                                <span class="badge badge-active">Quét VietQR Tự Động</span>
+                                <div class="card-title">🛒 Mua Thêm Gói Lượt Phóng To Ảnh Upscale 4K</div>
+                                <span class="badge badge-active">Quét VietQR Tự Động 24/7</span>
                             </div>
                             <div class="card-body">
                                 <div class="pricing-grid" style="margin-bottom:0">
                                     <!-- PACKAGE 1: STARTER -->
                                     <div class="pricing-card">
                                         <div>
-                                            <h4>Gói Starter (1.000 Token)</h4>
+                                            <h4>Gói Starter (1.000 Lượt)</h4>
                                             <div class="price-val" style="color:#facc15">100.000đ</div>
-                                            <div class="price-sub">Chi phí: 100đ / token</div>
+                                            <div class="price-sub">Chi phí: 100đ / lượt • Không hạn dùng</div>
                                             <ul class="price-checklist">
-                                                <li>🪙 <b>1.000 Tokens</b> vào ví ngay lập tức</li>
+                                                <li>🪙 <b>1.000 Lượt (Tokens)</b> vào ví ngay lập tức</li>
                                                 <li>🖼️ Tương đương 1.000 ảnh 2K hoặc 500 ảnh 4K</li>
-                                                <li>⚡ Phù hợp người dùng trải nghiệm cơ bản</li>
-                                                <li>✅ Token không bao giờ hết hạn</li>
+                                                <li>⚡ Phù hợp trải nghiệm sáng tạo cá nhân</li>
+                                                <li>✅ Lượt ảnh vĩnh viễn không bao giờ hết hạn</li>
                                             </ul>
                                         </div>
                                         <button class="btn btn-outline" style="border-color:#facc15;color:#facc15" onclick="openQrPayment('Gói 1.000 Token (Starter)', '100.000đ', 36500, 'TOKEN', 'TOKEN_WALLET')">⚡ Nạp 100.000đ</button>
@@ -888,16 +1940,16 @@ if (isset($_GET['registered'])) {
 
                                     <!-- PACKAGE 2: PRO CREATOR -->
                                     <div class="pricing-card featured" style="border-color:#facc15">
-                                        <span class="badge pricing-card-badge" style="background:#facc15;color:#000;font-weight:800">TẶNG 500 TOKENS</span>
+                                        <span class="badge pricing-card-badge" style="background:#facc15;color:#000;font-weight:800">TẶNG 500 LƯỢT</span>
                                         <div>
-                                            <h4>Gói Pro Creator (3.000 Token)</h4>
+                                            <h4>Gói Pro Creator (3.500 Lượt)</h4>
                                             <div class="price-val" style="color:#facc15">250.000đ</div>
-                                            <div class="price-sub">Chi phí: ~83đ / token</div>
+                                            <div class="price-sub">Chi phí: ~71đ / lượt (Đã gồm 500 lượt tặng)</div>
                                             <ul class="price-checklist">
-                                                <li>🪙 <b>3.000 Tokens</b> (Tặng kèm 500 Tokens)</li>
-                                                <li>🖼️ Tương đương 3.000 ảnh 2K hoặc 1.500 ảnh 4K</li>
+                                                <li>🪙 <b>3.500 Lượt</b> (3.000 gốc + 500 lượt tặng)</li>
+                                                <li>🖼️ Tương đương 3.500 ảnh 2K hoặc 1.750 ảnh 4K</li>
                                                 <li>⚡ Dành cho Content Creator làm kênh thường xuyên</li>
-                                                <li>✅ Token không có hạn sử dụng</li>
+                                                <li>✅ Lượt ảnh vĩnh viễn, không có hạn sử dụng</li>
                                             </ul>
                                         </div>
                                         <button class="btn btn-emerald" onclick="openQrPayment('Gói 3.000 Token (Pro Creator)', '250.000đ', 36500, 'TOKEN', 'TOKEN_WALLET')">⚡ Nạp 250.000đ</button>
@@ -906,14 +1958,14 @@ if (isset($_GET['registered'])) {
                                     <!-- PACKAGE 3: STUDIO PACK -->
                                     <div class="pricing-card">
                                         <div>
-                                            <h4>Gói Studio (10.000 Token)</h4>
+                                            <h4>Gói Studio (13.000 Lượt)</h4>
                                             <div class="price-val" style="color:#facc15">700.000đ</div>
-                                            <div class="price-sub">Chi phí: 70đ / token (Tiết kiệm 30%)</div>
+                                            <div class="price-sub">Chi phí: ~54đ / lượt (Tiết kiệm tới 45%)</div>
                                             <ul class="price-checklist">
-                                                <li>🪙 <b>10.000 Tokens</b> (Tặng kèm 3.000 Tokens)</li>
-                                                <li>🖼️ Tương đương 10.000 ảnh 2K hoặc 5.000 ảnh 4K</li>
+                                                <li>🪙 <b>13.000 Lượt</b> (10.000 gốc + 3.000 lượt tặng)</li>
+                                                <li>🖼️ Tương đương 13.000 ảnh 2K hoặc 6.500 ảnh 4K</li>
                                                 <li>⚡ Dành cho Studio & Team sản xuất lớn</li>
-                                                <li>👑 Ưu tiên băng thông GPU cao cấp nhất</li>
+                                                <li>👑 Ưu tiên tốc độ xử lý GPU cao nhất</li>
                                             </ul>
                                         </div>
                                         <button class="btn btn-outline" style="border-color:#facc15;color:#facc15" onclick="openQrPayment('Gói 10.000 Token (Studio)', '700.000đ', 36500, 'TOKEN', 'TOKEN_WALLET')">⚡ Nạp 700.000đ</button>
@@ -928,9 +1980,9 @@ if (isset($_GET['registered'])) {
                                             <div class="price-sub">Thời hạn: 30 ngày sử dụng</div>
                                             <ul class="price-checklist">
                                                 <li>👑 <b>Không giới hạn số lượng ảnh 2K / 4K</b></li>
-                                                <li>🚀 Render liên tục 24/7 không trừ token</li>
+                                                <li>🚀 Render liên tục 24/7 không trừ số dư lượt</li>
                                                 <li>⚡ Tối ưu cho xưởng sản xuất video công nghiệp</li>
-                                                <li>✅ Hỗ trợ kỹ thuật ưu tiên 1-1 từ Admin</li>
+                                                <li>✅ Hỗ trợ kỹ thuật ưu tiên 1-1 từ chuyên viên 2TOOL</li>
                                             </ul>
                                         </div>
                                         <button class="btn btn-primary" onclick="openQrPayment('Gói Unlimited Studio (30 Ngày)', '1.800.000đ', 30, 'UNLIMITED', 'TOKEN_WALLET')">👑 Mua Gói Unlimited</button>
@@ -942,14 +1994,14 @@ if (isset($_GET['registered'])) {
                         <!-- TOKEN TRANSACTIONS HISTORY -->
                         <div class="card">
                             <div class="card-header">
-                                <div class="card-title">📜 Lịch Sử Biến Động Số Dư Token</div>
+                                <div class="card-title">📜 Lịch Sử Sử Dụng & Biến Động Lượt Ảnh</div>
                             </div>
                             <div class="card-body" style="padding:0">
                                 <?php if (empty($user_tokens_tx)): ?>
                                     <div class="empty-state">
                                         <div class="empty-state-icon">🪙</div>
-                                        <div class="empty-state-title">Chưa Có Biến Động Token Nào</div>
-                                        <div class="empty-state-desc">Tài khoản chưa phát sinh giao dịch nạp hoặc tiêu thụ token Upscale 4K.</div>
+                                        <div class="empty-state-title">Chưa Có Biến Động Lượt Ảnh Nào</div>
+                                        <div class="empty-state-desc">Tài khoản chưa phát sinh giao dịch nạp hoặc tiêu thụ lượt ảnh Upscale 4K.</div>
                                     </div>
                                 <?php else: ?>
                                     <div class="table-responsive">
@@ -958,39 +2010,52 @@ if (isset($_GET['registered'])) {
                                                 <tr>
                                                     <th>Mã GD</th>
                                                     <th>Thời Gian</th>
-                                                    <th>Loại GD</th>
+                                                    <th>Loại Tác Vụ</th>
                                                     <th>Biến Động</th>
                                                     <th>Số Dư Cuối</th>
-                                                    <th>Lý Do / Chi Tiết</th>
+                                                    <th>Nội Dung / Lý Do</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 <?php foreach ($user_tokens_tx as $tx): 
                                                     $d = (int)($tx['delta'] ?? 0);
                                                     $t_type = $tx['type'] ?? 'N/A';
-                                                    $delta_str = ($d > 0 ? '+' : '') . number_format($d, 0, ',', '.');
+                                                    $delta_str = ($d > 0 ? '+' : '') . number_format($d, 0, ',', '.') . ' Lượt';
                                                     $delta_color = $d > 0 ? 'var(--emerald)' : ($d < 0 ? 'var(--danger)' : 'var(--muted-foreground)');
                                                 ?>
                                                     <tr>
                                                         <td><code style="font-size:11.5px">#<?= htmlspecialchars($tx['id']) ?></code></td>
                                                         <td class="text-subtle" style="font-size:12px"><?= htmlspecialchars($tx['created_at']) ?></td>
                                                         <td>
-                                                            <?php if ($t_type === 'COMMIT'): ?>
-                                                                <span class="badge badge-purple">COMMIT (Render)</span>
-                                                            <?php elseif ($t_type === 'RESERVE'): ?>
-                                                                <span class="badge badge-warning">RESERVE (Khóa)</span>
-                                                            <?php elseif ($t_type === 'RELEASE'): ?>
-                                                                <span class="badge badge-info">RELEASE (Hoàn)</span>
-                                                            <?php elseif ($t_type === 'PROMOTION'): ?>
-                                                                <span class="badge badge-active">🎁 TẶNG ĐĂNG KÝ</span>
+                                                            <?php 
+                                                                $t_upper = strtoupper((string)$t_type);
+                                                                $desc = $tx['reason'] ?: ($tx['description'] ?? ($tx['metadata_json'] ?: '-'));
+                                                                if ($desc === 'Local image upscale completed') {
+                                                                    $desc = ($d === -2) ? '4K upscale completed' : (($d === -1) ? '2K upscale completed' : $desc);
+                                                                }
+                                                            ?>
+                                                            <?php if ($t_upper === 'UPSCALE 4K' || ($t_upper === 'UPSCALE' && $d === -2)): ?>
+                                                                <span class="badge badge-purple" style="font-weight:700">🚀 Upscale 4K</span>
+                                                            <?php elseif ($t_upper === 'UPSCALE 2K' || ($t_upper === 'UPSCALE' && $d === -1)): ?>
+                                                                <span class="badge badge-info" style="font-weight:700">⚡ Upscale 2K</span>
+                                                            <?php elseif ($t_upper === 'UPSCALE' || $t_upper === 'COMMIT'): ?>
+                                                                <span class="badge badge-purple">🖼️ Xuất ảnh xong</span>
+                                                            <?php elseif ($t_upper === 'RESERVE'): ?>
+                                                                <span class="badge badge-warning">⏳ Đang xử lý</span>
+                                                            <?php elseif ($t_upper === 'RELEASE' || $t_upper === 'RESERVATION_RELEASE'): ?>
+                                                                <span class="badge badge-info">↩️ Hoàn lại lượt</span>
+                                                            <?php elseif ($t_upper === 'PROMOTION'): ?>
+                                                                <span class="badge badge-active">🎁 Quà tặng đăng ký</span>
+                                                            <?php elseif ($t_upper === 'UPGRADE' || $t_upper === 'TOPUP' || $t_upper === 'ADMIN_ADJUSTMENT'): ?>
+                                                                <span class="badge badge-active">💳 Biến động token</span>
                                                             <?php else: ?>
                                                                 <span class="badge"><?= htmlspecialchars($t_type) ?></span>
                                                             <?php endif; ?>
                                                         </td>
                                                         <td style="font-weight:700;color:<?= $delta_color ?>"><?= $delta_str ?></td>
-                                                        <td><b><?= number_format($tx['balance_after'] ?? 0, 0, ',', '.') ?></b></td>
+                                                        <td><b><?= number_format($tx['balance_after'] ?? 0, 0, ',', '.') ?> Lượt</b></td>
                                                         <td style="font-size:12.5px;color:var(--muted-foreground)">
-                                                            <?= htmlspecialchars($tx['reason'] ?: ($tx['metadata_json'] ?: '-')) ?>
+                                                            <?= htmlspecialchars($desc) ?>
                                                         </td>
                                                     </tr>
                                                 <?php endforeach; ?>
@@ -998,6 +2063,200 @@ if (isset($_GET['registered'])) {
                                         </table>
                                     </div>
                                 <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB 1.3: 2TOOLNE CLOUD STORAGE -->
+                    <div id="tab-cloud-storage" class="tab-pane" style="display:none">
+                        <!-- HEADER & SPACE SELECTOR -->
+                        <div class="cloud-header-box">
+                            <div class="cloud-header-bar">
+                                <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                                    <h3 style="font-size:18px;font-weight:700;margin:0;display:flex;align-items:center;gap:8px;letter-spacing:-0.02em">
+                                        <span style="font-size:20px">☁️</span> 2TOOLNE Cloud Storage
+                                    </h3>
+                                    <div id="cloud-space-status-badge" class="cloud-status-pulse">
+                                        <span class="cloud-pulse-dot"></span>
+                                        <span id="cloud-status-text">Đang Hoạt Động</span>
+                                    </div>
+                                    <span class="text-muted" style="font-size:12.5px">Lưu trữ đám mây 2TOOL Cloud tốc độ cao, kết nối trực tiếp AI Upscale</span>
+                                </div>
+                                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                                    <div class="cloud-space-selector-wrap">
+                                        <label style="font-size:11px;color:var(--muted-foreground);font-weight:700;letter-spacing:0.04em">KHÔNG GIAN:</label>
+                                        <select id="cloud-space-select" class="cloud-space-selector" onchange="onCloudSpaceChanged(this.value)">
+                                            <?php if (!empty($user_cloud_spaces)): ?>
+                                                <?php foreach ($user_cloud_spaces as $sp): ?>
+                                                    <option value="<?= htmlspecialchars($sp['id']) ?>" 
+                                                            data-status="<?= htmlspecialchars($sp['status']) ?>"
+                                                            data-owner-type="<?= htmlspecialchars($sp['owner_type']) ?>"
+                                                            data-owner-id="<?= htmlspecialchars($sp['owner_id']) ?>"
+                                                            data-user-role="<?= htmlspecialchars($sp['user_role'] ?? 'MEMBER') ?>"
+                                                            data-space-name="<?= htmlspecialchars($sp['name']) ?>">
+                                                        <?= ($sp['owner_type'] === 'TEAM' ? '👥 ' : '👤 ') . htmlspecialchars($sp['name']) ?> (<?= $sp['owner_type'] === 'TEAM' ? 'Team Space - ' . ($sp['user_role'] ?? 'MEMBER') : 'Cá Nhân' ?>)
+                                                    </option>
+                                                <?php endforeach; ?>
+                                            <?php else: ?>
+                                                <option value="">(Chưa có không gian)</option>
+                                            <?php endif; ?>
+                                        </select>
+                                    </div>
+                                    <button class="btn btn-primary btn-sm" onclick="openCloudUploadModal()" id="btn-cloud-upload" style="box-shadow:0 0 15px rgba(56,189,248,0.25);font-weight:600">
+                                        <span>⬆️</span> Tải Tệp Lên
+                                    </button>
+                                    <button class="btn btn-outline btn-sm" onclick="promptCreateCloudFolder()" id="btn-cloud-mkdir">
+                                        <span>📁</span> Tạo Thư Mục
+                                    </button>
+                                    <button class="btn btn-outline btn-sm" onclick="openCloudTrashModal()">
+                                        <span>🗑️</span> Thùng Rác (<span id="cloud-trash-badge">0</span>)
+                                    </button>
+                                    <button class="btn btn-warning btn-sm" onclick="openModal('modal-cloud-buy-quota')" style="font-weight:700;background:linear-gradient(135deg, #f59e0b, #d97706);border:none;color:#fff;box-shadow:0 0 12px rgba(245,158,11,0.25)">
+                                        <span>⚡</span> Mua Dung Lượng
+                                    </button>
+                                    <button class="btn btn-emerald btn-sm" onclick="openModal('modal-cloud-create-team')" style="font-weight:700;background:linear-gradient(135deg, #10b981, #059669);border:none;color:#fff;box-shadow:0 0 12px rgba(16,185,129,0.25)">
+                                        <span>🏢</span> Khởi Tạo Team Cloud
+                                    </button>
+                                    <button class="btn btn-outline btn-sm" id="btn-cloud-team-manage" onclick="openTeamManagementModal()" style="display:none;font-weight:600;border-color:#38bdf8;color:#38bdf8">
+                                        <span>👥</span> Thành Viên Team
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- OVER-QUOTA BANNER (Hidden by default, toggled via JS) -->
+                        <div id="cloud-overquota-banner" class="cloud-overquota-banner" style="display:none">
+                            <span style="font-size:22px;line-height:1">⚠️</span>
+                            <div style="flex:1">
+                                <b style="color:#ef4444;font-size:14px">Cảnh báo: Không gian lưu trữ đã vượt hạn mức dung lượng!</b>
+                                <div style="margin-top:4px">
+                                    Không gian này hiện đang ở chế độ <b>Chỉ Đọc (Read-only)</b>. Bạn tạm thời không thể tải thêm tệp mới hoặc tạo thư mục.
+                                    <br><span style="color:#10b981;font-weight:600">🛡️ Lưu ý an toàn:</span> Hàng đợi GPU xử lý tác vụ Upscale AI của ứng dụng máy tính vẫn hoạt động bình thường và <b>không bị gián đoạn</b>. Hãy dọn bớt file trong Thùng Rác hoặc bấm "Mua Dung Lượng" để mở rộng dung lượng!
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SLEEK QUOTA STRIP (Compact 1-row dashboard) -->
+                        <div class="cloud-quota-strip">
+                            <div class="cloud-quota-strip-left">
+                                <div style="display:flex;align-items:center;gap:8px;font-size:12.5px">
+                                    <span style="font-weight:700;color:var(--muted-foreground)">💾 DUNG LƯỢNG:</span>
+                                    <span id="cloud-quota-usage-text" style="font-weight:700;font-family:var(--font-mono);color:var(--foreground)">0 B</span>
+                                    <span style="color:var(--muted-subtle)">/</span>
+                                    <span id="cloud-quota-total-text" style="font-weight:600;font-family:var(--font-mono);color:var(--muted-foreground)">5 GB</span>
+                                    <span id="cloud-quota-percent" style="font-weight:800;font-family:var(--font-mono);color:var(--emerald);margin-left:4px">0%</span>
+                                </div>
+                                <div class="cloud-quota-track-strip">
+                                    <div id="cloud-quota-fill-bar" class="cloud-quota-fill" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <div class="cloud-quota-strip-right">
+                                <div class="cloud-chip-compact">
+                                    <span class="text-muted">Còn Trống:</span>
+                                    <b id="cloud-chip-free" style="color:var(--emerald)">--</b>
+                                </div>
+                                <div class="cloud-chip-compact">
+                                    <span class="text-muted">Tổng Số Tệp:</span>
+                                    <b id="cloud-chip-files">0</b>
+                                </div>
+                                <div class="cloud-chip-compact" id="cloud-quota-status-sub">
+                                    <span class="text-muted">Trạng Thái:</span>
+                                    <b style="color:var(--emerald)">Bình Thường</b>
+                                </div>
+                                <!-- Hidden elements kept for JS compatibility -->
+                                <span id="cloud-chip-quota" style="display:none">--</span>
+                                <span id="cloud-chip-used" style="display:none">--</span>
+                                <span id="cloud-quota-reserved-wrapper" style="display:none;color:#38bdf8;font-size:11.5px">
+                                    ⏳ Đang đẩy lên: <b id="cloud-quota-reserved-text">0 B</b>
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- EXPLORER TOOLBAR V2 (Integrated 1 Row) -->
+                        <div class="cloud-toolbar-v2">
+                            <div class="cloud-breadcrumbs" id="cloud-breadcrumbs-container">
+                                <span class="cloud-crumb active" onclick="navigateCloudFolder(null)">🏠 Thư mục gốc</span>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                                <div class="cloud-search-box">
+                                    <span style="font-size:13px;color:var(--muted-foreground)">🔍</span>
+                                    <input type="text" id="cloud-search-input" class="cloud-search-input" placeholder="Tìm kiếm tệp..." oninput="onCloudSearchInput(this.value)">
+                                </div>
+                                <div class="cloud-filter-pills">
+                                    <button type="button" class="cloud-filter-pill active" data-cat="all" onclick="setCloudCategoryFilter('all')">Tất cả</button>
+                                    <button type="button" class="cloud-filter-pill" data-cat="images" onclick="setCloudCategoryFilter('images')">🖼️ Ảnh</button>
+                                    <button type="button" class="cloud-filter-pill" data-cat="videos" onclick="setCloudCategoryFilter('videos')">🎬 Video</button>
+                                    <button type="button" class="cloud-filter-pill" data-cat="archives" onclick="setCloudCategoryFilter('archives')">📦 Nén</button>
+                                    <button type="button" class="cloud-filter-pill" data-cat="docs" onclick="setCloudCategoryFilter('docs')">📄 Tài liệu</button>
+                                </div>
+                                <div class="cloud-view-toggle">
+                                    <button type="button" id="btn-cloud-view-list" class="cloud-view-btn active" onclick="setCloudViewMode('list')" title="Dạng danh sách">
+                                        <span>☰</span>
+                                    </button>
+                                    <button type="button" id="btn-cloud-view-grid" class="cloud-view-btn" onclick="setCloudViewMode('grid')" title="Dạng lưới thẻ">
+                                        <span>☵</span>
+                                    </button>
+                                    <button type="button" class="cloud-view-btn" onclick="refreshCloudView()" title="Làm mới">
+                                        <span>🔄</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- EXPLORER CONTENT -->
+                        <div id="cloud-explorer-loading" style="display:none;text-align:center;padding:50px;color:var(--muted-foreground)">
+                            <div style="font-size:28px;margin-bottom:10px;animation:spin 1.5s linear infinite">⏳</div>
+                            <div style="font-weight:600">Đang đồng bộ dữ liệu đám mây...</div>
+                        </div>
+
+                        <div id="cloud-explorer-content">
+                            <!-- FOLDERS LIST -->
+                            <div id="cloud-folders-section" style="margin-bottom:20px;display:none">
+                                <div style="font-size:12px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;margin-bottom:12px;letter-spacing:0.04em">Thư Mục</div>
+                                <div class="cloud-grid" id="cloud-folders-grid"></div>
+                            </div>
+
+                            <!-- EMPTY DROPZONE (Shown when no files in current view) -->
+                            <div id="cloud-empty-dropzone" class="cloud-empty-dropzone" style="display:none" onclick="openCloudUploadModal()">
+                                <div class="cloud-dropzone-icon">☁️</div>
+                                <div style="font-size:16px;font-weight:700;color:var(--foreground);margin-bottom:6px">Kéo thả tệp tin vào đây hoặc bấm để Tải lên</div>
+                                <div style="font-size:13px;color:var(--muted-foreground);max-width:440px;margin:0 auto">
+                                    Hỗ trợ tải lên đa tệp cùng lúc trực tiếp vào 2TOOL Cloud qua cơ chế Stream tốc độ cao.
+                                </div>
+                            </div>
+
+                            <!-- FILES LIST (TABLE VIEW) -->
+                            <div id="cloud-files-table-section">
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                                    <div style="font-size:12px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:0.04em">
+                                        Tệp Tin (<span id="cloud-files-count-badge">0</span>)
+                                    </div>
+                                </div>
+                                <div class="cloud-table-wrap">
+                                    <table class="cloud-table-v2">
+                                        <thead>
+                                            <tr>
+                                                <th style="min-width:240px">Tên Tệp</th>
+                                                <th>Kích Thước</th>
+                                                <th>Phân Loại</th>
+                                                <th>Thời Gian</th>
+                                                <th style="text-align:right">Thao Tác</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="cloud-files-tbody">
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- FILES LIST (GRID VIEW) -->
+                            <div id="cloud-files-grid-section" style="display:none">
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                                    <div style="font-size:12px;font-weight:700;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:0.04em">
+                                        Tệp Tin (<span id="cloud-files-count-badge-grid">0</span>)
+                                    </div>
+                                </div>
+                                <div class="cloud-grid" id="cloud-files-grid"></div>
                             </div>
                         </div>
                     </div>
@@ -1013,19 +2272,19 @@ if (isset($_GET['registered'])) {
                                             <span class="badge" style="background:#facc15;color:#000;font-weight:800">✨ AI SIÊU PHÂN GIẢI 2K & 4K</span>
                                             <span class="os-detect-badge badge badge-info" style="font-weight:600">🔍 Đang nhận diện hệ điều hành...</span>
                                         </div>
-                                        <h3 style="font-size:22px;margin:0 0 6px">2toolne Upscale 4K — AI Super-Resolution App (v1.0.0 Stable)</h3>
-                                        <p class="text-muted" style="margin:0;font-size:13.5px">Ứng dụng phóng to và phục chế ảnh 2K/4K siêu nét bằng AI on-device (Vulkan, DirectML, Apple Silicon Neural Engine). Tiêu thụ Token theo lượt ảnh hoàn tất (1 Token = 2K, 2 Tokens = 4K).</p>
+                                        <h3 style="font-size:22px;margin:0 0 6px">2toolne Upscale 4K — AI Super-Resolution App (v1.1.2 Stable)</h3>
+                                        <p class="text-muted" style="margin:0;font-size:13.5px">Ứng dụng phóng to và phục chế ảnh 2K/4K siêu nét bằng AI on-device (Vulkan, DirectML, Apple Silicon Metal). Tiêu thụ theo số ảnh xuất hoàn tất (1 ảnh 2K = 1 lượt, 1 ảnh 4K = 2 lượt).</p>
                                     </div>
                                     <!-- PROMINENT SMART 1-CLICK BUTTON -->
                                     <div class="smart-download-container" data-app-name="2toolne Upscale 4K" style="display:flex;flex-direction:column;gap:8px;min-width:260px">
-                                        <a href="/downloads/2toolne_Upscale_Windows_latest.zip" 
-                                           data-os-win="/downloads/2toolne_Upscale_Windows_latest.zip" 
-                                           data-os-mac="/downloads/2toolne_Upscale_macOS_latest.zip" 
+                                        <a href="/downloads/2toolne_Upscale_Setup_latest.exe?v=1.1.2" 
+                                           data-os-win="/downloads/2toolne_Upscale_Setup_latest.exe?v=1.1.2" 
+                                           data-os-mac="/downloads/2toolne_Upscale_latest.dmg?v=1.1.2" 
                                            class="smart-download-btn btn btn-accent btn-lg" 
                                            style="font-weight:700;text-align:center;box-shadow:0 0 20px rgba(250, 204, 21, 0.25)">
-                                            <span class="smart-download-icon">🪟</span> <span class="smart-download-text">Tải Cho Windows (.zip)</span>
+                                            <span class="smart-download-icon">🪟</span> <span class="smart-download-text">Tải Cho Windows (.exe - 149 MB)</span>
                                         </a>
-                                        <div style="font-size:11px;color:var(--muted-foreground);text-align:center">Bản chính thức v1.0.0 • Tự động tương thích thiết bị</div>
+                                        <div style="font-size:11px;color:var(--muted-foreground);text-align:center">Bản chính thức v1.1.2 • Tự động tương thích thiết bị</div>
                                     </div>
                                 </div>
 
@@ -1038,8 +2297,7 @@ if (isset($_GET['registered'])) {
                                         </div>
                                         <p style="font-size:12px;color:var(--muted-foreground);margin-bottom:10px">Tăng tốc phần cứng DirectML, Vulkan, NVIDIA RTX Tensor.</p>
                                         <div style="display:flex;gap:8px;flex-wrap:wrap">
-                                            <a href="/downloads/2toolne_Upscale_Windows_latest.zip" class="btn btn-accent btn-sm" style="flex:1;text-align:center">📥 Tải .zip (Portable 64-bit)</a>
-                                            <a href="/downloads/2toolne_Upscale_Setup_latest.exe" class="btn btn-outline btn-sm" style="flex:1;text-align:center">⚙️ Bộ cài .exe (Setup)</a>
+                                            <a href="/downloads/2toolne_Upscale_Setup_latest.exe?v=1.1.2" class="btn btn-accent btn-sm" style="flex:1;text-align:center">⚙️ Bộ cài .exe (149 MB - Khuyên dùng)</a>
                                         </div>
                                     </div>
 
@@ -1051,14 +2309,14 @@ if (isset($_GET['registered'])) {
                                         <p style="font-size:12px;color:var(--muted-foreground);margin-bottom:10px">Universal Binary: Apple Silicon (M1/M2/M3/M4 Metal) & Intel Core.</p>
                                         <div style="display:flex;gap:8px;flex-wrap:wrap">
                                             <a href="/downloads/2toolne_Upscale_macOS_latest.zip" class="btn btn-emerald btn-sm" style="flex:1;text-align:center">🍏 Tải .zip (Universal Mac)</a>
-                                            <a href="/downloads/2toolne_Upscale_latest.dmg" class="btn btn-outline btn-sm" style="flex:1;text-align:center">📦 Gói cài .dmg</a>
+                                            <a href="/downloads/2toolne_Upscale_latest.dmg?v=1.1.2" class="btn btn-outline btn-sm" style="flex:1;text-align:center">📦 Gói cài .dmg</a>
                                         </div>
                                     </div>
                                 </div>
 
                                 <div style="margin-top:14px;padding:8px 12px;background:rgba(250, 204, 21, 0.08);border-radius:var(--radius-sm);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-                                    <span style="font-size:12.5px;color:var(--foreground)">🪙 Số dư Token hiện tại: <b style="color:#facc15"><?= number_format($user_wallet['balance'] ?? 0, 0, ',', '.') ?> Tokens</b></span>
-                                    <a href="#tab-wallet-view" class="btn btn-outline btn-xs" onclick="switchMainTab('tab-wallet-view')">Nạp Thêm Token ➔</a>
+                                    <span style="font-size:12.5px;color:var(--foreground)">🪙 Số dư lượt ảnh hiện tại: <b style="color:#facc15"><?= number_format($user_wallet['balance'] ?? 0, 0, ',', '.') ?> Lượt (Tokens)</b></span>
+                                    <a href="#tab-wallet-view" class="btn btn-outline btn-xs" onclick="switchMainTab('tab-wallet-view')">Nạp Thêm Lượt Ảnh ➔</a>
                                 </div>
                             </div>
                         </div>
@@ -1072,7 +2330,7 @@ if (isset($_GET['registered'])) {
                                             <span class="badge badge-active">🚀 SẢN PHẨM MỚI 2026</span>
                                             <span class="os-detect-badge badge badge-info" style="font-weight:600">🔍 Đang nhận diện hệ điều hành...</span>
                                         </div>
-                                        <h3 style="font-size:22px;margin:0 0 6px">2toolne Studio — AI YouTube Production Suite (v1.0.0 RC)</h3>
+                                        <h3 style="font-size:22px;margin:0 0 6px">2toolne Studio — AI YouTube Production Suite (v1.1.2 RC)</h3>
                                         <p class="text-muted" style="margin:0;font-size:13.5px">Hệ thống sản xuất phim tài liệu tự động 200–250 shots, Edge TTS, Căn chỉnh lời chính xác, Upscale 4K & Multi-Track DAW.</p>
                                     </div>
                                     <!-- PROMINENT SMART 1-CLICK BUTTON -->
@@ -1084,7 +2342,7 @@ if (isset($_GET['registered'])) {
                                            style="font-weight:700;text-align:center;box-shadow:0 0 20px rgba(16, 185, 129, 0.3)">
                                             <span class="smart-download-icon">🪟</span> <span class="smart-download-text">Tải Cho Windows (.zip)</span>
                                         </a>
-                                        <div style="font-size:11px;color:var(--muted-foreground);text-align:center">Bản chính thức v1.0.0 RC • Tự động tương thích thiết bị</div>
+                                        <div style="font-size:11px;color:var(--muted-foreground);text-align:center">Bản chính thức v1.1.2 RC • Tự động tương thích thiết bị</div>
                                     </div>
                                 </div>
 
@@ -1121,8 +2379,8 @@ if (isset($_GET['registered'])) {
                             <!-- SLIDESHOW BUILDER AI -->
                             <div class="card">
                                 <div class="card-header">
-                                    <div class="card-title">🎬 Slideshow Builder AI (v2.3.0 Stable)</div>
-                                    <span class="badge badge-purple">GPU Renderer G</span>
+                                    <div class="card-title">🎬 Slideshow Builder AI (v2.3.9 Stable)</div>
+                                    <span class="badge badge-purple">Subpixel Affine 60FPS</span>
                                 </div>
                                 <div class="card-body" style="display:flex;flex-direction:column;justify-content:space-between;height:calc(100% - 55px)">
                                     <div>
@@ -1130,12 +2388,12 @@ if (isset($_GET['registered'])) {
                                             Phần mềm tạo video chuyển cảnh Ken Burns 4K mượt mà 60 FPS, phụ đề tự động Pill/Noonnu, lồng tiếng phát thanh viên đa giọng đọc.
                                         </p>
                                         <div class="text-subtle" style="font-size:12px;margin-bottom:16px">
-                                            ✅ Tích hợp GPU Hardware Acceleration (Apple VideoToolbox / NVIDIA NVENC / QuickSync)
+                                            ✅ Động cơ Subpixel Affine không rung giật, tích hợp GPU Hardware Acceleration.
                                         </div>
                                     </div>
                                     <div style="display:flex;gap:8px;flex-wrap:wrap">
-                                        <a href="/downloads/SlideshowBuilder_macOS_latest.zip" class="btn btn-emerald btn-sm" style="flex:1;text-align:center">🍎 Tải macOS (.zip)</a>
-                                        <a href="/downloads/SlideshowBuilder_Windows_latest.zip" class="btn btn-accent btn-sm" style="flex:1;text-align:center">🪟 Tải Windows (.zip)</a>
+                                        <a href="/downloads/SlideshowBuilder_macOS_v2.3.9.zip" class="btn btn-emerald btn-sm" style="flex:1;text-align:center">🍎 Tải macOS (.zip)</a>
+                                        <a href="/downloads/SlideshowBuilder_Windows_v2.3.9.zip" class="btn btn-accent btn-sm" style="flex:1;text-align:center">🪟 Tải Windows (.zip)</a>
                                     </div>
                                 </div>
                             </div>
@@ -1192,10 +2450,68 @@ if (isset($_GET['registered'])) {
 
                     <!-- TAB 2: BUY VIP KEY -->
                     <div id="tab-buy-key" class="tab-pane" style="display:none">
+                        <!-- PRODUCT: 2TOOLNE AUTOEDIT FOR CAPCUT (V2) -->
+                        <div class="card" style="margin-bottom:24px;border-color:#8b5cf6;background:linear-gradient(180deg, rgba(139, 92, 246, 0.06) 0%, var(--surface-1) 100%)">
+                            <div class="card-header" style="border-bottom:1px solid rgba(139, 92, 246, 0.2)">
+                                <div class="card-title" style="color:#c084fc">🎬 2TOOLNE AutoEdit for CapCut (Product V2 — Native Desktop Edition)</div>
+                                <span class="badge" style="background:#7c3aed;color:#fff;font-weight:700">HOT V2.0.0 RC</span>
+                            </div>
+                            <div class="card-body">
+                                <p class="text-muted" style="margin-bottom:20px">Phần mềm Desktop độc lập điều phối và tự động hóa biên tập CapCut Desktop: Tạo Timeline, Native Scale/Position Keyframes mượt mà, Rãnh âm thanh & Phụ đề XML tự động.</p>
+                                <div class="pricing-grid" style="margin-bottom:0">
+                                    <div class="pricing-card">
+                                        <div>
+                                            <h4>CapCut AutoEdit (1 Tháng)</h4>
+                                            <div class="price-val" style="color:#c084fc">800.000đ</div>
+                                            <div class="price-sub">Thời hạn: 30 ngày sử dụng</div>
+                                            <ul class="price-checklist">
+                                                <li>✅ Tự động xuất bản nháp CapCut Desktop</li>
+                                                <li>✅ Native Keyframes (Scale/Position) mượt mà</li>
+                                                <li>✅ Hỗ trợ âm thanh & phụ đề tự động</li>
+                                                <li>✅ Ứng dụng Desktop độc lập (macOS + Windows)</li>
+                                            </ul>
+                                        </div>
+                                        <button class="btn btn-outline" style="border-color:#8b5cf6;color:#c084fc" onclick="openQrPayment('CapCut AutoEdit (1 Tháng)', '800.000đ', 30, 'VIP', '2toolne.capcut.v2')">⚡ Mua Gói 1 Tháng</button>
+                                    </div>
+
+                                    <div class="pricing-card featured" style="border-color:#8b5cf6">
+                                        <span class="badge pricing-card-badge" style="background:#7c3aed;color:#fff">KHUYÊN DÙNG 1 NĂM</span>
+                                        <div>
+                                            <h4>CapCut AutoEdit (1 Năm VIP)</h4>
+                                            <div class="price-val" style="color:#c084fc">6.000.000đ</div>
+                                            <div class="price-sub">Thời hạn: 365 ngày (Tiết kiệm 3.6 Tr)</div>
+                                            <ul class="price-checklist">
+                                                <li>✅ Toàn bộ quyền lợi gói tháng</li>
+                                                <li>✅ Tự động update mọi bản CapCut Desktop mới</li>
+                                                <li>✅ Hỗ trợ ưu tiên 1-1 từ kỹ thuật viên</li>
+                                                <li>✅ Đổi thiết bị linh hoạt không giới hạn</li>
+                                            </ul>
+                                        </div>
+                                        <button class="btn btn-emerald" style="background:#7c3aed;border-color:#7c3aed" onclick="openQrPayment('CapCut AutoEdit (1 Năm VIP)', '6.000.000đ', 365, 'VIP', '2toolne.capcut.v2')">⚡ Mua Gói 1 Năm (VIP)</button>
+                                    </div>
+
+                                    <div class="pricing-card">
+                                        <div>
+                                            <h4>CapCut AutoEdit (Vĩnh Viễn)</h4>
+                                            <div class="price-val" style="color:#c084fc">10.000.000đ</div>
+                                            <div class="price-sub">Sở hữu trọn đời (Lifetime)</div>
+                                            <ul class="price-checklist">
+                                                <li>👑 <b>Sở hữu bản quyền trọn đời</b></li>
+                                                <li>👑 Miễn phí cập nhật trọn đời</li>
+                                                <li>👑 Hỗ trợ kỹ thuật ưu tiên 24/7</li>
+                                                <li>👑 Bảo mật mã hóa phần cứng DPAPI & Ed25519</li>
+                                            </ul>
+                                        </div>
+                                        <button class="btn btn-outline" style="border-color:#8b5cf6;color:#c084fc" onclick="openQrPayment('CapCut AutoEdit (Vĩnh Viễn)', '10.000.000đ', 36500, 'LIFETIME', '2toolne.capcut.v2')">👑 Mua Gói Vĩnh Viễn</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="card" style="margin-bottom:24px">
                             <div class="card-header">
                                 <div class="card-title">🚀 2TOOLNE — AI YouTube Production Studio (Khuyên Dùng)</div>
-                                <span class="badge badge-active">NEW v1.0.0</span>
+                                <span class="badge badge-active">NEW v1.1.2</span>
                             </div>
                             <div class="card-body">
                                 <p class="text-muted" style="margin-bottom:20px">Hệ thống sản xuất video tài liệu tự động 200–250 shots, Edge TTS, Cắt ghép Opencut Multi-Track & Radar phân tích tăng trưởng.</p>
@@ -1222,7 +2538,7 @@ if (isset($_GET['registered'])) {
                                             <div class="price-sub">Thời hạn: 365 ngày sử dụng</div>
                                             <ul class="price-checklist">
                                                 <li>✅ Toàn bộ quyền lợi gói tháng</li>
-                                                <li>✅ Hỗ trợ ưu tiên 1-1 từ Admin</li>
+                                                <li>✅ Hỗ trợ ưu tiên 1-1 từ chuyên viên 2TOOL</li>
                                                 <li>✅ YouTube Uploader & Growth Radar</li>
                                             </ul>
                                         </div>
@@ -1299,16 +2615,33 @@ if (isset($_GET['registered'])) {
                         <!-- TOKEN PACKAGES SHORTCUT -->
                         <div class="card" style="margin-top:24px;border-color:rgba(234, 179, 8, 0.35);background:linear-gradient(135deg, rgba(234, 179, 8, 0.08) 0%, var(--surface-1) 100%)">
                             <div class="card-header">
-                                <div class="card-title">🪙 Nạp Token Upscale Ảnh 2K / 4K</div>
+                                <div class="card-title">🪙 Nạp Lượt Phóng To Ảnh AI (Upscale 2K / 4K)</div>
                                 <span class="badge badge-active">Mới 2026</span>
                             </div>
                             <div class="card-body" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px">
                                 <div>
-                                    <p class="text-muted">Nạp thêm token cho hệ thống Upscale 4K của 2toolne. 1.000 Token chỉ 100k, 3.000 Token chỉ 250k, hoặc Gói Không Giới Hạn 30 ngày.</p>
-                                    <div style="font-size:12.5px;color:#facc15;font-weight:600;margin-top:4px">Số dư hiện tại: <?= number_format($user_wallet['balance'] ?? 0, 0, ',', '.') ?> Tokens</div>
+                                    <p class="text-muted">Nạp thêm lượt phóng to ảnh cho ứng dụng 2toolne Upscale 4K. 1.000 lượt chỉ 100k, 3.500 lượt chỉ 250k, hoặc Gói Không Giới Hạn 30 ngày.</p>
+                                    <div style="font-size:12.5px;color:#facc15;font-weight:600;margin-top:4px">Số dư hiện tại: <?= number_format($user_wallet['balance'] ?? 0, 0, ',', '.') ?> Lượt (Tokens)</div>
                                 </div>
                                 <button class="btn btn-emerald" onclick="switchMainTab('tab-wallet-view')">
-                                    🪙 Xem & Mua Gói Token
+                                    🪙 Xem & Mua Gói Lượt Ảnh
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- CLOUD STORAGE PACKAGES SHORTCUT -->
+                        <div class="card" style="margin-top:24px;border-color:rgba(56, 189, 248, 0.35);background:linear-gradient(135deg, rgba(56, 189, 248, 0.08) 0%, var(--surface-1) 100%)">
+                            <div class="card-header">
+                                <div class="card-title">☁️ 2TOOLNE Cloud Storage (Lưu Trữ & Đồng Bộ Đám Mây)</div>
+                                <span class="badge badge-info">2TOOL Cloud Core</span>
+                            </div>
+                            <div class="card-body" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px">
+                                <div>
+                                    <p class="text-muted">Kho lưu trữ đám mây tốc độ cao kết nối tự động với AI Upscale, chia sẻ link tải trực tiếp không giới hạn băng thông. Dung lượng từ 15GB đến 2TB+.</p>
+                                    <div style="font-size:12.5px;color:#38bdf8;font-weight:600;margin-top:4px">Đồng bộ trực tiếp tệp tin dự án & ảnh upscale từ máy tính lên Cloud</div>
+                                </div>
+                                <button class="btn btn-primary" onclick="switchMainTab('tab-cloud-storage')">
+                                    ☁️ Mở Kho Cloud Storage
                                 </button>
                             </div>
                         </div>
@@ -1332,7 +2665,7 @@ if (isset($_GET['registered'])) {
                                         <label class="form-label">MÔ TẢ CHI TIẾT MONG MUỐN:</label>
                                         <textarea name="description" class="form-textarea" rows="3" placeholder="Mô tả cụ thể cách tính năng hoạt động..." required></textarea>
                                     </div>
-                                    <button type="submit" class="btn btn-primary">Gửi Góp Ý Cho Admin</button>
+                                    <button type="submit" class="btn btn-primary">Gửi Góp Ý Cho 2TOOL</button>
                                 </form>
                             </div>
                         </div>
@@ -1513,8 +2846,14 @@ if (isset($_GET['registered'])) {
                     <button class="btn btn-emerald prod-tab-btn active" id="ptab-btn-2toolne" onclick="switchProductTab('ptab-2toolne', 'ptab-btn-2toolne')">
                         🚀 2toolne (AI YouTube Studio)
                     </button>
+                    <button class="btn btn-outline prod-tab-btn" id="ptab-btn-capcut" onclick="switchProductTab('ptab-capcut', 'ptab-btn-capcut')" style="border-color:#8b5cf6;color:#c084fc">
+                        🎬 2toolne AutoEdit (CapCut V2)
+                    </button>
                     <button class="btn btn-outline prod-tab-btn" id="ptab-btn-token" onclick="switchProductTab('ptab-token', 'ptab-btn-token')">
                         ✨ 2toolne Upscale 4K (AI)
+                    </button>
+                    <button class="btn btn-outline prod-tab-btn" id="ptab-btn-cloud" onclick="switchProductTab('ptab-cloud', 'ptab-btn-cloud')">
+                        ☁️ 2TOOLNE Cloud (Lưu Trữ)
                     </button>
                     <button class="btn btn-outline prod-tab-btn" id="ptab-btn-video" onclick="switchProductTab('ptab-video', 'ptab-btn-video')">
                         🎬 Slideshow Builder AI
@@ -1563,7 +2902,7 @@ if (isset($_GET['registered'])) {
                     <div class="card" style="margin-bottom:36px;border-color:var(--emerald);background:linear-gradient(180deg, #09261e 0%, var(--surface-1) 100%)">
                         <div class="card-body" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px">
                             <div>
-                                <span class="badge badge-active" style="margin-bottom:8px">BẢN CHÍNH THỨC v1.0.0 (RELEASE CANDIDATE)</span>
+                                <span class="badge badge-active" style="margin-bottom:8px">BẢN CHÍNH THỨC v1.1.2 (RELEASE CANDIDATE)</span>
                                 <h3 style="font-size:18px">Tải Bản Cài Đặt 2toolne Studio</h3>
                                 <p class="text-muted" style="margin-top:4px">Kiến trúc Electron 44 + React 19 + Python Media Worker — Độc lập và bảo mật.</p>
                             </div>
@@ -1599,7 +2938,7 @@ if (isset($_GET['registered'])) {
                                 <div class="price-sub">Thời hạn: 365 ngày sử dụng</div>
                                 <ul class="price-checklist">
                                     <li>✅ Toàn bộ quyền lợi gói tháng</li>
-                                    <li>✅ Hỗ trợ ưu tiên 1-1 từ Admin</li>
+                                    <li>✅ Hỗ trợ ưu tiên 1-1 từ chuyên viên 2TOOL</li>
                                     <li>✅ YouTube Uploader & Growth Radar</li>
                                     <li>✅ Đổi máy tính HWID linh hoạt</li>
                                 </ul>
@@ -1614,11 +2953,107 @@ if (isset($_GET['registered'])) {
                                 <ul class="price-checklist">
                                     <li>👑 <b>Cập nhật tính năng trọn đời</b></li>
                                     <li>👑 Quyền lợi VIP cao cấp nhất</li>
-                                    <li>👑 Hỗ trợ kỹ thuật 24/7 từ Admin</li>
+                                    <li>👑 Hỗ trợ kỹ thuật 24/7 từ 2TOOL Team</li>
                                     <li>👑 Ưu tiên phát triển tính năng theo yêu cầu</li>
                                 </ul>
                             </div>
                             <button class="btn btn-outline" onclick="openModal('modal-login')">👑 Đăng Nhập Để Mua</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PRODUCT: 2TOOLNE AUTOEDIT FOR CAPCUT (V2) -->
+                <div id="ptab-capcut" class="prod-tab-content" style="display:none">
+                    <div class="feature-grid">
+                        <div class="feature-card">
+                            <div class="feature-icon">🎬</div>
+                            <div class="feature-title">Native CapCut Timeline</div>
+                            <div class="feature-desc">Tự động cấu trúc bản nháp (draft_content.json) và đăng ký trực tiếp vào dự án CapCut Desktop không qua trung gian.</div>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon">📐</div>
+                            <div class="feature-title">Native Scale & Position Keyframes</div>
+                            <div class="feature-desc">Điều phối keyframe mượt mà, chính xác đến từng microsecond, loại bỏ hoàn toàn hiện tượng rung lắc jitter.</div>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon">🎵</div>
+                            <div class="feature-title">Âm Thanh & Phụ Đề XML Đồng Bộ</div>
+                            <div class="feature-desc">Hỗ trợ rãnh audio đa tầng, tự động đồng bộ phụ đề SRT tiếng Việt tương thích 100% phông chữ của CapCut.</div>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon">🖥️</div>
+                            <div class="feature-title">100% Desktop Native</div>
+                            <div class="feature-desc">Không trình duyệt, không localhost, không chiếm port mạng. Ứng dụng Electron Desktop độc lập trên macOS và Windows.</div>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon">🔒</div>
+                            <div class="feature-title">Bảo Mật Ed25519 & DPAPI / Keychain</div>
+                            <div class="feature-desc">Chứng chỉ bản quyền mã hóa cấp hệ điều hành, bảo vệ an toàn tuyệt đối và hỗ trợ sử dụng ngoại tuyến 72 giờ.</div>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon">⚡</div>
+                            <div class="feature-title">Multi-Probe Tự Động Nhận Diện</div>
+                            <div class="feature-desc">Tự động phát hiện phiên bản và thư mục lưu trữ CapCut Desktop trên cả macOS Apple Silicon và Windows 10/11.</div>
+                        </div>
+                    </div>
+
+                    <!-- DOWNLOAD BOX FOR CAPCUT V2 -->
+                    <div class="card" style="margin-bottom:36px;border-color:#8b5cf6;background:linear-gradient(180deg, rgba(139, 92, 246, 0.1) 0%, var(--surface-1) 100%)">
+                        <div class="card-body" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px">
+                            <div>
+                                <span class="badge" style="background:#7c3aed;color:#fff;font-weight:800;margin-bottom:8px">BẢN CHÍNH THỨC v2.0.0 (RELEASE CANDIDATE)</span>
+                                <h3 style="font-size:18px">Tải Bộ Cài Đặt 2toolne AutoEdit for CapCut</h3>
+                                <p class="text-muted" style="margin-top:4px">Kiến trúc Desktop Electron + Python Native Sidecar độc lập — Hỗ trợ CapCut Desktop 9.3.0+.</p>
+                            </div>
+                            <div style="display:flex;gap:8px;flex-wrap:wrap">
+                                <a href="/downloads/2toolne_AutoEdit_macOS_latest.dmg" class="btn btn-emerald">🍏 Tải Cho macOS (.dmg)</a>
+                                <a href="/downloads/2toolne_AutoEdit_Setup_latest.exe" class="btn btn-accent">🪟 Tải Cho Windows (.exe)</a>
+                                <button class="btn btn-outline" onclick="switchMainTab('tab-buy-key')">⚡ Mua Bản Quyền</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pricing-grid">
+                        <div class="pricing-card">
+                            <div>
+                                <h4>Gói 1 Tháng</h4>
+                                <div class="price-val" style="color:#c084fc">800.000đ</div>
+                                <div class="price-sub">Thời hạn: 30 ngày</div>
+                                <ul class="price-checklist">
+                                    <li>✅ Xuất bản nháp CapCut Desktop tự động</li>
+                                    <li>✅ Scale & Position keyframes mượt mà</li>
+                                    <li>✅ Đầy đủ audio & phụ đề tự động</li>
+                                </ul>
+                            </div>
+                            <button class="btn btn-outline" onclick="switchMainTab('tab-buy-key')">⚡ Mua Gói 1 Tháng</button>
+                        </div>
+                        <div class="pricing-card featured" style="border-color:#8b5cf6">
+                            <span class="badge pricing-card-badge" style="background:#7c3aed;color:#fff">TIẾT KIỆM 3.6 TRIỆU</span>
+                            <div>
+                                <h4>Gói 1 Năm (VIP)</h4>
+                                <div class="price-val" style="color:#c084fc">6.000.000đ</div>
+                                <div class="price-sub">Thời hạn: 365 ngày</div>
+                                <ul class="price-checklist">
+                                    <li>✅ Toàn bộ quyền lợi gói tháng</li>
+                                    <li>✅ Cập nhật mọi bản CapCut Desktop mới</li>
+                                    <li>✅ Hỗ trợ ưu tiên 1-1 từ kỹ thuật viên</li>
+                                    <li>✅ Hỗ trợ đổi máy linh hoạt</li>
+                                </ul>
+                            </div>
+                            <button class="btn btn-emerald" style="background:#7c3aed;border-color:#7c3aed" onclick="switchMainTab('tab-buy-key')">⚡ Mua Gói 1 Năm (VIP)</button>
+                        </div>
+                        <div class="pricing-card">
+                            <div>
+                                <h4>Gói Vĩnh Viễn</h4>
+                                <div class="price-val" style="color:#c084fc">10.000.000đ</div>
+                                <div class="price-sub">Sở hữu trọn đời (Lifetime)</div>
+                                <ul class="price-checklist">
+                                    <li>👑 <b>Sở hữu trọn đời vĩnh viễn</b></li>
+                                    <li>👑 Miễn phí cập nhật tính năng mới trọn đời</li>
+                                    <li>👑 Hỗ trợ kỹ thuật ưu tiên cao nhất 24/7</li>
+                                </ul>
+                            </div>
+                            <button class="btn btn-outline" onclick="switchMainTab('tab-buy-key')">👑 Mua Gói Vĩnh Viễn</button>
                         </div>
                     </div>
                 </div>
@@ -1647,13 +3082,13 @@ if (isset($_GET['registered'])) {
                     <div class="card" style="margin-bottom:36px;border-color:var(--purple-500);background:linear-gradient(180deg, rgba(147, 51, 234, 0.1) 0%, var(--surface-1) 100%)">
                         <div class="card-body" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px">
                             <div>
-                                <span class="badge badge-purple" style="margin-bottom:8px">BẢN CHÍNH THỨC v2.3.0 (GPU RENDERER G)</span>
-                                <h3 style="font-size:18px">Tải Bộ Cài Đặt Slideshow Builder AI</h3>
-                                <p class="text-muted" style="margin-top:4px">Động cơ tăng tốc phần cứng GPU NVIDIA / VideoToolbox / QuickSync — Render 4K mượt mà.</p>
+                                <span class="badge badge-purple" style="margin-bottom:8px">BẢN CHÍNH THỨC v2.3.9 (SUBPIXEL AFFINE ZERO-JITTER)</span>
+                                <h3 style="font-size:18px">Tải Bộ Cài Đặt Slideshow Builder AI (v2.3.9)</h3>
+                                <p class="text-muted" style="margin-top:4px">Động cơ chuyển động Subpixel Affine không rung lắc, siêu nét Lanczos4, hỗ trợ đầy đủ Python 3.10-3.13, tăng tốc GPU và phụ đề tự động.</p>
                             </div>
                             <div style="display:flex;gap:8px;flex-wrap:wrap">
-                                <a href="/downloads/SlideshowBuilder_macOS_latest.zip" class="btn btn-emerald">🍎 Tải Cho macOS (.zip)</a>
-                                <a href="/downloads/SlideshowBuilder_Windows_latest.zip" class="btn btn-accent">🪟 Tải Cho Windows (.zip)</a>
+                                <a href="/downloads/SlideshowBuilder_macOS_v2.3.9.zip" class="btn btn-emerald">🍎 Tải Cho macOS (.zip)</a>
+                                <a href="/downloads/SlideshowBuilder_Windows_v2.3.9.zip" class="btn btn-accent">🪟 Tải Cho Windows (.zip)</a>
                                 <button class="btn btn-outline" onclick="openModal('modal-register')">🎁 Dùng Thử 3 Ngày</button>
                             </div>
                         </div>
@@ -1752,13 +3187,13 @@ if (isset($_GET['registered'])) {
                         </div>
                         <div class="feature-card">
                             <div class="feature-icon">🔒</div>
-                            <div class="feature-title">Chu Trình 3 Bước An Toàn</div>
-                            <div class="feature-desc">Khóa tạm ➔ Xử lý xong mới trừ tiền ➔ Tự động hoàn trả 100% token nếu phần mềm gặp sự cố mạng hay tắt máy.</div>
+                            <div class="feature-title">Cam Kết Hoàn Lượt 100%</div>
+                            <div class="feature-desc">Chỉ trừ khi ảnh đã hoàn tất. Tự động hoàn trả 100% lượt ảnh nếu phần mềm gặp sự cố gián đoạn mạng hay tắt ứng dụng.</div>
                         </div>
                         <div class="feature-card">
                             <div class="feature-icon">🎁</div>
-                            <div class="feature-title">Tặng 50 Token Miễn Phí</div>
-                            <div class="feature-desc">Đăng ký tài khoản nhận ngay 50 token trải nghiệm tạo ảnh 2K/4K không tốn một đồng chi phí nào.</div>
+                            <div class="feature-title">Tặng 50 Lượt Ảnh Miễn Phí</div>
+                            <div class="feature-desc">Đăng ký tài khoản nhận ngay 50 lượt trải nghiệm phóng to ảnh 2K/4K siêu nét hoàn toàn miễn phí.</div>
                         </div>
                     </div>
 
@@ -1766,14 +3201,14 @@ if (isset($_GET['registered'])) {
                     <div class="card" style="margin-bottom:32px;border-color:#facc15;background:linear-gradient(180deg, rgba(250, 204, 21, 0.1) 0%, var(--surface-1) 100%)">
                         <div class="card-body" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px">
                             <div>
-                                <span class="badge" style="background:#facc15;color:#000;font-weight:800;margin-bottom:8px">BẢN CHÍNH THỨC v1.0.0 (ON-DEVICE AI ACCELERATION)</span>
+                                <span class="badge" style="background:#facc15;color:#000;font-weight:800;margin-bottom:8px">BẢN CHÍNH THỨC v1.1.2 (ON-DEVICE AI ACCELERATION)</span>
                                 <h3 style="font-size:18px;margin:0 0 4px">Tải Bộ Cài Đặt 2toolne Upscale 4K</h3>
                                 <p class="text-muted" style="margin:0;font-size:13px">Tăng tốc phần cứng qua Vulkan / DirectML / Apple Silicon Metal — Chạy độc lập trên máy tính.</p>
                             </div>
                             <div style="display:flex;gap:8px;flex-wrap:wrap">
-                                <a href="/downloads/2toolne_Upscale_macOS_latest.zip" class="btn btn-emerald">🍏 Tải Cho macOS (.zip / .dmg)</a>
-                                <a href="/downloads/2toolne_Upscale_Windows_latest.zip" class="btn btn-accent">🪟 Tải Cho Windows (.zip / .exe)</a>
-                                <button class="btn btn-outline" onclick="openModal('modal-register')">🎁 Nhận 50 Token Miễn Phí</button>
+                                <a href="/downloads/2toolne_Upscale_latest.dmg?v=1.1.2" class="btn btn-emerald">🍏 Tải Cho macOS (.dmg - 125 MB)</a>
+                                <a href="/downloads/2toolne_Upscale_Setup_latest.exe?v=1.1.2" class="btn btn-accent">🪟 Tải Cho Windows (.exe - 149 MB)</a>
+                                <button class="btn btn-outline" onclick="openModal('modal-register')">🎁 Nhận 50 Lượt Miễn Phí</button>
                             </div>
                         </div>
                     </div>
@@ -1782,13 +3217,13 @@ if (isset($_GET['registered'])) {
                         <!-- STARTER -->
                         <div class="pricing-card">
                             <div>
-                                <h4>Gói Starter (1.000 Token)</h4>
+                                <h4>Gói Starter (1.000 Lượt)</h4>
                                 <div class="price-val" style="color:#facc15">100.000đ</div>
-                                <div class="price-sub">100đ / token • Không hạn dùng</div>
+                                <div class="price-sub">100đ / lượt • Không hạn dùng</div>
                                 <ul class="price-checklist">
-                                    <li>🪙 1.000 Tokens Upscale 2K / 4K</li>
+                                    <li>🪙 1.000 Lượt (Tokens) Upscale 2K / 4K</li>
                                     <li>🖼️ Tương đương 1.000 ảnh 2K hoặc 500 ảnh 4K</li>
-                                    <li>⚡ Token vĩnh viễn không hết hạn</li>
+                                    <li>⚡ Lượt ảnh vĩnh viễn không bao giờ hết hạn</li>
                                 </ul>
                             </div>
                             <button class="btn btn-outline" onclick="openModal('modal-login')">⚡ Đăng Nhập Để Mua</button>
@@ -1796,14 +3231,14 @@ if (isset($_GET['registered'])) {
 
                         <!-- PRO -->
                         <div class="pricing-card featured" style="border-color:#facc15">
-                            <span class="badge pricing-card-badge" style="background:#facc15;color:#000;font-weight:800">TẶNG 500 TOKENS</span>
+                            <span class="badge pricing-card-badge" style="background:#facc15;color:#000;font-weight:800">TẶNG 500 LƯỢT</span>
                             <div>
-                                <h4>Gói Pro (3.000 Token)</h4>
+                                <h4>Gói Pro (3.500 Lượt)</h4>
                                 <div class="price-val" style="color:#facc15">250.000đ</div>
-                                <div class="price-sub">~83đ / token • Tặng thêm 500 token</div>
+                                <div class="price-sub">~71đ / lượt • Đã gồm 500 lượt tặng</div>
                                 <ul class="price-checklist">
-                                    <li>🪙 3.000 Tokens (Đã gồm 500 token thưởng)</li>
-                                    <li>🖼️ Tương đương 3.000 ảnh 2K hoặc 1.500 ảnh 4K</li>
+                                    <li>🪙 3.500 Lượt (Đã gồm 500 lượt thưởng)</li>
+                                    <li>🖼️ Tương đương 3.500 ảnh 2K hoặc 1.750 ảnh 4K</li>
                                     <li>⚡ Tối ưu cho nhà sáng tạo nội dung YouTube</li>
                                 </ul>
                             </div>
@@ -1813,12 +3248,12 @@ if (isset($_GET['registered'])) {
                         <!-- STUDIO -->
                         <div class="pricing-card">
                             <div>
-                                <h4>Gói Studio (10.000 Token)</h4>
+                                <h4>Gói Studio (13.000 Lượt)</h4>
                                 <div class="price-val" style="color:#facc15">700.000đ</div>
-                                <div class="price-sub">70đ / token • Tiết kiệm 30%</div>
+                                <div class="price-sub">~54đ / lượt • Tiết kiệm 45%</div>
                                 <ul class="price-checklist">
-                                    <li>🪙 10.000 Tokens (Tặng 3.000 token)</li>
-                                    <li>🖼️ Tương đương 10.000 ảnh 2K hoặc 5.000 ảnh 4K</li>
+                                    <li>🪙 13.000 Lượt (Tặng 3.000 lượt thưởng)</li>
+                                    <li>🖼️ Tương đương 13.000 ảnh 2K hoặc 6.500 ảnh 4K</li>
                                     <li>👑 Ưu tiên tốc độ xử lý trên hàng đợi GPU</li>
                                 </ul>
                             </div>
@@ -1839,6 +3274,90 @@ if (isset($_GET['registered'])) {
                                 </ul>
                             </div>
                             <button class="btn btn-primary" onclick="openModal('modal-login')">👑 Đăng Nhập Để Mua</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PRODUCT 4: 2TOOLNE CLOUD STORAGE -->
+                <div id="ptab-cloud" class="prod-tab-content" style="display:none">
+                    <div class="feature-grid">
+                        <div class="feature-card">
+                            <div class="feature-icon">☁️</div>
+                            <div class="feature-title">Cụm Đám Mây 2TOOL Cloud Đa Kênh</div>
+                            <div class="feature-desc">Hệ thống lưu trữ đám mây tốc độ cao kết hợp hạ tầng đám mây đa kênh thành một kho lưu trữ an toàn, dung lượng lớn.</div>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon">⚡</div>
+                            <div class="feature-title">Zero GPU Blocking Backup</div>
+                            <div class="feature-desc">Tự động sao lưu ảnh thành phẩm chạy ngầm từ Desktop App ngay khi xử lý xong, không làm chậm hay nghẽn GPU Upscale.</div>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon">🔄</div>
+                            <div class="feature-title">Direct Resumable 4MB Chunks</div>
+                            <div class="feature-desc">Truyền luồng trực tiếp từ máy khách lên 2TOOL Cloud, tự động phục hồi và tiếp tục tải lên ngay khi có mạng trở lại.</div>
+                        </div>
+                    </div>
+
+                    <!-- CLOUD STORAGE CALLOUT -->
+                    <div class="card" style="margin-bottom:32px;border-color:#38bdf8;background:linear-gradient(180deg, rgba(56, 189, 248, 0.1) 0%, var(--surface-1) 100%)">
+                        <div class="card-body" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px">
+                            <div>
+                                <span class="badge" style="background:rgba(56,189,248,0.2);color:#38bdf8;border:1px solid rgba(56,189,248,0.4);font-weight:700;margin-bottom:8px">2TOOLNE CLOUD V2 — STORAGE POOL SYSTEM</span>
+                                <h3 style="font-size:18px;margin:0 0 4px">Kho Lưu Trữ Đám Mây Chuyên Nghiệp Cho Studio</h3>
+                                <p class="text-muted" style="margin:0;font-size:13px">Quản lý tệp tin trực quan, xem trước ảnh/video, chia sẻ không gian làm việc cho cả đội nhóm.</p>
+                            </div>
+                            <div style="display:flex;gap:8px;flex-wrap:wrap">
+                                <button class="btn btn-emerald" onclick="openModal('modal-login')">🚀 Đăng Nhập Quản Lý Tệp</button>
+                                <button class="btn btn-outline" onclick="openModal('modal-register')">🎁 Nhận 15GB Miễn Phí</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pricing-grid">
+                        <div class="pricing-card">
+                            <div>
+                                <h4>Cloud Personal (50 GB)</h4>
+                                <div class="price-val" style="color:#38bdf8">50.000đ</div>
+                                <div class="price-sub">/ tháng • Không gian cá nhân</div>
+                                <ul class="price-checklist">
+                                    <li>☁️ 50 GB lưu trữ 2TOOL Cloud tốc độ cao</li>
+                                    <li>⚡ Tự động sao lưu từ 2TOOLNE Desktop App</li>
+                                    <li>🔗 Link tải trực tiếp & xem trước ảnh 4K</li>
+                                    <li>🛡️ Mã hóa & sao lưu an toàn tuyệt đối</li>
+                                </ul>
+                            </div>
+                            <button class="btn btn-outline" onclick="openModal('modal-login')">⚡ Đăng Nhập Để Mua</button>
+                        </div>
+
+                        <div class="pricing-card featured" style="border-color:#38bdf8">
+                            <span class="badge pricing-card-badge" style="background:#38bdf8;color:#000;font-weight:800">PHỔ BIẾN CHO STUDIO</span>
+                            <div>
+                                <h4>Cloud Team (200 GB)</h4>
+                                <div class="price-val" style="color:#38bdf8">150.000đ</div>
+                                <div class="price-sub">/ tháng • Dành cho đội nhóm</div>
+                                <ul class="price-checklist">
+                                    <li>☁️ 200 GB lưu trữ đám mây mở rộng</li>
+                                    <li>👥 Chia sẻ không gian cho tối đa 5 thành viên</li>
+                                    <li>⚡ Upload trực tiếp song song nhiều thiết bị</li>
+                                    <li>👑 Phân quyền Quản trị viên / Thành viên</li>
+                                </ul>
+                            </div>
+                            <button class="btn btn-emerald" style="background:#0284c7;border-color:#0284c7" onclick="openModal('modal-login')">⚡ Đăng Nhập Để Mua</button>
+                        </div>
+
+                        <div class="pricing-card">
+                            <div>
+                                <h4>Cloud Enterprise (1 TB)</h4>
+                                <div class="price-val" style="color:#38bdf8">500.000đ</div>
+                                <div class="price-sub">/ tháng • Dung lượng cực lớn</div>
+                                <ul class="price-checklist">
+                                    <li>☁️ 1.000 GB (1 TB) lưu trữ vĩnh viễn</li>
+                                    <li>👥 Không giới hạn thành viên trong Studio</li>
+                                    <li>🚀 Băng thông tải xuống ưu tiên tối đa</li>
+                                    <li>👑 Hỗ trợ kết nối kho lưu trữ riêng cho doanh nghiệp</li>
+                                </ul>
+                            </div>
+                            <button class="btn btn-outline" onclick="openModal('modal-login')">👑 Đăng Nhập Để Mua</button>
                         </div>
                     </div>
                 </div>
@@ -1866,14 +3385,14 @@ if (isset($_GET['registered'])) {
                             </div>
                             <!-- PROMINENT SMART 1-CLICK BUTTON -->
                             <div class="smart-download-container" data-app-name="2toolne Upscale 4K" style="display:flex;flex-direction:column;gap:8px;min-width:260px">
-                                <a href="/downloads/2toolne_Upscale_Windows_latest.zip" 
-                                   data-os-win="/downloads/2toolne_Upscale_Windows_latest.zip" 
-                                   data-os-mac="/downloads/2toolne_Upscale_macOS_latest.zip" 
+                                <a href="/downloads/2toolne_Upscale_Setup_latest.exe?v=1.1.2" 
+                                   data-os-win="/downloads/2toolne_Upscale_Setup_latest.exe?v=1.1.2" 
+                                   data-os-mac="/downloads/2toolne_Upscale_latest.dmg?v=1.1.2" 
                                    class="smart-download-btn btn btn-accent btn-lg" 
                                    style="font-weight:700;text-align:center;box-shadow:0 0 20px rgba(250, 204, 21, 0.25)">
-                                    <span class="smart-download-icon">🪟</span> <span class="smart-download-text">Tải Cho Windows (.zip)</span>
+                                    <span class="smart-download-icon">🪟</span> <span class="smart-download-text">Tải Cho Windows (.exe - 149 MB)</span>
                                 </a>
-                                <div style="font-size:11px;color:var(--muted-foreground);text-align:center">Tự động nhận diện cấu hình • Bản chuẩn v1.0.0 Stable</div>
+                                <div style="font-size:11px;color:var(--muted-foreground);text-align:center">Tự động nhận diện cấu hình • Bản chuẩn v1.1.2 Stable</div>
                             </div>
                         </div>
 
@@ -1886,8 +3405,7 @@ if (isset($_GET['registered'])) {
                                 </div>
                                 <p style="font-size:12px;color:var(--muted-foreground);margin-bottom:10px">Tối ưu DirectML, Vulkan, NVIDIA CUDA / Tensor Cores.</p>
                                 <div style="display:flex;gap:8px;flex-wrap:wrap">
-                                    <a href="/downloads/2toolne_Upscale_Windows_latest.zip" class="btn btn-accent btn-sm" style="flex:1;text-align:center">📥 Tải .zip (Portable 64-bit)</a>
-                                    <a href="/downloads/2toolne_Upscale_Setup_latest.exe" class="btn btn-outline btn-sm" style="flex:1;text-align:center">⚙️ Bản cài đặt .exe</a>
+                                    <a href="/downloads/2toolne_Upscale_Setup_latest.exe?v=1.1.2" class="btn btn-accent btn-sm" style="flex:1;text-align:center">⚙️ Bản cài đặt .exe (149 MB - Khuyên dùng)</a>
                                 </div>
                             </div>
 
@@ -1899,7 +3417,7 @@ if (isset($_GET['registered'])) {
                                 <p style="font-size:12px;color:var(--muted-foreground);margin-bottom:10px">Universal: Apple Silicon (M1/M2/M3/M4 Metal) & Intel.</p>
                                 <div style="display:flex;gap:8px;flex-wrap:wrap">
                                     <a href="/downloads/2toolne_Upscale_macOS_latest.zip" class="btn btn-emerald btn-sm" style="flex:1;text-align:center">🍏 Tải .zip (Universal Mac)</a>
-                                    <a href="/downloads/2toolne_Upscale_latest.dmg" class="btn btn-outline btn-sm" style="flex:1;text-align:center">📦 Gói cài .dmg</a>
+                                    <a href="/downloads/2toolne_Upscale_latest.dmg?v=1.1.2" class="btn btn-outline btn-sm" style="flex:1;text-align:center">📦 Gói cài .dmg</a>
                                 </div>
                             </div>
                         </div>
@@ -1927,7 +3445,7 @@ if (isset($_GET['registered'])) {
                                    style="font-weight:700;text-align:center;box-shadow:0 0 20px rgba(16, 185, 129, 0.3)">
                                     <span class="smart-download-icon">🪟</span> <span class="smart-download-text">Tải Cho Windows (.zip)</span>
                                 </a>
-                                <div style="font-size:11px;color:var(--muted-foreground);text-align:center">Tự động nhận diện cấu hình • Bản chuẩn v1.0.0 RC</div>
+                                <div style="font-size:11px;color:var(--muted-foreground);text-align:center">Tự động nhận diện cấu hình • Bản chuẩn v1.1.2 RC</div>
                             </div>
                         </div>
 
@@ -1967,14 +3485,14 @@ if (isset($_GET['registered'])) {
                             <div>
                                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
                                     <span style="font-size:22px">🎬</span>
-                                    <div class="card-title" style="margin:0">Slideshow Builder AI (v2.3.0 Stable)</div>
+                                    <div class="card-title" style="margin:0">Slideshow Builder AI (v2.3.9 Stable)</div>
                                 </div>
-                                <p class="text-muted" style="font-size:13px;margin:8px 0 16px">Động cơ Renderer G GPU Subpixel nội suy mượt mà 60 FPS, phụ đề tự động Pill/Noonnu, lồng tiếng đa giọng đọc.</p>
+                                <p class="text-muted" style="font-size:13px;margin:8px 0 16px">Động cơ Subpixel Affine Motion mượt mà 60 FPS không rung giật, phụ đề tự động Pill/Noonnu, lồng tiếng đa giọng đọc.</p>
                                 <div class="text-subtle" style="font-size:12px;margin-bottom:16px">Tương thích: Windows 10/11 & macOS Monterey+</div>
                             </div>
                             <div style="display:flex;gap:8px;flex-wrap:wrap">
-                                <a href="/downloads/SlideshowBuilder_macOS_latest.zip" class="btn btn-emerald btn-sm" style="flex:1;text-align:center">🍎 Tải macOS (.zip)</a>
-                                <a href="/downloads/SlideshowBuilder_Windows_latest.zip" class="btn btn-accent btn-sm" style="flex:1;text-align:center">🪟 Tải Windows (.zip)</a>
+                                <a href="/downloads/SlideshowBuilder_macOS_v2.3.9.zip" class="btn btn-emerald btn-sm" style="flex:1;text-align:center">🍎 Tải macOS (.zip)</a>
+                                <a href="/downloads/SlideshowBuilder_Windows_v2.3.9.zip" class="btn btn-accent btn-sm" style="flex:1;text-align:center">🪟 Tải Windows (.zip)</a>
                             </div>
                         </div>
                     </div>
@@ -2001,75 +3519,215 @@ if (isset($_GET['registered'])) {
     <footer style="border-top:1px solid var(--border);padding:32px 0;text-align:center;font-size:13px;color:var(--muted-foreground);margin-top:64px">
         <div class="container">
             <p>© 2026 <b>2tamne.site</b> — Commercial AI Software Suite. Mọi quyền được bảo lưu.</p>
-            <p style="margin-top:6px">Hotline & Zalo Admin Hỗ Trợ: <a href="https://zalo.me/0326649304" target="_blank" style="color:var(--emerald);font-weight:600">0326649304</a></p>
+            <p style="margin-top:6px">Hotline & Zalo Kỹ Thuật Hỗ Trợ: <a href="https://zalo.me/0326649304" target="_blank" style="color:var(--emerald);font-weight:600">0326649304</a></p>
         </div>
     </footer>
 
     <!-- ═══ MODALS & DIALOGS ═══ -->
 
-    <!-- MODAL: VIETQR PAYMENT WITH COUNTDOWN TIMER -->
+    <!-- MODAL: PAYMENT GATEWAY & VIETQR CHECKOUT -->
     <div id="modal-qr-pay" class="modal-backdrop">
-        <div class="modal-dialog" style="max-width:440px;text-align:center">
+        <div class="modal-dialog" style="max-width:480px;width:100%">
             <div class="modal-header">
-                <div class="modal-title">Quét Mã VietQR Thanh Toán</div>
-                <button class="modal-close" onclick="closeModal('modal-qr-pay')">&times;</button>
+                <div class="modal-title" style="display:flex;align-items:center;gap:8px">
+                    <span style="font-size:16px">⚡</span>
+                    <span>Thanh Toán Đơn Hàng</span>
+                </div>
+                <button type="button" class="modal-close" onclick="closeModal('modal-qr-pay')" aria-label="Đóng">&times;</button>
             </div>
             <div class="modal-body">
-                <p style="font-size:13px;color:var(--muted-foreground);margin-bottom:12px">
-                    Gói chọn mua: <b id="qr-pkg-title" style="color:var(--emerald)">...</b>
-                </p>
-                
-                <!-- QR IMAGE -->
-                <div style="background:#fff;padding:8px;border-radius:var(--radius-sm);display:inline-block;margin-bottom:14px;box-shadow:var(--shadow-md)">
-                    <img src="/assets/vietqr_tamne.png" alt="VietQR" style="width:230px;height:auto;border-radius:4px;display:block">
+                <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">
+                    <span style="font-size:12.5px;color:var(--muted-foreground)">Sản phẩm / Gói:</span>
+                    <b id="qr-pkg-title" style="color:var(--emerald);font-size:13.5px">...</b>
                 </div>
 
-                <!-- BANK DETAILS -->
-                <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;text-align:left;font-size:12.5px;margin-bottom:14px">
-                    <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-                        <span class="text-muted">Ngân hàng:</span>
-                        <b>VietinBank (PGD Thủ Đô)</b>
+                <!-- ═══ PHƯƠNG THỨC 1: CỔNG THANH TOÁN CHÍNH SEPAY (TỰ ĐỘNG DUYỆT 24/7) ═══ -->
+                <div style="background:rgba(2, 132, 199, 0.08);border:1.5px solid #0284c7;border-radius:var(--radius-sm);padding:14px;margin-bottom:14px;text-align:left">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                        <span style="font-size:12px;font-weight:700;color:#38bdf8">⚡ CỔNG THANH TOÁN CHÍNH (SEPAY)</span>
+                        <span class="badge" style="background:rgba(16, 185, 129, 0.2);color:#10b981;border:1px solid rgba(16, 185, 129, 0.4);font-size:10px">TỰ ĐỘNG 24/7</span>
                     </div>
-                    <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-                        <span class="text-muted">Chủ tài khoản:</span>
-                        <b>HOANG LUONG TAM</b>
+                    <p style="font-size:12px;color:var(--foreground);line-height:1.5;margin-bottom:12px">
+                        Quét mã VietQR động qua SePay — Tự động nhận diện và <b>kích hoạt Key / nạp Token ngay lập tức</b> trong 3 giây!
+                    </p>
+                    <form action="/sepay_checkout.php" method="POST">
+                        <input type="hidden" name="package_name" id="sepay-form-pkg-name">
+                        <input type="hidden" name="package_price" id="sepay-form-pkg-price">
+                        <input type="hidden" name="duration_days" id="sepay-form-pkg-days">
+                        <input type="hidden" name="tier" id="sepay-form-pkg-tier">
+                        <input type="hidden" name="product" id="sepay-form-pkg-product" value="SLIDESHOW">
+                        <button type="submit" class="btn" style="width:100%;height:44px;font-size:14px;font-weight:700;background:linear-gradient(135deg,#0284c7,#0369a1);color:#fff;border:none;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 14px rgba(2,132,199,0.35);border-radius:var(--radius-sm);cursor:pointer">
+                            <span>⚡ Thanh Toán Tự Động Qua Cổng SePay</span>
+                        </button>
+                    </form>
+                    <div style="font-size:11px;color:#94a3b8;text-align:center;margin-top:7px">
+                        💳 Hỗ trợ tất cả ứng dụng ngân hàng & ví điện tử tại Việt Nam
                     </div>
-                    <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-                        <span class="text-muted">Số tài khoản:</span>
-                        <b class="font-mono" style="color:var(--info)">101876965948</b>
-                    </div>
-                    <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-                        <span class="text-muted">Số tiền:</span>
-                        <b id="qr-pkg-price" style="color:var(--emerald);font-size:14px">...</b>
-                    </div>
-                    <div style="display:flex;justify-content:space-between;align-items:center">
-                        <span class="text-muted">Nội dung CK:</span>
-                        <div style="display:flex;align-items:center;gap:4px">
-                            <b id="qr-memo-text" class="font-mono" style="color:var(--warning)">...</b>
-                            <button type="button" class="btn btn-outline btn-xs" onclick="copyText(document.getElementById('qr-memo-text').textContent)">📋</button>
+                </div>
+
+                <!-- ═══ PHƯƠNG THỨC 2: CHUYỂN KHOẢN THỦ CÔNG (COLLAPSIBLE EXPANSION) ═══ -->
+                <details id="details-manual-transfer" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);text-align:left">
+                    <summary style="padding:10px 14px;cursor:pointer;font-size:12px;color:var(--muted-foreground);font-weight:600;display:flex;justify-content:space-between;align-items:center;user-select:none">
+                        <span>🏦 Hoặc chuyển khoản thủ công (Duyệt nhanh trong 5 phút)</span>
+                        <span style="font-size:11px;color:var(--info)">Xem chi tiết ▼</span>
+                    </summary>
+                    <div style="padding:14px;border-top:1px solid var(--border)">
+                        <!-- QR IMAGE -->
+                        <div style="text-align:center;margin-bottom:12px">
+                            <div style="background:#fff;padding:6px;border-radius:var(--radius-sm);display:inline-block;box-shadow:var(--shadow-sm)">
+                                <img src="/assets/vietqr_tamne.png" alt="VietQR" style="max-width:160px;width:100%;height:auto;border-radius:4px;display:block">
+                            </div>
                         </div>
+
+                        <!-- BANK DETAILS -->
+                        <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;font-size:12px;margin-bottom:12px">
+                            <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+                                <span class="text-muted">Ngân hàng:</span>
+                                <b>VietinBank (PGD Thủ Đô)</b>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+                                <span class="text-muted">Chủ tài khoản:</span>
+                                <b>HOANG LUONG TAM</b>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                                <span class="text-muted">Số tài khoản:</span>
+                                <div style="display:flex;align-items:center;gap:6px">
+                                    <b class="font-mono" style="color:var(--info)">101876965948</b>
+                                    <button type="button" class="btn btn-outline btn-xs" onclick="copyText('101876965948')" title="Sao chép">📋</button>
+                                </div>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+                                <span class="text-muted">Số tiền:</span>
+                                <b id="qr-pkg-price" style="color:var(--emerald)">...</b>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;align-items:center">
+                                <span class="text-muted">Nội dung CK:</span>
+                                <div style="display:flex;align-items:center;gap:6px">
+                                    <b id="qr-memo-text" class="font-mono" style="color:var(--warning)">...</b>
+                                    <button type="button" class="btn btn-outline btn-xs" onclick="copyText(document.getElementById('qr-memo-text').textContent)" title="Sao chép">📋</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 2-MINUTE COUNTDOWN -->
+                        <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;font-size:11.5px;font-weight:600;color:var(--foreground);margin-bottom:12px;text-align:center">
+                            ⏱️ Thời gian giữ đơn: <span id="countdown-timer" style="color:var(--danger);font-size:13px">02:00</span>
+                        </div>
+
+                        <form method="POST" onsubmit="handleAjaxSubmitPayment(event, this)">
+                            <input type="hidden" name="action" value="submit_payment">
+                            <input type="hidden" name="package_name" id="form-pkg-name">
+                            <input type="hidden" name="package_price" id="form-pkg-price">
+                            <input type="hidden" name="duration_days" id="form-pkg-days">
+                            <input type="hidden" name="tier" id="form-pkg-tier">
+                            <input type="hidden" name="product" id="form-pkg-product" value="SLIDESHOW">
+                            <button type="submit" class="btn btn-outline" style="width:100%;height:38px;font-size:13px;font-weight:600">
+                                ✅ Tôi Đã Chuyển Khoản (Chờ Xác Nhận)
+                            </button>
+                        </form>
                     </div>
+                </details>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: APP AUTHENTICATION -->
+    <?php if (!empty($pending_app_auth) && $current_user): ?>
+    <div id="modal-app-auth" class="modal-backdrop active" style="z-index:99999;display:flex;align-items:center;justify-content:center">
+        <div class="modal-dialog" style="max-width:440px;background:#12131a;border:1px solid rgba(59,130,246,0.3);box-shadow:0 25px 60px rgba(0,0,0,0.85);border-radius:18px">
+            <div class="modal-header" style="border-bottom:1px solid rgba(255,255,255,0.08);padding:18px 20px">
+                <div class="modal-title" style="font-size:16px;font-weight:700;display:flex;align-items:center;gap:10px">
+                    <span style="font-size:22px">🔐</span> Phê Duyệt Đăng Nhập Ứng Dụng
+                </div>
+                <a href="index.php?cancel_auth=1" class="modal-close">&times;</a>
+            </div>
+            <div class="modal-body" style="padding:22px 20px">
+                <div style="text-align:center;margin-bottom:20px">
+                    <div style="display:inline-flex;align-items:center;justify-content:center;width:60px;height:60px;border-radius:18px;background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.25);margin-bottom:12px;font-size:28px">
+                        ⚡
+                    </div>
+                    <div style="font-size:16px;font-weight:700;color:#fff">2toolne Upscale Desktop</div>
+                    <div style="font-size:12px;color:rgba(255,255,255,0.6);margin-top:4px">Đang yêu cầu kết nối với tài khoản trên web của bạn</div>
                 </div>
 
-                <!-- 2-MINUTE COUNTDOWN -->
-                <div style="background:var(--surface-2);border:1px solid var(--border-strong);border-radius:var(--radius-sm);padding:8px;font-size:12.5px;font-weight:600;color:var(--foreground);margin-bottom:14px">
-                    ⏱️ Thời gian giữ đơn: <span id="countdown-timer" style="color:var(--danger);font-size:14px">02:00</span>
+                <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px 16px;margin-bottom:20px">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:10px;font-size:13px">
+                        <span style="color:rgba(255,255,255,0.5)">Tài khoản:</span>
+                        <strong style="color:#60a5fa;font-size:14px"><?= htmlspecialchars($current_user) ?></strong>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;margin-bottom:10px;font-size:13px">
+                        <span style="color:rgba(255,255,255,0.5)">Gói dịch vụ:</span>
+                        <span class="badge" style="background:#2563eb;color:#fff;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700">PRO</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:13px">
+                        <span style="color:rgba(255,255,255,0.5)">Số dư Lượt ảnh:</span>
+                        <strong style="color:#10b981;font-size:14px"><?= number_format($user_wallet['balance'] ?? 0) ?> Lượt</strong>
+                    </div>
                 </div>
 
                 <form method="POST">
-                    <input type="hidden" name="action" value="submit_payment">
-                    <input type="hidden" name="package_name" id="form-pkg-name">
-                    <input type="hidden" name="package_price" id="form-pkg-price">
-                    <input type="hidden" name="duration_days" id="form-pkg-days">
-                    <input type="hidden" name="tier" id="form-pkg-tier">
-                    <input type="hidden" name="product" id="form-pkg-product" value="SLIDESHOW">
-                    <button type="submit" class="btn btn-emerald" style="width:100%;height:40px;font-size:14px">
-                        ✅ Tôi Đã Chuyển Khoản Thành Công
+                    <input type="hidden" name="action" value="approve_app_auth">
+                    <input type="hidden" name="session_id" value="<?= htmlspecialchars($pending_app_auth['session'] ?? '') ?>">
+                    <input type="hidden" name="port" value="<?= intval($pending_app_auth['port'] ?? 0) ?>">
+                    <input type="hidden" name="challenge" value="<?= htmlspecialchars($pending_app_auth['challenge'] ?? '') ?>">
+                    <button type="submit" class="btn btn-accent btn-lg" style="width:100%;font-weight:700;margin-bottom:10px;font-size:14px;padding:12px">
+                        ✅ Duyệt Đăng Nhập Cho App
                     </button>
+                    <a href="index.php?cancel_auth=1" class="btn btn-outline btn-sm" style="width:100%;text-align:center;display:block">
+                        ❌ Hủy Bỏ
+                    </a>
                 </form>
             </div>
         </div>
     </div>
+    <?php endif; ?>
+
+    <!-- MODAL: APP AUTHENTICATION SUCCESS CELEBRATION -->
+    <?php if (isset($_GET['app_auth_approved']) && !empty($_SESSION['app_auth_approved'])): 
+        $approved_info = $_SESSION['app_auth_approved'];
+        unset($_SESSION['app_auth_approved']);
+    ?>
+    <div id="modal-app-auth-success" class="modal-backdrop active" style="z-index:99999;display:flex;align-items:center;justify-content:center">
+        <div class="modal-dialog" style="max-width:440px;background:#12131a;border:1px solid rgba(16,185,129,0.4);box-shadow:0 25px 60px rgba(0,0,0,0.85);border-radius:18px;text-align:center;padding:32px 24px">
+            <div style="font-size:54px;margin-bottom:12px">🎉</div>
+            <h2 style="font-size:20px;font-weight:700;color:#fff;margin:0 0 8px">Đã Duyệt Đăng Nhập Thành Công!</h2>
+            <p style="font-size:14px;color:rgba(255,255,255,0.7);line-height:1.5;margin:0 0 20px">
+                Ứng dụng <b>2toolne Upscale Desktop</b> đã được kết nối thành công với tài khoản <b><?= htmlspecialchars($approved_info['username']) ?></b>.
+            </p>
+            <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:12px;padding:12px;margin-bottom:20px">
+                <div style="font-size:15px;font-weight:700;color:#34d399"><?= htmlspecialchars($approved_info['username']) ?></div>
+                <div style="font-size:13px;color:#a7f3d0;margin-top:2px"><?= number_format($approved_info['balance']) ?> Lượt • Gói <?= htmlspecialchars($approved_info['plan']) ?></div>
+            </div>
+            <p style="font-size:13px;color:rgba(255,255,255,0.5);margin:0 0 20px">
+                Bạn có thể đóng tab trình duyệt này và quay lại ứng dụng 2toolne Upscale để tiếp tục sử dụng.
+            </p>
+            <a href="index.php" class="btn btn-primary" style="width:100%;padding:10px;display:inline-block;text-decoration:none">
+                Quay Lại Trang Chủ
+            </a>
+        </div>
+    </div>
+    <?php if (!empty($approved_info['port']) && $approved_info['port'] > 1024): 
+        $cb_url = "http://127.0.0.1:" . intval($approved_info['port']) . "/callback?" . http_build_query([
+            'status' => 'success',
+            'session_id' => $approved_info['session'],
+            'challenge' => $approved_info['challenge'],
+            'token' => $approved_info['token'],
+            'user_id' => $approved_info['uid'],
+            'username' => $approved_info['username'],
+            'email' => $approved_info['email'],
+            'plan' => $approved_info['plan'],
+            'balance' => $approved_info['balance'],
+        ]);
+    ?>
+    <script>
+        try {
+            fetch(<?= json_encode($cb_url) ?>, { mode: 'no-cors' }).catch(() => {});
+            const img = new Image();
+            img.src = <?= json_encode($cb_url) ?>;
+        } catch(e) {}
+    </script>
+    <?php endif; ?>
+    <?php endif; ?>
 
     <!-- MODAL: LOGIN -->
     <div id="modal-login" class="modal-backdrop">
@@ -2099,12 +3757,12 @@ if (isset($_GET['registered'])) {
     <div id="modal-register" class="modal-backdrop">
         <div class="modal-dialog" style="max-width:420px">
             <div class="modal-header">
-                <div class="modal-title">🎁 Đăng Ký Nhận Key 3 Ngày</div>
+                <div class="modal-title">🎁 Đăng Ký Nhận Bản Quyền Dùng Thử</div>
                 <button class="modal-close" onclick="closeModal('modal-register')">&times;</button>
             </div>
             <div class="modal-body">
                 <p style="font-size:12.5px;color:var(--muted-foreground);margin-bottom:14px">
-                    Tự động cấp 1 License Key trải nghiệm 3 ngày miễn phí cho địa chỉ IP của bạn.
+                    Tự động tặng 1 Khóa dùng thử 3 ngày + 50 lượt phóng to ảnh 2K/4K miễn phí cho tài khoản của bạn.
                 </p>
                 <form method="POST">
                     <input type="hidden" name="action" value="register">
@@ -2125,7 +3783,7 @@ if (isset($_GET['registered'])) {
                         <input type="password" name="password" class="form-input" required minlength="6">
                     </div>
                     <button type="submit" class="btn btn-emerald" style="width:100%;height:40px">
-                        🚀 Tạo Tài Khoản & Nhận Key Ngay
+                        🚀 Tạo Tài Khoản & Nhận Quà Ngay
                     </button>
                 </form>
             </div>
@@ -2136,25 +3794,312 @@ if (isset($_GET['registered'])) {
     <div id="modal-reset-hwid-confirm" class="modal-backdrop">
         <div class="modal-dialog" style="max-width:420px">
             <div class="modal-header">
-                <div class="modal-title">🔄 Xác Nhận Đổi Máy (Reset HWID)</div>
+                <div class="modal-title">🔄 Xác Nhận Đổi Thiết Bị</div>
                 <button class="modal-close" onclick="closeModal('modal-reset-hwid-confirm')">&times;</button>
             </div>
             <div class="modal-body">
                 <p style="font-size:13px;color:var(--foreground);line-height:1.6;margin-bottom:14px">
-                    Bạn có chắc chắn muốn <b>Reset liên kết phần cứng (HWID)</b> cho mã bản quyền này?
+                    Bạn có chắc chắn muốn <b>gỡ liên kết máy tính cũ</b> cho mã bản quyền này để kích hoạt trên thiết bị mới?
                 </p>
                 <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;font-size:12.5px;color:var(--muted-foreground);margin-bottom:16px">
-                    Key: <b id="hwid-reset-key-label" class="font-mono text-primary">...</b><br>
-                    Sau khi reset, bạn có thể nhập key này để kích hoạt trên máy tính mới.
+                    Mã bản quyền: <b id="hwid-reset-key-label" class="font-mono text-primary">...</b><br>
+                    Sau khi gỡ liên kết, bạn có thể nhập mã này trên máy tính mới để tiếp tục sử dụng.
                 </div>
                 <form method="POST">
                     <input type="hidden" name="action" value="reset_hwid">
                     <input type="hidden" name="key" id="hwid-reset-key-input">
                     <div style="display:flex;justify-content:flex-end;gap:10px">
                         <button type="button" class="btn btn-outline" onclick="closeModal('modal-reset-hwid-confirm')">Hủy Bỏ</button>
-                        <button type="submit" class="btn btn-accent">Xác Nhận Reset HWID</button>
+                        <button type="submit" class="btn btn-accent">Xác Nhận Đổi Thiết Bị</button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ MODAL: CLOUD UPLOAD FILE (DIRECT RESUMABLE ENGINE) ═══ -->
+    <div id="modal-cloud-upload" class="modal-backdrop">
+        <div class="modal-dialog" style="max-width:540px">
+            <div class="modal-header">
+                <h3 class="modal-title" style="font-size:16px;margin:0;display:flex;align-items:center;gap:6px">
+                    <span>⬆️</span> Tải Tệp Lên 2TOOLNE Cloud
+                </h3>
+                <button class="modal-close" onclick="closeModal('modal-cloud-upload')">&times;</button>
+            </div>
+            <div class="modal-body" style="padding:20px">
+                <div class="cloud-dropzone" id="cloud-dropzone" onclick="document.getElementById('cloud-file-input').click()">
+                    <div style="font-size:36px;margin-bottom:8px">☁️</div>
+                    <div style="font-weight:600;font-size:14px;margin-bottom:4px">Chọn tệp tin hoặc kéo thả vào đây</div>
+                    <div style="font-size:12px;color:var(--muted-foreground)">Hỗ trợ ảnh JPG/PNG/WEBP, video MP4/MKV, zip, v.v. Tối đa theo hạn mức lưu trữ.</div>
+                    <input type="file" id="cloud-file-input" multiple style="display:none" onchange="onCloudFileSelected(this.files)">
+                </div>
+
+                <div id="cloud-selected-files-list" style="margin-top:16px;display:none">
+                    <div style="font-size:12px;font-weight:600;color:var(--muted-foreground);margin-bottom:8px">Tệp đã chọn:</div>
+                    <div id="cloud-file-items-container" style="max-height:140px;overflow-y:auto;display:flex;flex-direction:column;gap:6px"></div>
+                </div>
+
+                <div id="cloud-upload-progress-container" style="margin-top:16px;display:none">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:12.5px">
+                        <span id="cloud-upload-status-text" style="color:var(--foreground);font-weight:500">Đang khởi tạo phiên tải lên...</span>
+                        <span id="cloud-upload-percent-text" style="font-family:var(--font-mono);font-weight:700;color:var(--primary)">0%</span>
+                    </div>
+                    <div class="cloud-quota-track" style="height:10px">
+                        <div id="cloud-upload-bar-fill" class="cloud-quota-fill" style="width:0%"></div>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted-subtle);margin-top:4px">
+                        <span id="cloud-upload-bytes-text">0 / 0 MB</span>
+                        <span id="cloud-upload-speed-text">2TOOL Cloud Stream tốc độ cao</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding:14px 20px;display:flex;justify-content:flex-end;gap:10px">
+                <button type="button" class="btn btn-outline btn-sm" onclick="closeModal('modal-cloud-upload')" id="btn-cloud-cancel-upload">Đóng</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="startCloudUploadQueue()" id="btn-cloud-start-upload">Bắt Đầu Tải Lên</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ MODAL: CLOUD TRASH (THÙNG RÁC) ═══ -->
+    <div id="modal-cloud-trash" class="modal-backdrop">
+        <div class="modal-dialog" style="max-width:700px">
+            <div class="modal-header">
+                <h3 class="modal-title" style="font-size:16px;margin:0;display:flex;align-items:center;gap:6px">
+                    <span>🗑️</span> Thùng Rác 2TOOLNE Cloud
+                </h3>
+                <button class="modal-close" onclick="closeModal('modal-cloud-trash')">&times;</button>
+            </div>
+            <div class="modal-body" style="padding:20px">
+                <div style="background:rgba(234, 179, 8, 0.08);border:1px solid rgba(234, 179, 8, 0.25);border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;color:#facc15;margin-bottom:16px">
+                    ℹ️ Tệp trong Thùng Rác vẫn chiếm dung lượng của Không gian lưu trữ cho đến khi bạn bấm <b>Xóa Vĩnh Viễn</b>. Bạn có thể khôi phục lại tệp bất kỳ lúc nào.
+                </div>
+                <div class="table-responsive" style="max-height:350px;overflow-y:auto">
+                    <table class="table" style="margin:0">
+                        <thead>
+                            <tr>
+                                <th>Tên Tệp</th>
+                                <th>Kích Thước</th>
+                                <th>Thời Gian Xóa</th>
+                                <th style="text-align:right">Thao Tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cloud-trash-tbody">
+                            <tr><td colspan="4" style="text-align:center;padding:24px;color:var(--muted-foreground)">Đang tải thùng rác...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding:14px 20px;display:flex;justify-content:flex-end">
+                <button type="button" class="btn btn-outline btn-sm" onclick="closeModal('modal-cloud-trash')">Đóng</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ MODAL: BUY CLOUD QUOTA (MUA DUNG LƯỢNG) ═══ -->
+    <div id="modal-cloud-buy-quota" class="modal-backdrop">
+        <div class="modal-dialog" style="max-width:640px;width:95%">
+            <div class="modal-header">
+                <div>
+                    <h3 class="modal-title" style="font-size:17px;margin:0;display:flex;align-items:center;gap:8px">
+                        <span>⚡</span> Mua Dung Lượng 2TOOLNE Cloud
+                    </h3>
+                    <div style="font-size:12px;color:var(--muted-foreground);margin-top:3px">
+                        Lưu trữ 2TOOL Cloud tốc độ cao, đồng bộ tức thì với AI Upscale • Thời hạn: <b>3 Tháng (90 ngày)</b>
+                    </div>
+                </div>
+                <button class="modal-close" onclick="closeModal('modal-cloud-buy-quota')">&times;</button>
+            </div>
+            <div class="modal-body" style="padding:16px 20px">
+                <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(170px, 1fr));gap:12px;margin-bottom:16px">
+                    <!-- 20GB -->
+                    <div style="background:var(--surface-2);border:1px solid rgba(56,189,248,0.3);border-radius:var(--radius-md);padding:14px;text-align:center;display:flex;flex-direction:column;justify-content:space-between">
+                        <div>
+                            <div style="font-size:11px;font-weight:700;color:var(--muted-foreground)">GÓI CƠ BẢN (MIN)</div>
+                            <div style="font-size:22px;font-weight:800;color:#38bdf8;margin:6px 0">20 GB</div>
+                            <div style="font-size:14px;font-weight:700;color:var(--foreground)">50.000đ</div>
+                            <div style="font-size:11px;color:var(--muted-foreground);margin-top:2px">Dùng trong 3 tháng</div>
+                        </div>
+                        <button type="button" class="btn btn-primary btn-sm" style="width:100%;margin-top:12px" onclick="closeModal('modal-cloud-buy-quota');openQrPayment('Gói Cloud 20GB (3 Tháng)', '50.000đ', 90, 'CLOUD_20GB', 'CLOUD_STORAGE')">
+                            ⚡ Mua 20GB
+                        </button>
+                    </div>
+                    <!-- 40GB -->
+                    <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);padding:14px;text-align:center;display:flex;flex-direction:column;justify-content:space-between">
+                        <div>
+                            <div style="font-size:11px;font-weight:700;color:var(--muted-foreground)">GÓI PHỔ BIẾN</div>
+                            <div style="font-size:22px;font-weight:800;color:#38bdf8;margin:6px 0">40 GB</div>
+                            <div style="font-size:14px;font-weight:700;color:var(--foreground)">100.000đ</div>
+                            <div style="font-size:11px;color:var(--muted-foreground);margin-top:2px">Dùng trong 3 tháng</div>
+                        </div>
+                        <button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-top:12px;border-color:#38bdf8;color:#38bdf8" onclick="closeModal('modal-cloud-buy-quota');openQrPayment('Gói Cloud 40GB (3 Tháng)', '100.000đ', 90, 'CLOUD_40GB', 'CLOUD_STORAGE')">
+                            ⚡ Mua 40GB
+                        </button>
+                    </div>
+                    <!-- 60GB -->
+                    <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);padding:14px;text-align:center;display:flex;flex-direction:column;justify-content:space-between">
+                        <div>
+                            <div style="font-size:11px;font-weight:700;color:var(--muted-foreground)">GÓI NÂNG CAO</div>
+                            <div style="font-size:22px;font-weight:800;color:#38bdf8;margin:6px 0">60 GB</div>
+                            <div style="font-size:14px;font-weight:700;color:var(--foreground)">150.000đ</div>
+                            <div style="font-size:11px;color:var(--muted-foreground);margin-top:2px">Dùng trong 3 tháng</div>
+                        </div>
+                        <button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-top:12px;border-color:#38bdf8;color:#38bdf8" onclick="closeModal('modal-cloud-buy-quota');openQrPayment('Gói Cloud 60GB (3 Tháng)', '150.000đ', 90, 'CLOUD_60GB', 'CLOUD_STORAGE')">
+                            ⚡ Mua 60GB
+                        </button>
+                    </div>
+                    <!-- 80GB -->
+                    <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);padding:14px;text-align:center;display:flex;flex-direction:column;justify-content:space-between">
+                        <div>
+                            <div style="font-size:11px;font-weight:700;color:var(--muted-foreground)">GÓI STUDIO</div>
+                            <div style="font-size:22px;font-weight:800;color:#38bdf8;margin:6px 0">80 GB</div>
+                            <div style="font-size:14px;font-weight:700;color:var(--foreground)">200.000đ</div>
+                            <div style="font-size:11px;color:var(--muted-foreground);margin-top:2px">Dùng trong 3 tháng</div>
+                        </div>
+                        <button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-top:12px;border-color:#38bdf8;color:#38bdf8" onclick="closeModal('modal-cloud-buy-quota');openQrPayment('Gói Cloud 80GB (3 Tháng)', '200.000đ', 90, 'CLOUD_80GB', 'CLOUD_STORAGE')">
+                            ⚡ Mua 80GB
+                        </button>
+                    </div>
+                    <!-- 100GB -->
+                    <div style="background:linear-gradient(135deg, rgba(245,158,11,0.1), rgba(217,119,6,0.05));border:1px solid rgba(245,158,11,0.4);border-radius:var(--radius-md);padding:14px;text-align:center;display:flex;flex-direction:column;justify-content:space-between">
+                        <div>
+                            <div style="font-size:11px;font-weight:700;color:var(--warning)">GÓI TỐI ĐA (MAX)</div>
+                            <div style="font-size:22px;font-weight:800;color:var(--warning);margin:6px 0">100 GB</div>
+                            <div style="font-size:14px;font-weight:700;color:var(--foreground)">250.000đ</div>
+                            <div style="font-size:11px;color:var(--muted-foreground);margin-top:2px">Dùng trong 3 tháng</div>
+                        </div>
+                        <button type="button" class="btn btn-warning btn-sm" style="width:100%;margin-top:12px;font-weight:700" onclick="closeModal('modal-cloud-buy-quota');openQrPayment('Gói Cloud 100GB (3 Tháng)', '250.000đ', 90, 'CLOUD_100GB', 'CLOUD_STORAGE')">
+                            👑 Mua 100GB
+                        </button>
+                    </div>
+                </div>
+                <div style="font-size:11.5px;color:var(--muted-foreground);line-height:1.5;background:var(--surface-1);padding:10px 12px;border-radius:var(--radius-sm);border:1px solid var(--border)">
+                    💡 <b>Lưu ý:</b> Thanh toán tự động qua mã VietQR SePay. Ngay khi chuyển khoản thành công, dung lượng sẽ được tự động kích hoạt ngay lập tức vào Không gian lưu trữ của bạn.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ MODAL: CREATE TEAM CLOUD (KHỞI TẠO TEAM CLOUD) ═══ -->
+    <div id="modal-cloud-create-team" class="modal-backdrop">
+        <div class="modal-dialog" style="max-width:540px;width:95%">
+            <div class="modal-header">
+                <div>
+                    <h3 class="modal-title" style="font-size:17px;margin:0;display:flex;align-items:center;gap:8px">
+                        <span>🏢</span> Khởi Tạo Không Gian Team Cloud
+                    </h3>
+                    <div style="font-size:12px;color:var(--muted-foreground);margin-top:3px">
+                        Bộ nhớ dùng chung cho đội ngũ và xưởng sản xuất
+                    </div>
+                </div>
+                <button class="modal-close" onclick="closeModal('modal-cloud-create-team')">&times;</button>
+            </div>
+            <div class="modal-body" style="padding:16px 20px">
+                <div style="background:linear-gradient(135deg, rgba(16,185,129,0.12), rgba(56,189,248,0.1));border:1px solid rgba(16,185,129,0.35);border-radius:var(--radius-md);padding:16px;margin-bottom:16px">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                        <span style="font-size:14px;font-weight:700;color:var(--foreground)">GÓI KHỞI ĐỘNG TEAM CLOUD</span>
+                        <span style="font-size:18px;font-weight:800;color:var(--emerald)">50.000đ</span>
+                    </div>
+                    <ul style="margin:0;padding-left:18px;font-size:13px;color:var(--foreground);line-height:1.7">
+                        <li>👥 <b>Bao gồm 2 Slot tài khoản</b> (tính cả tài khoản đăng ký gói).</li>
+                        <li>💾 <b>20 GB dung lượng Cloud</b> dùng chung cho toàn bộ thành viên.</li>
+                        <li>⏱️ <b>Thời hạn sử dụng:</b> 3 Tháng (90 ngày).</li>
+                        <li>🔒 <b>Phân quyền rõ ràng:</b> Trưởng nhóm (Owner), Quản lý nhóm (Manager), Thành viên (Member).</li>
+                        <li>🛡️ <b>Cách ly không gian độc lập:</b> Mỗi người dùng và Đội nhóm được cấp không gian riêng biệt trên 2TOOL Cloud, loại bỏ nguy cơ trùng lặp hay ghi đè file.</li>
+                        <li>➕ <b>Mua thêm Slot linh hoạt:</b> 20k/1 slot, 100k/5 slots, 150k/10 slots bất kỳ lúc nào.</li>
+                    </ul>
+                </div>
+                <button type="button" class="btn btn-emerald" style="width:100%;height:42px;font-weight:700;font-size:14px" onclick="closeModal('modal-cloud-create-team');openQrPayment('Khởi Tạo Team Cloud (3 Tháng)', '50.000đ', 90, 'TEAM_INIT', 'TEAM_CLOUD')">
+                    🚀 Đăng Ký Khởi Tạo Team Cloud Ngay (50.000đ)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ MODAL: TEAM MEMBERS & PERMISSIONS (QUẢN LÝ THÀNH VIÊN TEAM) ═══ -->
+    <div id="modal-cloud-team-members" class="modal-backdrop">
+        <div class="modal-dialog" style="max-width:680px;width:95%">
+            <div class="modal-header">
+                <div>
+                    <h3 class="modal-title" style="font-size:17px;margin:0;display:flex;align-items:center;gap:8px">
+                        <span>👥</span> Quản Lý Đội Nhóm & Thành Viên
+                    </h3>
+                    <div style="font-size:12px;color:var(--muted-foreground);margin-top:3px" id="user-team-modal-sub">
+                        Đang tải thông tin Team...
+                    </div>
+                </div>
+                <button class="modal-close" onclick="closeModal('modal-cloud-team-members')">&times;</button>
+            </div>
+            <div class="modal-body" style="padding:16px 20px">
+                <!-- SLOT OVERVIEW -->
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;background:var(--surface-2);padding:10px 14px;border-radius:var(--radius-sm);border:1px solid var(--border)">
+                    <div>
+                        <span style="font-size:11px;color:var(--muted-foreground);display:block">TÌNH TRẠNG CHỖ NGỒI (SLOTS)</span>
+                        <span style="font-size:14px;font-weight:700;color:#38bdf8" id="user-team-modal-slots">Đang kiểm tra...</span>
+                    </div>
+                    <div id="user-team-buy-slots-btn-wrap" style="display:none">
+                        <button type="button" class="btn btn-primary btn-xs" onclick="toggleUserTeamSlotOptions()">
+                            ➕ Mua Thêm Slot
+                        </button>
+                    </div>
+                </div>
+
+                <!-- BUY EXTRA SLOTS DRAWER (HIDDEN BY DEFAULT) -->
+                <div id="user-team-slot-options-box" style="display:none;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--radius-md);padding:12px;margin-bottom:14px">
+                    <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:#38bdf8">⚡ Mua Thêm Slot Thành Viên Team (Thời hạn theo nhóm):</div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));gap:10px">
+                        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;text-align:center">
+                            <div style="font-weight:700;font-size:13px">+1 Slot</div>
+                            <div style="font-weight:800;color:var(--foreground);margin:4px 0">20.000đ</div>
+                            <button type="button" class="btn btn-outline btn-xs" style="width:100%" onclick="closeModal('modal-cloud-team-members');openQrPayment('Mua Thêm 1 Slot Team', '20.000đ', 90, 'TEAM_SLOT_1', 'TEAM_CLOUD')">Mua 1 Slot</button>
+                        </div>
+                        <div style="background:var(--surface-2);border:1px solid rgba(56,189,248,0.4);border-radius:var(--radius-sm);padding:10px;text-align:center">
+                            <div style="font-weight:700;font-size:13px;color:#38bdf8">Combo +5 Slot</div>
+                            <div style="font-weight:800;color:var(--foreground);margin:4px 0">100.000đ</div>
+                            <button type="button" class="btn btn-primary btn-xs" style="width:100%" onclick="closeModal('modal-cloud-team-members');openQrPayment('Mua Thêm 5 Slot Team', '100.000đ', 90, 'TEAM_SLOT_5', 'TEAM_CLOUD')">Mua 5 Slot</button>
+                        </div>
+                        <div style="background:var(--surface-2);border:1px solid rgba(245,158,11,0.4);border-radius:var(--radius-sm);padding:10px;text-align:center">
+                            <div style="font-weight:700;font-size:13px;color:var(--warning)">Combo +10 Slot</div>
+                            <div style="font-weight:800;color:var(--foreground);margin:4px 0">150.000đ</div>
+                            <button type="button" class="btn btn-warning btn-xs" style="width:100%;font-weight:700" onclick="closeModal('modal-cloud-team-members');openQrPayment('Mua Thêm 10 Slot Team', '150.000đ', 90, 'TEAM_SLOT_10', 'TEAM_CLOUD')">Mua 10 Slot</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- INVITE FORM (SHOWN FOR OWNER / ADMIN) -->
+                <div id="user-team-invite-box" style="display:none;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--radius-md);padding:12px;margin-bottom:14px">
+                    <form method="POST" style="margin:0">
+                        <input type="hidden" name="action" value="send_team_invite">
+                        <input type="hidden" name="team_id" id="user-team-invite-team-id">
+                        <div style="font-size:12px;font-weight:700;margin-bottom:6px">📨 Mời Người Dùng Vào Team:</div>
+                        <div style="display:flex;gap:8px">
+                            <input type="text" name="target_username" class="form-input" placeholder="Gõ chính xác username tài khoản (ví dụ: hieunekkk)..." required style="font-size:12.5px;height:36px">
+                            <button type="submit" class="btn btn-primary btn-sm" style="white-space:nowrap;font-weight:600">Gửi Lời Mời</button>
+                        </div>
+                        <div style="font-size:11px;color:var(--muted-foreground);margin-top:4px">
+                            Người được mời sẽ nhận được banner thông báo trên màn hình để xác nhận tham gia.
+                        </div>
+                    </form>
+                </div>
+
+                <!-- MEMBERS TABLE -->
+                <div class="table-responsive" style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-md)">
+                    <table class="data-table" style="margin:0">
+                        <thead>
+                            <tr>
+                                <th>Thành Viên</th>
+                                <th>Phân Quyền Vai Trò</th>
+                                <th>Trạng Thái</th>
+                                <th style="text-align:right">Thao Tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="user-team-members-tbody">
+                            <tr><td colspan="4" style="text-align:center;padding:20px;color:var(--muted-foreground)">Đang tải danh sách thành viên...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding:10px 20px;display:flex;justify-content:flex-end">
+                <button type="button" class="btn btn-outline btn-sm" onclick="closeModal('modal-cloud-team-members')">Đóng</button>
             </div>
         </div>
     </div>
@@ -2216,6 +4161,27 @@ if (isset($_GET['registered'])) {
     <script>
         let timerInterval = null;
 
+        function toggleMobileMenu() {
+            const p = document.getElementById('mobile-nav-panel');
+            const icon = document.getElementById('mobile-menu-icon');
+            if (!p) return;
+            const isHidden = p.style.display === 'none' || !p.classList.contains('open');
+            if (isHidden) {
+                p.style.display = 'block';
+                setTimeout(() => p.classList.add('open'), 10);
+                if (icon) icon.textContent = '✕';
+            } else {
+                p.classList.remove('open');
+                setTimeout(() => { p.style.display = 'none'; }, 200);
+                if (icon) icon.textContent = '☰';
+            }
+        }
+
+        function mobileSwitchTab(tabId) {
+            toggleMobileMenu();
+            switchMainTab(tabId);
+        }
+
         function openModal(id) {
             const el = document.getElementById(id);
             if (el) el.classList.add('active');
@@ -2225,12 +4191,52 @@ if (isset($_GET['registered'])) {
             if (el) el.classList.remove('active');
             if (id === 'modal-qr-pay' && timerInterval) clearInterval(timerInterval);
         }
-        function showToast(text) {
+        let toastTimer = null;
+        function showToast(text, duration = 3000) {
             const t = document.getElementById('toast');
             if (t) {
                 t.textContent = text;
                 t.style.display = 'flex';
-                setTimeout(() => { t.style.display = 'none'; }, 2200);
+                if (toastTimer) clearTimeout(toastTimer);
+                toastTimer = setTimeout(() => { t.style.display = 'none'; }, duration);
+            }
+        }
+        async function handleAjaxSubmitPayment(e, form) {
+            e.preventDefault();
+            const btn = form.querySelector('button[type="submit"]');
+            const origText = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '⏳ Đang gửi đơn hàng...';
+            }
+
+            try {
+                const fd = new FormData(form);
+                fd.append('is_ajax', '1');
+                const res = await fetch('index.php', {
+                    method: 'POST',
+                    body: fd,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    }
+                });
+                const data = await res.json();
+                if (data && data.status === 'success') {
+                    closeModal('modal-qr-pay');
+                    showToast(data.message, 6000);
+                    setTimeout(() => {
+                        window.location.href = 'index.php?tab=' + (data.target_tab || 'keys');
+                    }, 800);
+                } else {
+                    alert(data.message || 'Lỗi khi gửi thông tin đơn hàng');
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = origText;
+                    }
+                }
+            } catch (err) {
+                form.submit();
             }
         }
         function copyText(txt) {
@@ -2248,13 +4254,102 @@ if (isset($_GET['registered'])) {
 
         const TAB_BTN_MAP = {
             'tab-my-keys': 'btn-tab-keys',
+            'tab-orders-history': 'btn-tab-orders',
             'tab-wallet-view': 'btn-tab-wallet',
+            'tab-cloud-storage': 'btn-tab-cloud',
             'tab-downloads': 'btn-tab-downloads',
             'tab-buy-key': 'btn-tab-buy',
             'tab-features-view': 'btn-tab-features',
             'tab-bugs-view': 'btn-tab-bugs',
             'tab-settings': 'btn-tab-settings'
         };
+
+        // User Orders Filter (Text, Date Range, Status)
+        function filterUserOrderTable() {
+            const q = (document.getElementById('user-order-search')?.value || '').toLowerCase().trim();
+            const fromDate = document.getElementById('user-filter-date-from')?.value || '';
+            const toDate = document.getElementById('user-filter-date-to')?.value || '';
+            const status = document.getElementById('user-filter-status')?.value || '';
+
+            let visibleCount = 0;
+            const rows = document.querySelectorAll('.user-order-row');
+            rows.forEach(r => {
+                const s = r.getAttribute('data-search') || '';
+                const d = r.getAttribute('data-date') || '';
+                const st = r.getAttribute('data-status') || '';
+
+                const matchQ = !q || s.includes(q);
+                const matchFrom = !fromDate || d >= fromDate;
+                const matchTo = !toDate || d <= toDate;
+                const matchStatus = !status || st === status;
+
+                if (matchQ && matchFrom && matchTo && matchStatus) {
+                    r.style.display = '';
+                    visibleCount++;
+                } else {
+                    r.style.display = 'none';
+                }
+            });
+
+            const statusEl = document.getElementById('user-order-filter-status');
+            if (statusEl) {
+                if (q || fromDate || toDate || status) {
+                    statusEl.textContent = `Khớp ${visibleCount} / ${rows.length}`;
+                    statusEl.className = 'badge badge-warning';
+                } else {
+                    statusEl.textContent = `Tất cả (${rows.length})`;
+                    statusEl.className = 'badge badge-info';
+                }
+            }
+
+            const noMatch = document.getElementById('user-orders-no-match');
+            if (noMatch) {
+                noMatch.style.display = (visibleCount === 0 && rows.length > 0) ? 'block' : 'none';
+            }
+        }
+
+        function setUserDatePreset(preset, btn) {
+            document.querySelectorAll('.filter-date-preset-user').forEach(b => b.classList.remove('active'));
+            if (btn) btn.classList.add('active');
+
+            const fromInput = document.getElementById('user-filter-date-from');
+            const toInput = document.getElementById('user-filter-date-to');
+            if (!fromInput || !toInput) return;
+
+            const today = new Date();
+            const formatDate = (d) => {
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            };
+
+            if (preset === 'today') {
+                const todayStr = formatDate(today);
+                fromInput.value = todayStr;
+                toInput.value = todayStr;
+            } else if (preset === 'yesterday') {
+                const yest = new Date(today);
+                yest.setDate(yest.getDate() - 1);
+                const yestStr = formatDate(yest);
+                fromInput.value = yestStr;
+                toInput.value = yestStr;
+            } else if (preset === '7days') {
+                const past = new Date(today);
+                past.setDate(past.getDate() - 6);
+                fromInput.value = formatDate(past);
+                toInput.value = formatDate(today);
+            } else if (preset === 'this_month') {
+                const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+                fromInput.value = formatDate(firstDay);
+                toInput.value = formatDate(today);
+            } else { // 'all'
+                fromInput.value = '';
+                toInput.value = '';
+            }
+
+            filterUserOrderTable();
+        }
 
         function switchProductTab(tabId, btnId) {
             document.querySelectorAll('.prod-tab-content').forEach(el => el.style.display = 'none');
@@ -2280,6 +4375,961 @@ if (isset($_GET['registered'])) {
                 const b = document.getElementById(TAB_BTN_MAP[tabId]);
                 if (b) b.classList.add('active');
             }
+            if (tabId === 'tab-cloud-storage') {
+                initCloudUI();
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // ☁️ 2TOOLNE CLOUD STORAGE ENGINE (RESTFUL & DIRECT RESUMABLE UPLOAD)
+        // ═══════════════════════════════════════════════════════════════════════════
+        let currentCloudSpaceId = null;
+        let currentCloudFolderId = null;
+        let cloudBreadcrumbs = [{ id: null, name: '🏠 Thư mục gốc' }];
+        let cloudSelectedFiles = [];
+        let isCloudUploading = false;
+        let cloudAllFiles = [];
+        let cloudAllFolders = [];
+        let cloudSearchQuery = '';
+        let cloudCategoryFilter = 'all';
+        let cloudViewMode = 'list';
+
+        function initCloudUI() {
+            const sel = document.getElementById('cloud-space-select');
+            if (sel && sel.value) {
+                currentCloudSpaceId = sel.value;
+            }
+            if (!currentCloudSpaceId) {
+                fetch('/api/v1/cloud/spaces')
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success && data.spaces && data.spaces.length > 0) {
+                            currentCloudSpaceId = data.spaces[0].id;
+                            if (sel) {
+                                sel.innerHTML = data.spaces.map(s => `
+                                    <option value="${s.id}" data-status="${s.status}">
+                                        ${s.owner_type === 'TEAM' ? '👥 ' : '👤 '}${escapeHtml(s.name)} (${s.owner_type === 'TEAM' ? 'Team Space' : 'Cá Nhân'})
+                                    </option>
+                                `).join('');
+                                sel.value = currentCloudSpaceId;
+                            }
+                            refreshCloudView();
+                        }
+                    })
+                    .catch(() => {});
+                return;
+            }
+            refreshCloudView();
+        }
+
+        let currentActiveTeamId = null;
+        let currentActiveTeamRole = null;
+        let currentActiveTeamName = '';
+
+        function onCloudSpaceChanged(spaceId) {
+            currentCloudSpaceId = spaceId;
+            currentCloudFolderId = null;
+            cloudBreadcrumbs = [{ id: null, name: '🏠 Thư mục gốc' }];
+
+            // Check if selected space is a Team Space
+            const selectEl = document.getElementById('cloud-space-select');
+            const opt = selectEl ? selectEl.options[selectEl.selectedIndex] : null;
+            const isTeam = opt && opt.getAttribute('data-owner-type') === 'TEAM';
+            const teamBtn = document.getElementById('btn-cloud-team-manage');
+            if (teamBtn) {
+                teamBtn.style.display = isTeam ? 'inline-flex' : 'none';
+            }
+            if (isTeam) {
+                currentActiveTeamId = opt.getAttribute('data-owner-id');
+                currentActiveTeamRole = opt.getAttribute('data-user-role') || 'MEMBER';
+                currentActiveTeamName = opt.getAttribute('data-space-name') || opt.text || 'Team Space';
+            } else {
+                currentActiveTeamId = null;
+                currentActiveTeamRole = null;
+                currentActiveTeamName = '';
+            }
+
+            refreshCloudView();
+        }
+
+        function toggleUserTeamSlotOptions() {
+            const box = document.getElementById('user-team-slot-options-box');
+            if (box) {
+                box.style.display = (box.style.display === 'none' || !box.style.display) ? 'block' : 'none';
+            }
+        }
+
+        function openTeamManagementModal() {
+            if (!currentActiveTeamId) {
+                alert('Không gian hiện tại không phải là Team Space!');
+                return;
+            }
+            const teamId = currentActiveTeamId;
+            document.getElementById('user-team-modal-sub').textContent = `Mã nhóm: ${teamId} • Không gian: ${currentActiveTeamName}`;
+            document.getElementById('user-team-modal-slots').textContent = 'Đang kiểm tra...';
+            document.getElementById('user-team-invite-team-id').value = teamId;
+            document.getElementById('user-team-slot-options-box').style.display = 'none';
+
+            // Reset permissions UI
+            const inviteBox = document.getElementById('user-team-invite-box');
+            const buySlotsBtn = document.getElementById('user-team-buy-slots-btn-wrap');
+            if (inviteBox) inviteBox.style.display = 'none';
+            if (buySlotsBtn) buySlotsBtn.style.display = 'none';
+
+            document.getElementById('user-team-members-tbody').innerHTML = `
+                <tr><td colspan="4" style="text-align:center;padding:24px;color:var(--muted-foreground)">⏳ Đang tải dữ liệu thành viên...</td></tr>
+            `;
+
+            openModal('modal-cloud-team-members');
+
+            fetch(`?ajax=get_team_details&team_id=${encodeURIComponent(teamId)}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (!data || data.status !== 'success' || !data.team) {
+                        document.getElementById('user-team-members-tbody').innerHTML = `
+                            <tr><td colspan="4" style="text-align:center;padding:24px;color:var(--danger)">❌ ${escapeHtml(data.message || 'Không thể tải thông tin Team')}</td></tr>
+                        `;
+                        return;
+                    }
+
+                    const t = data.team;
+                    const members = data.members || [];
+                    const myRole = data.my_role || 'MEMBER';
+                    const activeCount = members.filter(m => m.status === 'ACTIVE').length;
+                    const remainingSlots = Math.max(0, parseInt(t.member_slots || 0) - activeCount);
+
+                    document.getElementById('user-team-modal-slots').textContent = `${activeCount} / ${t.member_slots} slots (${remainingSlots} slot trống)`;
+
+                    // Show invite & buy slots if OWNER or ADMIN
+                    const isOwner = myRole === 'OWNER';
+                    const isAdmin = myRole === 'ADMIN';
+                    if (isOwner || isAdmin) {
+                        if (inviteBox) inviteBox.style.display = 'block';
+                        if (buySlotsBtn) buySlotsBtn.style.display = 'block';
+                    }
+
+                    if (members.length === 0) {
+                        document.getElementById('user-team-members-tbody').innerHTML = `
+                            <tr><td colspan="4" style="text-align:center;padding:24px;color:var(--muted-foreground)">Chưa có thành viên nào.</td></tr>
+                        `;
+                        return;
+                    }
+
+                    document.getElementById('user-team-members-tbody').innerHTML = members.map(m => {
+                        const mRole = m.role || 'MEMBER';
+                        const isThisOwner = mRole === 'OWNER';
+                        const isThisAdmin = mRole === 'ADMIN';
+
+                        let roleBadge = isThisOwner 
+                            ? '<span class="badge badge-emerald" style="font-size:10.5px">👑 Trưởng Nhóm</span>' 
+                            : (isThisAdmin ? '<span class="badge badge-purple" style="font-size:10.5px">🛡️ Quản Lý Nhóm</span>' : '<span class="badge" style="font-size:10.5px;color:var(--muted-foreground)">👤 Thành Viên</span>');
+
+                        // Role Selector for OWNER
+                        let roleHtml = roleBadge;
+                        if (isOwner) {
+                            roleHtml = `
+                                <select class="form-input" style="padding:2px 6px;font-size:11px;height:26px;width:auto;display:inline-block;border-radius:4px" onchange="userChangeTeamRole('${escapeHtml(teamId)}', '${escapeHtml(m.user_id)}', this.value, '${escapeHtml(m.username)}')">
+                                    <option value="MEMBER" ${mRole === 'MEMBER' ? 'selected' : ''}>👤 Thành Viên</option>
+                                    <option value="ADMIN" ${mRole === 'ADMIN' ? 'selected' : ''}>🛡️ Quản Lý Nhóm</option>
+                                    <option value="OWNER" ${mRole === 'OWNER' ? 'selected' : ''}>👑 Trưởng Nhóm</option>
+                                </select>
+                            `;
+                        }
+
+                        const statusBadge = m.status === 'ACTIVE' 
+                            ? '<span class="badge badge-emerald" style="font-size:10px">🟢 Hoạt Động</span>' 
+                            : '<span class="badge badge-warning" style="font-size:10px">🟡 Đã Mời</span>';
+
+                        // Removal permission
+                        let removeBtn = '<span class="text-subtle" style="font-size:11px">--</span>';
+                        if (isOwner && !isThisOwner) {
+                            removeBtn = `
+                                <form method="POST" style="display:inline" onsubmit="return confirm('Bạn có chắc chắn muốn xóa thành viên @${escapeHtml(m.username)} khỏi nhóm?')">
+                                    <input type="hidden" name="action" value="user_remove_team_member">
+                                    <input type="hidden" name="team_id" value="${escapeHtml(teamId)}">
+                                    <input type="hidden" name="member_user_id" value="${escapeHtml(m.user_id)}">
+                                    <button type="submit" class="btn btn-danger btn-xs" title="Xóa khỏi nhóm">🗑️ Xóa</button>
+                                </form>
+                            `;
+                        } else if (isAdmin && mRole === 'MEMBER') {
+                            removeBtn = `
+                                <form method="POST" style="display:inline" onsubmit="return confirm('Bạn có chắc chắn muốn xóa thành viên @${escapeHtml(m.username)} khỏi nhóm?')">
+                                    <input type="hidden" name="action" value="user_remove_team_member">
+                                    <input type="hidden" name="team_id" value="${escapeHtml(teamId)}">
+                                    <input type="hidden" name="member_user_id" value="${escapeHtml(m.user_id)}">
+                                    <button type="submit" class="btn btn-danger btn-xs" title="Xóa khỏi nhóm">🗑️ Xóa</button>
+                                </form>
+                            `;
+                        }
+
+                        return `
+                            <tr>
+                                <td>
+                                    <b style="color:var(--foreground);font-size:13px">${escapeHtml(m.fullname || m.username)}</b>
+                                    <div style="font-size:11px;color:var(--muted-foreground)">@${escapeHtml(m.username)}</div>
+                                </td>
+                                <td>${roleHtml}</td>
+                                <td>${statusBadge}</td>
+                                <td style="text-align:right">${removeBtn}</td>
+                            </tr>
+                        `;
+                    }).join('');
+                })
+                .catch(err => {
+                    document.getElementById('user-team-members-tbody').innerHTML = `
+                        <tr><td colspan="4" style="text-align:center;padding:24px;color:var(--danger)">❌ Lỗi kết nối tải thành viên: ${escapeHtml(err.message)}</td></tr>
+                    `;
+                });
+        }
+
+        function userChangeTeamRole(teamId, memberUserId, newRole, username) {
+            let confirmMsg = `Đổi vai trò của @${username} sang ${newRole}?`;
+            if (newRole === 'OWNER') {
+                confirmMsg = `⚠️ Chuyển giao quyền Trưởng nhóm cho @${username}?\nBạn sẽ trở thành Quản Lý Nhóm. Bạn chắc chắn muốn chuyển giao?`;
+            }
+            if (!confirm(confirmMsg)) {
+                openTeamManagementModal();
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('action', 'user_update_team_role');
+            formData.append('team_id', teamId);
+            formData.append('member_user_id', memberUserId);
+            formData.append('role', newRole);
+
+            fetch('', { method: 'POST', body: formData })
+                .then(res => res.text())
+                .then(() => {
+                    openTeamManagementModal();
+                })
+                .catch(err => {
+                    alert('Lỗi: ' + err.message);
+                });
+        }
+
+        function refreshCloudView() {
+            if (!currentCloudSpaceId) return;
+            loadCloudQuota(currentCloudSpaceId);
+            loadCloudFolder(currentCloudSpaceId, currentCloudFolderId);
+            loadCloudTrashCount(currentCloudSpaceId);
+        }
+
+        function loadCloudQuota(spaceId) {
+            fetch(`/api/v1/cloud/spaces/${spaceId}/quota`)
+                .then(res => res.json())
+                .then(data => {
+                    if (!data.success || !data.quota) return;
+                    const q = data.quota;
+                    const usedBytes = q.used_bytes || 0;
+                    const reservedBytes = q.reserved_bytes || 0;
+                    const effectiveBytes = q.effective_quota_bytes || 1;
+                    const isOverQuota = q.is_over_quota || (usedBytes >= effectiveBytes);
+
+                    const usageTextEl = document.getElementById('cloud-quota-usage-text');
+                    const totalTextEl = document.getElementById('cloud-quota-total-text');
+                    const percentEl = document.getElementById('cloud-quota-percent');
+                    const fillBarEl = document.getElementById('cloud-quota-fill-bar');
+                    const bannerEl = document.getElementById('cloud-overquota-banner');
+                    const badgeEl = document.getElementById('cloud-space-status-badge');
+                    const statusTextEl = document.getElementById('cloud-status-text');
+                    const resWrapperEl = document.getElementById('cloud-quota-reserved-wrapper');
+                    const resTextEl = document.getElementById('cloud-quota-reserved-text');
+
+                    const percent = Math.min(100, Math.round((usedBytes / effectiveBytes) * 1000) / 10);
+                    if (usageTextEl) usageTextEl.textContent = formatBytes(usedBytes);
+                    if (totalTextEl) totalTextEl.textContent = formatBytes(effectiveBytes);
+                    if (percentEl) {
+                        percentEl.textContent = percent + '%';
+                        percentEl.style.color = isOverQuota ? '#ef4444' : (percent > 85 ? '#f59e0b' : 'var(--emerald)');
+                    }
+                    if (fillBarEl) {
+                        fillBarEl.style.width = percent + '%';
+                        if (isOverQuota) {
+                            fillBarEl.classList.add('over-quota');
+                        } else {
+                            fillBarEl.classList.remove('over-quota');
+                        }
+                    }
+
+                    // Stat chips
+                    const chipQuota = document.getElementById('cloud-chip-quota');
+                    const chipUsed = document.getElementById('cloud-chip-used');
+                    const chipFree = document.getElementById('cloud-chip-free');
+                    if (chipQuota) chipQuota.textContent = formatBytes(effectiveBytes);
+                    if (chipUsed) chipUsed.textContent = formatBytes(usedBytes);
+                    if (chipFree) {
+                        const freeBytes = Math.max(0, effectiveBytes - usedBytes);
+                        chipFree.textContent = formatBytes(freeBytes);
+                        chipFree.style.color = isOverQuota ? '#ef4444' : 'var(--emerald)';
+                    }
+
+                    const statusSubEl = document.getElementById('cloud-quota-status-sub');
+                    if (statusSubEl) {
+                        statusSubEl.innerHTML = isOverQuota 
+                            ? 'Trạng thái: <b style="color:#ef4444">Vượt hạn mức (Chỉ đọc)</b>' 
+                            : 'Trạng thái: <b style="color:var(--emerald)">Bình thường</b>';
+                    }
+
+                    if (resWrapperEl && resTextEl) {
+                        if (reservedBytes > 0) {
+                            resWrapperEl.style.display = 'inline';
+                            resTextEl.textContent = formatBytes(reservedBytes);
+                        } else {
+                            resWrapperEl.style.display = 'none';
+                        }
+                    }
+
+                    if (bannerEl) bannerEl.style.display = isOverQuota ? 'flex' : 'none';
+                    if (statusTextEl) {
+                        statusTextEl.textContent = isOverQuota ? 'Vượt Hạn Mức (Chỉ Đọc)' : 'Đang Hoạt Động';
+                    }
+                    if (badgeEl) {
+                        if (isOverQuota) {
+                            badgeEl.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+                            badgeEl.style.background = 'rgba(239, 68, 68, 0.12)';
+                            badgeEl.style.color = '#ef4444';
+                        } else {
+                            badgeEl.style.borderColor = 'rgba(16, 185, 129, 0.35)';
+                            badgeEl.style.background = 'rgba(16, 185, 129, 0.12)';
+                            badgeEl.style.color = '#34d399';
+                        }
+                    }
+
+                    const upBtn = document.getElementById('btn-cloud-upload');
+                    const mkBtn = document.getElementById('btn-cloud-mkdir');
+                    if (upBtn) upBtn.disabled = isOverQuota;
+                    if (mkBtn) mkBtn.disabled = isOverQuota;
+                })
+                .catch(() => {});
+        }
+
+        function loadCloudFolder(spaceId, folderId) {
+            const loading = document.getElementById('cloud-explorer-loading');
+            const content = document.getElementById('cloud-explorer-content');
+            if (loading) loading.style.display = 'block';
+            if (content) content.style.display = 'none';
+
+            const url = `/api/v1/cloud/spaces/${spaceId}/files` + (folderId ? `?folder_id=${encodeURIComponent(folderId)}` : '');
+            fetch(url)
+                .then(res => res.json())
+                .then(data => {
+                    if (loading) loading.style.display = 'none';
+                    if (content) content.style.display = 'block';
+                    if (!data.success) {
+                        showToast(data.message || 'Lỗi tải danh sách tệp tin');
+                        return;
+                    }
+
+                    cloudAllFolders = data.folders || [];
+                    cloudAllFiles = data.files || [];
+                    const chipFiles = document.getElementById('cloud-chip-files');
+                    if (chipFiles) chipFiles.textContent = cloudAllFiles.length;
+
+                    renderBreadcrumbs();
+                    renderFolders(cloudAllFolders);
+                    filterAndRenderCloudFiles();
+                })
+                .catch(err => {
+                    if (loading) loading.style.display = 'none';
+                    if (content) content.style.display = 'block';
+                    showToast('Không thể kết nối đến máy chủ Cloud');
+                });
+        }
+
+        function onCloudSearchInput(val) {
+            cloudSearchQuery = (val || '').trim().toLowerCase();
+            filterAndRenderCloudFiles();
+        }
+
+        function setCloudCategoryFilter(cat) {
+            cloudCategoryFilter = cat;
+            document.querySelectorAll('.cloud-filter-pill').forEach(el => {
+                if (el.getAttribute('data-cat') === cat) el.classList.add('active');
+                else el.classList.remove('active');
+            });
+            filterAndRenderCloudFiles();
+        }
+
+        function setCloudViewMode(mode) {
+            cloudViewMode = mode;
+            const btnList = document.getElementById('btn-cloud-view-list');
+            const btnGrid = document.getElementById('btn-cloud-view-grid');
+            if (btnList) btnList.classList.toggle('active', mode === 'list');
+            if (btnGrid) btnGrid.classList.toggle('active', mode === 'grid');
+            filterAndRenderCloudFiles();
+        }
+
+        function getCloudFileCat(ext) {
+            ext = (ext || '').toLowerCase();
+            if (['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'svg'].includes(ext)) return 'images';
+            if (['mp4', 'mkv', 'avi', 'mov', 'webm', 'wmv'].includes(ext)) return 'videos';
+            if (['zip', 'rar', '7z', 'tar', 'gz', 'bz2'].includes(ext)) return 'archives';
+            if (['pdf', 'doc', 'docx', 'txt', 'csv', 'xlsx', 'xls', 'json'].includes(ext)) return 'docs';
+            return 'other';
+        }
+
+        function filterAndRenderCloudFiles() {
+            let files = cloudAllFiles;
+            if (cloudCategoryFilter !== 'all') {
+                files = files.filter(f => getCloudFileCat(f.extension) === cloudCategoryFilter);
+            }
+            if (cloudSearchQuery) {
+                files = files.filter(f => {
+                    const name = (f.filename || '').toLowerCase();
+                    const ext = (f.extension || '').toLowerCase();
+                    return name.includes(cloudSearchQuery) || ext.includes(cloudSearchQuery);
+                });
+            }
+
+            const countBadge = document.getElementById('cloud-files-count-badge');
+            const countBadgeGrid = document.getElementById('cloud-files-count-badge-grid');
+            if (countBadge) countBadge.textContent = files.length;
+            if (countBadgeGrid) countBadgeGrid.textContent = files.length;
+
+            const emptyDropzone = document.getElementById('cloud-empty-dropzone');
+            const secTable = document.getElementById('cloud-files-table-section');
+            const secGrid = document.getElementById('cloud-files-grid-section');
+
+            // If empty folder & no active search
+            if (cloudAllFiles.length === 0 && !cloudSearchQuery && cloudCategoryFilter === 'all') {
+                if (emptyDropzone) emptyDropzone.style.display = 'block';
+                if (secTable) secTable.style.display = 'none';
+                if (secGrid) secGrid.style.display = 'none';
+                return;
+            }
+
+            if (emptyDropzone) emptyDropzone.style.display = 'none';
+            if (cloudViewMode === 'grid') {
+                if (secGrid) secGrid.style.display = 'block';
+                if (secTable) secTable.style.display = 'none';
+                renderFilesGrid(files);
+            } else {
+                if (secTable) secTable.style.display = 'block';
+                if (secGrid) secGrid.style.display = 'none';
+                renderFilesTable(files);
+            }
+        }
+
+        function renderBreadcrumbs() {
+            const container = document.getElementById('cloud-breadcrumbs-container');
+            if (!container) return;
+            let html = '';
+            cloudBreadcrumbs.forEach((crumb, idx) => {
+                const isLast = (idx === cloudBreadcrumbs.length - 1);
+                if (isLast) {
+                    html += `<span class="cloud-crumb active">${escapeHtml(crumb.name)}</span>`;
+                } else {
+                    html += `<span class="cloud-crumb" onclick="navigateCloudCrumb(${idx})">${escapeHtml(crumb.name)}</span>`;
+                    html += `<span class="cloud-crumb-sep">/</span>`;
+                }
+            });
+            container.innerHTML = html;
+        }
+
+        function navigateCloudCrumb(index) {
+            cloudBreadcrumbs = cloudBreadcrumbs.slice(0, index + 1);
+            currentCloudFolderId = cloudBreadcrumbs[cloudBreadcrumbs.length - 1].id;
+            refreshCloudView();
+        }
+
+        function navigateCloudFolder(folderId, folderName) {
+            if (folderId === null) {
+                cloudBreadcrumbs = [{ id: null, name: '🏠 Thư mục gốc' }];
+            } else {
+                cloudBreadcrumbs.push({ id: folderId, name: folderName || 'Thư mục con' });
+            }
+            currentCloudFolderId = folderId;
+            refreshCloudView();
+        }
+
+        function renderFolders(folders) {
+            const sec = document.getElementById('cloud-folders-section');
+            const grid = document.getElementById('cloud-folders-grid');
+            if (!sec || !grid) return;
+
+            if (folders.length === 0) {
+                sec.style.display = 'none';
+                grid.innerHTML = '';
+                return;
+            }
+
+            sec.style.display = 'block';
+            grid.innerHTML = folders.map(f => `
+                <div class="cloud-card-item" onclick="navigateCloudFolder('${f.id}', '${escapeJsStr(f.name)}')">
+                    <div class="cloud-item-header">
+                        <div class="cloud-item-icon">📁</div>
+                        <div>
+                            <div class="cloud-item-name">${escapeHtml(f.name)}</div>
+                            <div style="font-size:11px;color:var(--muted-foreground);margin-top:2px">${f.created_at || ''}</div>
+                        </div>
+                    </div>
+                    <div class="cloud-item-footer">
+                        <span>Thư mục</span>
+                        <span style="color:var(--primary)">Mở ➔</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderFilesTable(files) {
+            const tbody = document.getElementById('cloud-files-tbody');
+            if (!tbody) return;
+
+            if (files.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" style="text-align:center;padding:36px;color:var(--muted-foreground)">
+                            🔍 Không tìm thấy tệp tin nào phù hợp với bộ lọc hoặc từ khóa.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = files.map(f => {
+                const ext = (f.extension || '').toLowerCase();
+                const cat = getCloudFileCat(ext);
+                let icon = '📄';
+                let badgeClass = 'cloud-badge-doc';
+                if (cat === 'images') { icon = '🖼️'; badgeClass = 'cloud-badge-img'; }
+                else if (cat === 'videos') { icon = '🎬'; badgeClass = 'cloud-badge-vid'; }
+                else if (cat === 'archives') { icon = '📦'; badgeClass = 'cloud-badge-zip'; }
+
+                const isImgOrVid = ['images', 'videos'].includes(cat);
+
+                return `
+                    <tr>
+                        <td>
+                            <div style="display:flex;align-items:center;gap:10px">
+                                <span class="cloud-file-badge ${badgeClass}">${icon}</span>
+                                <div>
+                                    <div style="font-weight:600;color:var(--foreground);word-break:break-word">${escapeHtml(f.filename)}</div>
+                                    <div style="font-size:11px;color:var(--muted-subtle)">ID: ${f.id.substring(0, 8)}...</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td style="font-family:var(--font-mono);font-size:12.5px;color:var(--foreground)">${formatBytes(f.size_bytes)}</td>
+                        <td>
+                            <span class="badge ${f.app_id === 'UPSCALE' ? 'badge-info' : 'badge-emerald'}" style="font-size:10.5px">
+                                ${escapeHtml(f.app_id || 'CLOUD')}
+                            </span>
+                        </td>
+                        <td style="font-size:12px;color:var(--muted-foreground)">${f.created_at ? f.created_at.substring(0, 16) : ''}</td>
+                        <td style="text-align:right">
+                            <div style="display:inline-flex;gap:6px;align-items:center">
+                                <a href="/api/v1/cloud/files/${f.id}/download" class="btn btn-outline btn-xs" title="Tải về máy tính">
+                                    ⬇️ Tải Về
+                                </a>
+                                ${isImgOrVid ? `
+                                    <a href="/api/v1/cloud/files/${f.id}/preview" target="_blank" class="btn btn-outline btn-xs" title="Xem trước trong tab mới">
+                                        👁️
+                                    </a>
+                                ` : ''}
+                                <button type="button" class="btn btn-outline btn-xs" style="color:var(--danger)" onclick="trashCloudFile('${f.id}')" title="Chuyển vào thùng rác">
+                                    🗑️
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function renderFilesGrid(files) {
+            const grid = document.getElementById('cloud-files-grid');
+            if (!grid) return;
+
+            if (files.length === 0) {
+                grid.innerHTML = `
+                    <div style="grid-column:1/-1;text-align:center;padding:36px;color:var(--muted-foreground)">
+                        🔍 Không tìm thấy tệp tin nào phù hợp với bộ lọc hoặc từ khóa.
+                    </div>
+                `;
+                return;
+            }
+
+            grid.innerHTML = files.map(f => {
+                const ext = (f.extension || '').toLowerCase();
+                const cat = getCloudFileCat(ext);
+                let icon = '📄';
+                let badgeClass = 'cloud-badge-doc';
+                if (cat === 'images') { icon = '🖼️'; badgeClass = 'cloud-badge-img'; }
+                else if (cat === 'videos') { icon = '🎬'; badgeClass = 'cloud-badge-vid'; }
+                else if (cat === 'archives') { icon = '📦'; badgeClass = 'cloud-badge-zip'; }
+
+                const isImgOrVid = ['images', 'videos'].includes(cat);
+
+                return `
+                    <div class="cloud-card-item">
+                        <div style="display:flex;align-items:flex-start;gap:10px">
+                            <span class="cloud-file-badge ${badgeClass}" style="width:36px;height:36px;font-size:18px">${icon}</span>
+                            <div style="overflow:hidden;flex:1">
+                                <div style="font-weight:600;font-size:13px;color:var(--foreground);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(f.filename)}">
+                                    ${escapeHtml(f.filename)}
+                                </div>
+                                <div style="font-size:11.5px;color:var(--muted-foreground);font-family:var(--font-mono);margin-top:2px">
+                                    ${formatBytes(f.size_bytes)}
+                                </div>
+                            </div>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.06)">
+                            <span style="font-size:11px;color:var(--muted-subtle)">${f.created_at ? f.created_at.substring(5, 16) : ''}</span>
+                            <div style="display:flex;gap:4px">
+                                <a href="/api/v1/cloud/files/${f.id}/download" class="btn btn-outline btn-xs" title="Tải về máy tính">⬇️</a>
+                                ${isImgOrVid ? `<a href="/api/v1/cloud/files/${f.id}/preview" target="_blank" class="btn btn-outline btn-xs" title="Xem">👁️</a>` : ''}
+                                <button type="button" class="btn btn-outline btn-xs" style="color:var(--danger)" onclick="trashCloudFile('${f.id}')" title="Xóa">🗑️</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function promptCreateCloudFolder() {
+            const name = prompt('Nhập tên thư mục mới:');
+            if (!name || !name.trim()) return;
+            if (!currentCloudSpaceId) {
+                showToast('Vui lòng chọn Không gian lưu trữ');
+                return;
+            }
+
+            fetch(`/api/v1/cloud/spaces/${currentCloudSpaceId}/folders`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: name.trim(),
+                    parent_id: currentCloudFolderId || null
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('✅ Đã tạo thư mục thành công!');
+                    refreshCloudView();
+                } else {
+                    showToast(data.message || 'Không thể tạo thư mục');
+                }
+            })
+            .catch(() => showToast('Lỗi mạng khi tạo thư mục'));
+        }
+
+        function trashCloudFile(fileId) {
+            if (!confirm('Bạn có chắc chắn muốn chuyển tệp này vào Thùng Rác?')) return;
+            fetch(`/api/v1/cloud/files/${fileId}/trash`, { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast('🗑️ Đã chuyển tệp vào Thùng Rác');
+                        refreshCloudView();
+                    } else {
+                        showToast(data.message || 'Lỗi khi xóa tệp');
+                    }
+                })
+                .catch(() => showToast('Lỗi mạng khi xóa tệp'));
+        }
+
+        function openCloudUploadModal() {
+            cloudSelectedFiles = [];
+            const inp = document.getElementById('cloud-file-input');
+            if (inp) inp.value = '';
+            document.getElementById('cloud-selected-files-list').style.display = 'none';
+            document.getElementById('cloud-upload-progress-container').style.display = 'none';
+            document.getElementById('btn-cloud-start-upload').disabled = false;
+            openModal('modal-cloud-upload');
+        }
+
+        function onCloudFileSelected(files) {
+            if (!files || files.length === 0) return;
+            cloudSelectedFiles = Array.from(files);
+            const listCont = document.getElementById('cloud-selected-files-list');
+            const itemsCont = document.getElementById('cloud-file-items-container');
+            listCont.style.display = 'block';
+            itemsCont.innerHTML = cloudSelectedFiles.map(f => `
+                <div style="display:flex;justify-content:space-between;background:var(--surface-2);padding:6px 10px;border-radius:4px;font-size:12px;border:1px solid var(--border)">
+                    <span style="font-weight:500;color:var(--foreground)">${escapeHtml(f.name)}</span>
+                    <span style="color:var(--muted-foreground);font-family:var(--font-mono)">${formatBytes(f.size)}</span>
+                </div>
+            `).join('');
+        }
+
+        async function startCloudUploadQueue() {
+            if (cloudSelectedFiles.length === 0) {
+                showToast('Vui lòng chọn ít nhất một tệp để tải lên');
+                return;
+            }
+            if (!currentCloudSpaceId) {
+                showToast('Chưa chọn không gian lưu trữ');
+                return;
+            }
+
+            const startBtn = document.getElementById('btn-cloud-start-upload');
+            const cancelBtn = document.getElementById('btn-cloud-cancel-upload');
+            const progCont = document.getElementById('cloud-upload-progress-container');
+            const statusText = document.getElementById('cloud-upload-status-text');
+            const percentText = document.getElementById('cloud-upload-percent-text');
+            const barFill = document.getElementById('cloud-upload-bar-fill');
+            const bytesText = document.getElementById('cloud-upload-bytes-text');
+
+            startBtn.disabled = true;
+            cancelBtn.disabled = true;
+            progCont.style.display = 'block';
+            isCloudUploading = true;
+
+            for (let i = 0; i < cloudSelectedFiles.length; i++) {
+                const file = cloudSelectedFiles[i];
+                statusText.textContent = `[${i + 1}/${cloudSelectedFiles.length}] Đang tải lên: ${file.name}`;
+                percentText.textContent = '0%';
+                barFill.style.width = '0%';
+                bytesText.textContent = `0 / ${formatBytes(file.size)}`;
+
+                let uploadId = null;
+                try {
+                    // Step 1: Init Direct Resumable Upload
+                    const initRes = await fetch(`/api/v1/cloud/spaces/${currentCloudSpaceId}/uploads/create`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            folder_id: currentCloudFolderId || null,
+                            file_name: file.name,
+                            file_size: file.size,
+                            mime_type: file.type || 'application/octet-stream'
+                        })
+                    });
+                    const initData = await initRes.json();
+                    if (!initRes.ok || !initData.success) {
+                        throw new Error(initData.message || 'Không thể khởi tạo phiên tải lên');
+                    }
+
+                    uploadId = initData.upload_id;
+                    const sessionUrl = initData.session_url;
+                    let realDriveFileId = null;
+
+                    // Step 2: Stream / Put File
+                    if (sessionUrl && (sessionUrl.includes('google.com') || sessionUrl.includes('googleapis.com'))) {
+                        try {
+                            // Direct stream to 2TOOL Cloud Storage Resumable Endpoint
+                            const driveRespText = await uploadGoogleDriveResumable(sessionUrl, file, (loaded, total) => {
+                                const p = Math.round((loaded / total) * 100);
+                                percentText.textContent = p + '%';
+                                barFill.style.width = p + '%';
+                                bytesText.textContent = `${formatBytes(loaded)} / ${formatBytes(total)}`;
+                            });
+                            try {
+                                const parsed = JSON.parse(driveRespText);
+                                if (parsed && parsed.id) realDriveFileId = parsed.id;
+                            } catch (eP) {}
+                        } catch (directErr) {
+                            console.warn('Direct upload notice, transitioning to 2TOOL Cloud Relay:', directErr);
+                            statusText.textContent = `[${i + 1}/${cloudSelectedFiles.length}] Đang đồng bộ luồng qua 2TOOL Cloud Stream...`;
+                            // Seamless Relay Fallback
+                            const relayRes = await fetch(`/api/v1/cloud/uploads/${uploadId}/relay`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': file.type || 'application/octet-stream'
+                                },
+                                body: file
+                            });
+                            const relayData = await relayRes.json();
+                            if (!relayRes.ok || !relayData.success) {
+                                throw new Error(relayData.message || directErr.message || 'Lỗi kết nối tải lên 2TOOL Cloud');
+                            }
+                            if (relayData.provider_file_id) {
+                                realDriveFileId = relayData.provider_file_id;
+                            }
+                        }
+                    } else {
+                        // Simulated session
+                        for (let p = 10; p <= 100; p += 30) {
+                            await new Promise(r => setTimeout(r, 100));
+                            percentText.textContent = Math.min(100, p) + '%';
+                            barFill.style.width = Math.min(100, p) + '%';
+                        }
+                    }
+
+                    // Step 3: Finalize
+                    statusText.textContent = `[${i + 1}/${cloudSelectedFiles.length}] Đang chốt giao dịch đám mây...`;
+                    const finRes = await fetch(`/api/v1/cloud/uploads/${uploadId}/finalize`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            provider_file_id: realDriveFileId || ('cf_file_' + Date.now())
+                        })
+                    });
+                    const finData = await finRes.json();
+                    if (!finRes.ok || !finData.success) {
+                        throw new Error(finData.message || 'Không thể chốt phiên tải lên');
+                    }
+                } catch (err) {
+                    if (uploadId) {
+                        fetch(`/api/v1/cloud/uploads/${uploadId}/abort`, { method: 'POST' }).catch(() => {});
+                    }
+                    showToast(`Lỗi tải tệp "${file.name}": ${err.message}`);
+                    startBtn.disabled = false;
+                    cancelBtn.disabled = false;
+                    isCloudUploading = false;
+                    return;
+                }
+            }
+
+            isCloudUploading = false;
+            startBtn.disabled = false;
+            cancelBtn.disabled = false;
+            closeModal('modal-cloud-upload');
+            showToast('🎉 Tải tất cả tệp lên đám mây thành công!');
+            refreshCloudView();
+        }
+
+        function uploadGoogleDriveResumable(sessionUrl, file, onProgress) {
+            return new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open('PUT', sessionUrl, true);
+                xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+                xhr.upload.onprogress = (e) => {
+                    if (e.lengthComputable && onProgress) {
+                        onProgress(e.loaded, e.total);
+                    }
+                };
+                xhr.onload = () => {
+                    if (xhr.status === 200 || xhr.status === 201) {
+                        resolve(xhr.responseText);
+                    } else {
+                        reject(new Error('Lỗi truyền tải 2TOOL Cloud: HTTP ' + xhr.status));
+                    }
+                };
+                xhr.onerror = () => reject(new Error('Lỗi kết nối mạng khi truyền luồng lên 2TOOL Cloud'));
+                xhr.send(file);
+            });
+        }
+
+        function loadCloudTrashCount(spaceId) {
+            fetch(`/api/v1/cloud/spaces/${spaceId}/trash`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success && Array.isArray(data.trash)) {
+                        const badge = document.getElementById('cloud-trash-badge');
+                        if (badge) badge.textContent = data.trash.length;
+                    }
+                })
+                .catch(() => {});
+        }
+
+        function openCloudTrashModal() {
+            if (!currentCloudSpaceId) return;
+            const tbody = document.getElementById('cloud-trash-tbody');
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--muted-foreground)">Đang tải thùng rác...</td></tr>';
+            openModal('modal-cloud-trash');
+
+            fetch(`/api/v1/cloud/spaces/${currentCloudSpaceId}/trash`)
+                .then(res => res.json())
+                .then(data => {
+                    if (!data.success || !Array.isArray(data.trash) || data.trash.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--muted-foreground)">Thùng rác rỗng.</td></tr>';
+                        return;
+                    }
+
+                    tbody.innerHTML = data.trash.map(t => `
+                        <tr>
+                            <td style="font-weight:500;color:var(--foreground)">${escapeHtml(t.filename)}</td>
+                            <td style="font-family:var(--font-mono);font-size:12px">${formatBytes(t.size_bytes)}</td>
+                            <td style="font-size:12px;color:var(--muted-foreground)">${t.deleted_at || ''}</td>
+                            <td style="text-align:right">
+                                <button type="button" class="btn btn-outline btn-xs" style="color:var(--emerald)" onclick="restoreCloudFile('${t.id}')">
+                                    Khôi Phục
+                                </button>
+                                <button type="button" class="btn btn-outline btn-xs" style="color:var(--danger)" onclick="permanentDeleteCloudFile('${t.id}')">
+                                    Xóa Vĩnh Viễn
+                                </button>
+                            </td>
+                        </tr>
+                    `).join('');
+                })
+                .catch(() => {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--danger)">Lỗi tải thùng rác.</td></tr>';
+                });
+        }
+
+        function restoreCloudFile(fileId) {
+            fetch(`/api/v1/cloud/files/${fileId}/restore`, { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast('✅ Đã khôi phục tệp thành công');
+                        openCloudTrashModal();
+                        refreshCloudView();
+                    } else {
+                        showToast(data.message || 'Không thể khôi phục tệp');
+                    }
+                })
+                .catch(() => showToast('Lỗi mạng'));
+        }
+
+        function permanentDeleteCloudFile(fileId) {
+            if (!confirm('CẢNH BÁO: Tệp sẽ bị xóa vĩnh viễn khỏi 2TOOL Cloud. Không thể hoàn tác! Bạn có chắc không?')) return;
+            fetch(`/api/v1/cloud/files/${fileId}/permanent`, { method: 'DELETE' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast('🗑️ Đã xóa vĩnh viễn tệp');
+                        openCloudTrashModal();
+                        refreshCloudView();
+                    } else {
+                        showToast(data.message || 'Không thể xóa tệp');
+                    }
+                })
+                .catch(() => showToast('Lỗi mạng'));
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const dropzone = document.getElementById('cloud-empty-dropzone');
+            if (dropzone) {
+                ['dragenter', 'dragover'].forEach(name => {
+                    dropzone.addEventListener(name, (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        dropzone.classList.add('dragover');
+                    });
+                });
+                ['dragleave', 'drop'].forEach(name => {
+                    dropzone.addEventListener(name, (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        dropzone.classList.remove('dragover');
+                    });
+                });
+                dropzone.addEventListener('drop', (e) => {
+                    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                        openCloudUploadModal();
+                        onCloudFileSelected(e.dataTransfer.files);
+                    }
+                });
+            }
+
+            const spaceSel = document.getElementById('cloud-space-select');
+            if (spaceSel && spaceSel.value) {
+                onCloudSpaceChanged(spaceSel.value);
+            }
+        });
+
+        function formatBytes(bytes, decimals = 2) {
+            if (!bytes || bytes <= 0) return '0 B';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/[&<>"']/g, function(m) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m];
+            });
+        }
+
+        function escapeJsStr(str) {
+            if (!str) return '';
+            return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
         }
 
         function openQrPayment(pkgName, pkgPrice, days, tier, product = '2TOOLNE') {
@@ -2296,6 +5346,17 @@ if (isset($_GET['registered'])) {
             document.getElementById('form-pkg-days').value = days;
             document.getElementById('form-pkg-tier').value = tier;
             document.getElementById('form-pkg-product').value = product;
+
+            if (document.getElementById('sepay-form-pkg-name')) {
+                document.getElementById('sepay-form-pkg-name').value = pkgName;
+                document.getElementById('sepay-form-pkg-price').value = pkgPrice;
+                document.getElementById('sepay-form-pkg-days').value = days;
+                document.getElementById('sepay-form-pkg-tier').value = tier;
+                document.getElementById('sepay-form-pkg-product').value = product;
+            }
+
+            const manualDetails = document.getElementById('details-manual-transfer');
+            if (manualDetails) manualDetails.removeAttribute('open');
 
             openModal('modal-qr-pay');
             startCountdown(120);
@@ -2347,9 +5408,10 @@ if (isset($_GET['registered'])) {
                         const macUrl = btn.getAttribute('data-os-mac') || '/downloads/2toolne_macOS_latest.zip';
                         btn.href = macUrl;
                         btn.className = 'smart-download-btn btn btn-emerald btn-lg';
+                        const isDmg = macUrl.endsWith('.dmg');
+                        if (text) text.textContent = isDmg ? 'Tải Cho macOS (.dmg - 125 MB)' : 'Tải Cho macOS (.zip Universal)';
                     }
                     if (icon) icon.textContent = '🍏';
-                    if (text) text.textContent = 'Tải Cho macOS (.zip Universal)';
                 });
                 macBoxes.forEach(box => {
                     box.style.borderColor = 'var(--emerald)';
@@ -2368,9 +5430,10 @@ if (isset($_GET['registered'])) {
                         const winUrl = btn.getAttribute('data-os-win') || '/downloads/2toolne_Windows_latest.zip';
                         btn.href = winUrl;
                         btn.className = 'smart-download-btn btn btn-accent btn-lg';
+                        const isExe = winUrl.endsWith('.exe');
+                        if (text) text.textContent = isExe ? 'Tải Cho Windows (.exe - 149 MB)' : 'Tải Cho Windows (.zip 64-bit)';
                     }
                     if (icon) icon.textContent = '🪟';
-                    if (text) text.textContent = 'Tải Cho Windows (.zip 64-bit)';
                 });
                 winBoxes.forEach(box => {
                     box.style.borderColor = 'var(--accent)';
@@ -2388,10 +5451,18 @@ if (isset($_GET['registered'])) {
             const tabMap = {
                 'keys':            'tab-my-keys',
                 'my-keys':         'tab-my-keys',
+                'orders':          'tab-orders-history',
+                'order':           'tab-orders-history',
+                'history':         'tab-orders-history',
+                'transactions':    'tab-orders-history',
+                'tab-orders-history': 'tab-orders-history',
                 'wallet':          'tab-wallet-view',
                 'tokens':          'tab-wallet-view',
                 'token':           'tab-wallet-view',
                 'tab-wallet-view': 'tab-wallet-view',
+                'cloud':           'tab-cloud-storage',
+                'cloud-storage':   'tab-cloud-storage',
+                'tab-cloud-storage': 'tab-cloud-storage',
                 'downloads':       'tab-downloads',
                 'download':        'tab-downloads',
                 'tab-downloads':   'tab-downloads',
@@ -2404,18 +5475,25 @@ if (isset($_GET['registered'])) {
                 'settings':        'tab-settings'
             };
             const target = urlTab || rawHash;
-            if (target && tabMap[target]) {
-                window.addEventListener('DOMContentLoaded', () => {
-                    const el = document.getElementById(tabMap[target]);
-                    if (el) switchMainTab(tabMap[target]);
-                });
+            function handleTabRouting(t) {
+                if (!t || !tabMap[t]) return;
+                const destId = tabMap[t];
+                const el = document.getElementById(destId);
+                if (el) {
+                    switchMainTab(destId);
+                } else if (t === 'cloud' || t === 'cloud-storage' || t === 'tab-cloud-storage') {
+                    // Guest fallback: switch to public cloud product tab
+                    switchProductTab('ptab-cloud', 'ptab-btn-cloud');
+                    const pSec = document.getElementById('products');
+                    if (pSec) pSec.scrollIntoView({ behavior: 'smooth' });
+                }
+            }
+            if (target) {
+                window.addEventListener('DOMContentLoaded', () => handleTabRouting(target));
             }
             window.addEventListener('hashchange', () => {
                 const h = (location.hash || '').replace('#', '');
-                if (h && tabMap[h]) {
-                    const el = document.getElementById(tabMap[h]);
-                    if (el) switchMainTab(tabMap[h]);
-                }
+                handleTabRouting(h);
             });
         })();
 
@@ -2423,6 +5501,23 @@ if (isset($_GET['registered'])) {
         window.addEventListener('click', function(e) {
             if (e.target.classList.contains('modal-backdrop')) {
                 e.target.classList.remove('active');
+                if (timerInterval) clearInterval(timerInterval);
+            }
+        });
+
+        // ESC key to close modal & mobile nav
+        window.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                document.querySelectorAll('.modal-backdrop.active').forEach(m => {
+                    m.classList.remove('active');
+                });
+                const p = document.getElementById('mobile-nav-panel');
+                const icon = document.getElementById('mobile-menu-icon');
+                if (p && p.classList.contains('open')) {
+                    p.classList.remove('open');
+                    setTimeout(() => { p.style.display = 'none'; }, 200);
+                    if (icon) icon.textContent = '☰';
+                }
                 if (timerInterval) clearInterval(timerInterval);
             }
         });
@@ -2448,6 +5543,53 @@ if (isset($_GET['registered'])) {
             }, 10000);
         })();
         <?php endif; ?>
+
+        // Live User Token Balance Auto-Sync
+        <?php if (!empty($current_user)): ?>
+        (function() {
+            function syncUserBalance() {
+                if (document.hidden) return;
+                fetch('index.php?ajax=get_my_balance')
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data && data.status === 'success') {
+                            const navBal = document.getElementById('nav-token-balance');
+                            if (navBal && navBal.textContent !== data.formatted) {
+                                navBal.textContent = data.formatted;
+                            }
+                            const navBalMob = document.getElementById('nav-token-balance-mobile');
+                            if (navBalMob && navBalMob.textContent !== data.formatted) {
+                                navBalMob.textContent = data.formatted;
+                            }
+                            const walletBal = document.getElementById('wallet-page-token-balance');
+                            if (walletBal && walletBal.textContent !== data.formatted) {
+                                walletBal.textContent = data.formatted;
+                            }
+                        }
+                    })
+                    .catch(() => {});
+            }
+            setInterval(syncUserBalance, 25000);
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) syncUserBalance();
+            });
+        })();
+        <?php endif; ?>
     </script>
+<?php if (!empty($pending_app_auth) && !$current_user): ?>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    openModal('modal-login');
+    showToast('Vui lòng đăng nhập tài khoản 2tamne.site để duyệt kết nối ứng dụng!');
+});
+</script>
+<?php endif; ?>
+<?php if (isset($_GET['app_auth_approved'])): ?>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    showToast('🎉 Đã duyệt đăng nhập cho ứng dụng 2toolne Upscale thành công!');
+});
+</script>
+<?php endif; ?>
 </body>
 </html>

@@ -1,0 +1,39 @@
+{
+  "cloud_draft_cover": false,
+  "cloud_draft_sync": false,
+  "draft_cover": "draft_cover.jpg",
+  "draft_fold_path": "sanitized_workspace/com.lveditor.draft/2toolne_poc_project",
+  "draft_id": "FIXTURE-93-DRAFT-INFO-000000000001",
+  "draft_materials": [
+    {
+      "type": 0,
+      "value": [
+        {
+          "create_time": 1788700000,
+          "duration": 5000000,
+          "file_Path": "sanitized_workspace/media/clip_000.png",
+          "height": 1920,
+          "width": 1080,
+          "id": "MAT-META-CLIP-000001",
+          "import_time": 1788700000,
+          "import_time_ms": 1788700000000000,
+          "item_source": 1,
+          "metetype": "photo",
+          "type": 0
+        }
+      ]
+    },
+    {"type": 1, "value": []},
+    {"type": 2, "value": []},
+    {"type": 3, "value": []},
+    {"type": 6, "value": []},
+    {"type": 7, "value": []},
+    {"type": 8, "value": []}
+  ],
+  "draft_name": "Fixture Project 9.3",
+  "draft_root_path": "sanitized_workspace/com.lveditor.draft",
+  "draft_timeline_materials_size_": 1024,
+  "tm_draft_create": 1788700000000000,
+  "tm_draft_modified": 1788700000000000,
+  "tm_duration": 15000000
+}

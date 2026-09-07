@@ -1,0 +1,33 @@
+{
+  "version": "1.0",
+  "updated_at": 1788772428.1107771,
+  "queue_status": "IDLE",
+  "jobs": [
+    {
+      "job_id": "job_crash_1",
+      "project_id": "proj_crash_1",
+      "draft_id": "draft_crash_1",
+      "draft_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace",
+      "output_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace/crash_output.mp4",
+      "output_filename": "crash_output.mp4",
+      "render_profile_id": "windows_capcut_9_3_0_3970",
+      "render_settings": {},
+      "status": "DONE",
+      "created_at": "2026-09-07T09:13:48.069998+00:00",
+      "started_at": "2026-09-07T09:13:48.070035+00:00",
+      "finished_at": "2026-09-07T09:13:48.110704+00:00",
+      "retry_count": 0,
+      "last_error": null,
+      "verification_details": {
+        "size_bytes": 160486,
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "actual_duration_sec": 3.0,
+        "video_codec": "h264",
+        "width": 1920,
+        "height": 1080,
+        "has_audio": false,
+        "audio_codec": null
+      }
+    }
+  ]
+}

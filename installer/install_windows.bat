@@ -1,11 +1,11 @@
 @echo off
-title VibeCode Studio - Windows Installer v2.3.0
+title VibeCode Studio - Windows Installer v2.3.9
 chcp 65001 >nul 2>nul
 cd /d "%~dp0"
 
 echo ========================================================
 echo       VIBECODE STUDIO - CÀI ĐẶT TỰ ĐỘNG CHO WINDOWS
-echo       Phiên bản: v2.3.0 (64-bit Production)
+echo       Phiên bản: v2.3.9 (64-bit Production)
 echo ========================================================
 echo.
 
@@ -29,6 +29,7 @@ xcopy /E /I /Y /Q "..\license_manager.py" "%TARGET_DIR%\" >nul
 xcopy /E /I /Y /Q "..\renderer_e_engine.py" "%TARGET_DIR%\" >nul
 xcopy /E /I /Y /Q "..\renderer_g.py" "%TARGET_DIR%\" >nul
 xcopy /E /I /Y /Q "..\subtitles_engine.py" "%TARGET_DIR%\" >nul
+xcopy /E /I /Y /Q "..\subpixel_affine_engine.py" "%TARGET_DIR%\" >nul
 xcopy /E /I /Y /Q "..\translation_utils.py" "%TARGET_DIR%\" >nul
 xcopy /E /I /Y /Q "..\tts_utils.py" "%TARGET_DIR%\" >nul
 xcopy /E /I /Y /Q "..\version.py" "%TARGET_DIR%\" >nul
@@ -53,8 +54,8 @@ if not exist "%TARGET_DIR%\uploads" mkdir "%TARGET_DIR%\uploads"
 if not exist "%TARGET_DIR%\diagnostics" mkdir "%TARGET_DIR%\diagnostics"
 
 echo [*] Tạo shortcut trên Desktop và Start Menu...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut([System.Environment]::GetFolderPath('Desktop') + '\VibeCode Studio.lnk'); $s.TargetPath = '%TARGET_DIR%\SlideshowStudio.vbs'; $s.WorkingDirectory = '%TARGET_DIR%'; $s.Description = 'VibeCode Slideshow Studio AI v2.3.0'; $s.Save()" >nul 2>nul
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $sm = [System.Environment]::GetFolderPath('StartMenu') + '\Programs'; $s = $ws.CreateShortcut($sm + '\VibeCode Studio.lnk'); $s.TargetPath = '%TARGET_DIR%\SlideshowStudio.vbs'; $s.WorkingDirectory = '%TARGET_DIR%'; $s.Description = 'VibeCode Slideshow Studio AI v2.3.0'; $s.Save()" >nul 2>nul
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut([System.Environment]::GetFolderPath('Desktop') + '\VibeCode Studio.lnk'); $s.TargetPath = '%TARGET_DIR%\SlideshowStudio.vbs'; $s.WorkingDirectory = '%TARGET_DIR%'; $s.Description = 'VibeCode Slideshow Studio AI v2.3.9'; $s.Save()" >nul 2>nul
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $sm = [System.Environment]::GetFolderPath('StartMenu') + '\Programs'; $s = $ws.CreateShortcut($sm + '\VibeCode Studio.lnk'); $s.TargetPath = '%TARGET_DIR%\SlideshowStudio.vbs'; $s.WorkingDirectory = '%TARGET_DIR%'; $s.Description = 'VibeCode Slideshow Studio AI v2.3.9'; $s.Save()" >nul 2>nul
 
 echo [*] Tạo tệp gỡ cài đặt (Uninstaller)...
 copy /Y "uninstall_windows.bat" "%TARGET_DIR%\uninstall.bat" >nul 2>nul

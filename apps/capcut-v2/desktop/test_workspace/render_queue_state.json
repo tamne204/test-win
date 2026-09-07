@@ -1,0 +1,421 @@
+{
+  "version": "1.0",
+  "updated_at": 1788772427.356192,
+  "queue_status": "IDLE",
+  "jobs": [
+    {
+      "job_id": "job_f32456a26dd4",
+      "project_id": "proj_1",
+      "draft_id": "draft_1",
+      "draft_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace/draft_job_1",
+      "output_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace/output_job_1.mp4",
+      "output_filename": "output_job_1.mp4",
+      "render_profile_id": "windows_capcut_9_3_0_3970",
+      "render_settings": {
+        "expected_duration_sec": 2.0
+      },
+      "status": "FAILED",
+      "created_at": "2026-09-07T09:09:00.949812+00:00",
+      "started_at": "2026-09-07T09:09:00.951070+00:00",
+      "finished_at": "2026-09-07T09:09:57.219741+00:00",
+      "retry_count": 0,
+      "last_error": {
+        "error_code": "CRASH_INTERRUPTED",
+        "message": "App restart detected interrupted render job before output creation."
+      },
+      "verification_details": null
+    },
+    {
+      "job_id": "job_4a4099364bb6",
+      "project_id": "proj_2",
+      "draft_id": "draft_2",
+      "draft_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace/draft_job_2",
+      "output_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace/output_job_2.mp4",
+      "output_filename": "output_job_2.mp4",
+      "render_profile_id": "windows_capcut_9_3_0_3970",
+      "render_settings": {
+        "expected_duration_sec": 2.0
+      },
+      "status": "DONE",
+      "created_at": "2026-09-07T09:09:00.951924+00:00",
+      "started_at": "2026-09-07T09:09:57.220723+00:00",
+      "finished_at": "2026-09-07T09:10:03.308087+00:00",
+      "retry_count": 0,
+      "last_error": null,
+      "verification_details": {
+        "size_bytes": 160486,
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "actual_duration_sec": 3.0,
+        "video_codec": "h264",
+        "width": 1920,
+        "height": 1080,
+        "has_audio": false,
+        "audio_codec": null
+      }
+    },
+    {
+      "job_id": "job_5fcbc551e24f",
+      "project_id": "proj_3",
+      "draft_id": "draft_3",
+      "draft_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace/draft_job_3",
+      "output_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace/output_job_3.mp4",
+      "output_filename": "output_job_3.mp4",
+      "render_profile_id": "windows_capcut_9_3_0_3970",
+      "render_settings": {
+        "expected_duration_sec": 2.0
+      },
+      "status": "DONE",
+      "created_at": "2026-09-07T09:09:00.967420+00:00",
+      "started_at": "2026-09-07T09:10:03.308574+00:00",
+      "finished_at": "2026-09-07T09:10:09.369970+00:00",
+      "retry_count": 0,
+      "last_error": null,
+      "verification_details": {
+        "size_bytes": 160486,
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "actual_duration_sec": 3.0,
+        "video_codec": "h264",
+        "width": 1920,
+        "height": 1080,
+        "has_audio": false,
+        "audio_codec": null
+      }
+    },
+    {
+      "job_id": "job_57e0a1bcf4aa",
+      "project_id": "proj_4",
+      "draft_id": "draft_4",
+      "draft_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace/draft_job_4",
+      "output_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace/output_job_4.mp4",
+      "output_filename": "output_job_4.mp4",
+      "render_profile_id": "windows_capcut_9_3_0_3970",
+      "render_settings": {
+        "expected_duration_sec": 2.0
+      },
+      "status": "DONE",
+      "created_at": "2026-09-07T09:09:00.968697+00:00",
+      "started_at": "2026-09-07T09:10:09.370290+00:00",
+      "finished_at": "2026-09-07T09:10:15.434040+00:00",
+      "retry_count": 0,
+      "last_error": null,
+      "verification_details": {
+        "size_bytes": 160486,
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "actual_duration_sec": 3.0,
+        "video_codec": "h264",
+        "width": 1920,
+        "height": 1080,
+        "has_audio": false,
+        "audio_codec": null
+      }
+    },
+    {
+      "job_id": "job_bd08643a8e6f",
+      "project_id": "proj_5",
+      "draft_id": "draft_5",
+      "draft_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace/draft_job_5",
+      "output_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace/output_job_5.mp4",
+      "output_filename": "output_job_5.mp4",
+      "render_profile_id": "windows_capcut_9_3_0_3970",
+      "render_settings": {
+        "expected_duration_sec": 2.0
+      },
+      "status": "DONE",
+      "created_at": "2026-09-07T09:09:00.969728+00:00",
+      "started_at": "2026-09-07T09:10:15.434419+00:00",
+      "finished_at": "2026-09-07T09:10:21.500290+00:00",
+      "retry_count": 0,
+      "last_error": null,
+      "verification_details": {
+        "size_bytes": 160486,
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "actual_duration_sec": 3.0,
+        "video_codec": "h264",
+        "width": 1920,
+        "height": 1080,
+        "has_audio": false,
+        "audio_codec": null
+      }
+    },
+    {
+      "job_id": "job_810e65c37d35",
+      "project_id": "proj_1",
+      "draft_id": "draft_1",
+      "draft_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace/draft_job_1",
+      "output_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace/output_job_1.mp4",
+      "output_filename": "output_job_1.mp4",
+      "render_profile_id": "windows_capcut_9_3_0_3970",
+      "render_settings": {
+        "expected_duration_sec": 2.0
+      },
+      "status": "DONE",
+      "created_at": "2026-09-07T09:09:57.220362+00:00",
+      "started_at": "2026-09-07T09:10:21.500713+00:00",
+      "finished_at": "2026-09-07T09:10:27.571331+00:00",
+      "retry_count": 0,
+      "last_error": null,
+      "verification_details": {
+        "size_bytes": 160486,
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "actual_duration_sec": 3.0,
+        "video_codec": "h264",
+        "width": 1920,
+        "height": 1080,
+        "has_audio": false,
+        "audio_codec": null
+      }
+    },
+    {
+      "job_id": "job_f102406c8a28",
+      "project_id": "proj_2",
+      "draft_id": "draft_2",
+      "draft_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace/draft_job_2",
+      "output_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace/output_job_2.mp4",
+      "output_filename": "output_job_2.mp4",
+      "render_profile_id": "windows_capcut_9_3_0_3970",
+      "render_settings": {
+        "expected_duration_sec": 2.0
+      },
+      "status": "DONE",
+      "created_at": "2026-09-07T09:09:57.221030+00:00",
+      "started_at": "2026-09-07T09:10:27.571698+00:00",
+      "finished_at": "2026-09-07T09:10:33.630037+00:00",
+      "retry_count": 0,
+      "last_error": null,
+      "verification_details": {
+        "size_bytes": 160486,
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "actual_duration_sec": 3.0,
+        "video_codec": "h264",
+        "width": 1920,
+        "height": 1080,
+        "has_audio": false,
+        "audio_codec": null
+      }
+    },
+    {
+      "job_id": "job_b6f332fb2572",
+      "project_id": "proj_3",
+      "draft_id": "draft_3",
+      "draft_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace/draft_job_3",
+      "output_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace/output_job_3.mp4",
+      "output_filename": "output_job_3.mp4",
+      "render_profile_id": "windows_capcut_9_3_0_3970",
+      "render_settings": {
+        "expected_duration_sec": 2.0
+      },
+      "status": "DONE",
+      "created_at": "2026-09-07T09:09:57.222385+00:00",
+      "started_at": "2026-09-07T09:10:33.630359+00:00",
+      "finished_at": "2026-09-07T09:10:39.686664+00:00",
+      "retry_count": 0,
+      "last_error": null,
+      "verification_details": {
+        "size_bytes": 160486,
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "actual_duration_sec": 3.0,
+        "video_codec": "h264",
+        "width": 1920,
+        "height": 1080,
+        "has_audio": false,
+        "audio_codec": null
+      }
+    },
+    {
+      "job_id": "job_253d3c2e7f3f",
+      "project_id": "proj_4",
+      "draft_id": "draft_4",
+      "draft_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace/draft_job_4",
+      "output_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace/output_job_4.mp4",
+      "output_filename": "output_job_4.mp4",
+      "render_profile_id": "windows_capcut_9_3_0_3970",
+      "render_settings": {
+        "expected_duration_sec": 2.0
+      },
+      "status": "DONE",
+      "created_at": "2026-09-07T09:09:57.223214+00:00",
+      "started_at": "2026-09-07T09:10:39.687006+00:00",
+      "finished_at": "2026-09-07T09:10:45.753753+00:00",
+      "retry_count": 0,
+      "last_error": null,
+      "verification_details": {
+        "size_bytes": 160486,
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "actual_duration_sec": 3.0,
+        "video_codec": "h264",
+        "width": 1920,
+        "height": 1080,
+        "has_audio": false,
+        "audio_codec": null
+      }
+    },
+    {
+      "job_id": "job_3c515f53593a",
+      "project_id": "proj_5",
+      "draft_id": "draft_5",
+      "draft_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace/draft_job_5",
+      "output_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace/output_job_5.mp4",
+      "output_filename": "output_job_5.mp4",
+      "render_profile_id": "windows_capcut_9_3_0_3970",
+      "render_settings": {
+        "expected_duration_sec": 2.0
+      },
+      "status": "DONE",
+      "created_at": "2026-09-07T09:09:57.223661+00:00",
+      "started_at": "2026-09-07T09:10:45.754069+00:00",
+      "finished_at": "2026-09-07T09:10:51.831403+00:00",
+      "retry_count": 0,
+      "last_error": null,
+      "verification_details": {
+        "size_bytes": 160486,
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "actual_duration_sec": 3.0,
+        "video_codec": "h264",
+        "width": 1920,
+        "height": 1080,
+        "has_audio": false,
+        "audio_codec": null
+      }
+    },
+    {
+      "job_id": "job_5ec0c17fb014",
+      "project_id": "proj_1",
+      "draft_id": "draft_1",
+      "draft_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace/draft_job_1",
+      "output_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace/output_job_1.mp4",
+      "output_filename": "output_job_1.mp4",
+      "render_profile_id": "windows_capcut_9_3_0_3970",
+      "render_settings": {
+        "expected_duration_sec": 2.0
+      },
+      "status": "DONE",
+      "created_at": "2026-09-07T09:13:16.953626+00:00",
+      "started_at": "2026-09-07T09:13:16.954098+00:00",
+      "finished_at": "2026-09-07T09:13:23.031625+00:00",
+      "retry_count": 0,
+      "last_error": null,
+      "verification_details": {
+        "size_bytes": 160486,
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "actual_duration_sec": 3.0,
+        "video_codec": "h264",
+        "width": 1920,
+        "height": 1080,
+        "has_audio": false,
+        "audio_codec": null
+      }
+    },
+    {
+      "job_id": "job_b5b43f849a12",
+      "project_id": "proj_2",
+      "draft_id": "draft_2",
+      "draft_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace/draft_job_2",
+      "output_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace/output_job_2.mp4",
+      "output_filename": "output_job_2.mp4",
+      "render_profile_id": "windows_capcut_9_3_0_3970",
+      "render_settings": {
+        "expected_duration_sec": 2.0
+      },
+      "status": "DONE",
+      "created_at": "2026-09-07T09:13:16.954541+00:00",
+      "started_at": "2026-09-07T09:13:23.032198+00:00",
+      "finished_at": "2026-09-07T09:13:29.111979+00:00",
+      "retry_count": 0,
+      "last_error": null,
+      "verification_details": {
+        "size_bytes": 160486,
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "actual_duration_sec": 3.0,
+        "video_codec": "h264",
+        "width": 1920,
+        "height": 1080,
+        "has_audio": false,
+        "audio_codec": null
+      }
+    },
+    {
+      "job_id": "job_5f6fcc85a9e0",
+      "project_id": "proj_3",
+      "draft_id": "draft_3",
+      "draft_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace/draft_job_3",
+      "output_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace/output_job_3.mp4",
+      "output_filename": "output_job_3.mp4",
+      "render_profile_id": "windows_capcut_9_3_0_3970",
+      "render_settings": {
+        "expected_duration_sec": 2.0
+      },
+      "status": "DONE",
+      "created_at": "2026-09-07T09:13:16.955902+00:00",
+      "started_at": "2026-09-07T09:13:29.112626+00:00",
+      "finished_at": "2026-09-07T09:13:35.188547+00:00",
+      "retry_count": 0,
+      "last_error": null,
+      "verification_details": {
+        "size_bytes": 160486,
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "actual_duration_sec": 3.0,
+        "video_codec": "h264",
+        "width": 1920,
+        "height": 1080,
+        "has_audio": false,
+        "audio_codec": null
+      }
+    },
+    {
+      "job_id": "job_0c79d0febc7e",
+      "project_id": "proj_4",
+      "draft_id": "draft_4",
+      "draft_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace/draft_job_4",
+      "output_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace/output_job_4.mp4",
+      "output_filename": "output_job_4.mp4",
+      "render_profile_id": "windows_capcut_9_3_0_3970",
+      "render_settings": {
+        "expected_duration_sec": 2.0
+      },
+      "status": "DONE",
+      "created_at": "2026-09-07T09:13:16.956781+00:00",
+      "started_at": "2026-09-07T09:13:35.189377+00:00",
+      "finished_at": "2026-09-07T09:13:41.268910+00:00",
+      "retry_count": 0,
+      "last_error": null,
+      "verification_details": {
+        "size_bytes": 160486,
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "actual_duration_sec": 3.0,
+        "video_codec": "h264",
+        "width": 1920,
+        "height": 1080,
+        "has_audio": false,
+        "audio_codec": null
+      }
+    },
+    {
+      "job_id": "job_991f3235e79f",
+      "project_id": "proj_5",
+      "draft_id": "draft_5",
+      "draft_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace/draft_job_5",
+      "output_path": "/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop/test_workspace/output_job_5.mp4",
+      "output_filename": "output_job_5.mp4",
+      "render_profile_id": "windows_capcut_9_3_0_3970",
+      "render_settings": {
+        "expected_duration_sec": 2.0
+      },
+      "status": "DONE",
+      "created_at": "2026-09-07T09:13:16.957383+00:00",
+      "started_at": "2026-09-07T09:13:41.269579+00:00",
+      "finished_at": "2026-09-07T09:13:47.355658+00:00",
+      "retry_count": 0,
+      "last_error": null,
+      "verification_details": {
+        "size_bytes": 160486,
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "actual_duration_sec": 3.0,
+        "video_codec": "h264",
+        "width": 1920,
+        "height": 1080,
+        "has_audio": false,
+        "audio_codec": null
+      }
+    }
+  ]
+}

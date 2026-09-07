@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>2TOOLNE AutoEdit for CapCut</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- ════════ LEFT SIDEBAR ════════ -->
+    <aside class="app-sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-badge">2T</div>
+        <div class="brand-text">
+          <span class="brand-title">2toolne</span>
+          <span class="brand-sub">AutoEdit CapCut V2</span>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <button type="button" class="nav-btn active" data-tab="studio">
+          <span class="nav-icon">🎬</span>
+          <span class="nav-label" data-i18n="nav.studio">Studio Dựng Phim</span>
+        </button>
+        <button type="button" class="nav-btn" data-tab="queue">
+          <span class="nav-icon">📋</span>
+          <span class="nav-label" data-i18n="nav.queue">Hàng Đợi (Queue)</span>
+          <span class="nav-badge" id="queueBadge" style="display:none">0</span>
+        </button>
+        <button type="button" class="nav-btn" data-tab="projects">
+          <span class="nav-icon">📁</span>
+          <span class="nav-label" data-i18n="nav.projects">Dự Án Đã Tạo</span>
+        </button>
+        <button type="button" class="nav-btn" data-tab="upscale">
+          <span class="nav-icon">🔍</span>
+          <span class="nav-label" data-i18n="nav.upscale">AI Upscale 4K</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button type="button" class="nav-btn" data-tab="account">
+          <span class="nav-icon">👤</span>
+          <span class="nav-label" data-i18n="nav.account">Tài Khoản &amp; Ví</span>
+        </button>
+        <button type="button" class="nav-btn" data-tab="settings">
+          <span class="nav-icon">⚙️</span>
+          <span class="nav-label" data-i18n="nav.settings">Cài Đặt</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- ════════ MAIN VIEW CONTAINER ════════ -->
+    <div class="app-main-wrapper">
+      <!-- Top Header Bar -->
+      <header class="top-header">
+        <div class="header-left">
+          <h2 class="view-title" id="currentViewTitle">Studio Dựng Phim</h2>
+          <span class="view-sub" id="currentViewSub">Tự động dựng timeline, căn chỉnh kịch bản &amp; chuyển động CapCut</span>
+        </div>
+
+        <div class="header-right">
+          <!-- Token Balance Badge -->
+          <div class="status-badge badge-token" id="badgeTokenWallet" title="Số dư Token ví (Dùng cho AI Upscale &amp; Cloud)">
+            <span class="badge-icon">🪙</span>
+            <span class="badge-text">Ví: <strong id="tokenBalance">--</strong> Token</span>
+          </div>
+
+          <!-- License Badge -->
+          <div class="status-badge badge-license" id="badgeLicenseStatus" title="Trạng thái bản quyền thiết bị">
+            <span class="status-dot dot-checking" id="licenseDot"></span>
+            <span id="licenseText">Kiểm tra bản quyền...</span>
+          </div>
+
+          <!-- CapCut Status Badge -->
+          <div class="status-badge badge-capcut" id="badgeCapcutStatus" title="Trạng thái CapCut Desktop">
+            <span class="status-dot dot-checking" id="capcutDot"></span>
+            <span id="capcutText">Kiểm tra CapCut...</span>
+          </div>
+
+          <!-- Quick Action -->
+          <button type="button" class="btn-action-primary" id="btnQuickNewProject">
+            <span>+ Tạo Mới</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Views Container -->
+      <main class="main-content-scroll">
+
+        <!-- ════════ TAB 1: STUDIO (3-COLUMN WORKFLOW) ════════ -->
+        <div class="view-pane active" id="view-studio">
+          <div class="studio-grid">
+
+            <!-- ── COLUMN 1: MEDIA & PROJECT CONFIG ── -->
+            <section class="studio-card">
+              <div class="card-head">
+                <span class="card-icon">1</span>
+                <span class="card-title">Cấu Hình &amp; Tài Nguyên</span>
+              </div>
+              <div class="card-body">
+                <!-- Project Name -->
+                <div class="input-field">
+                  <label for="inpProjectName">Tên dự án (Mặc định: 2toolne + Giờ/Ngày/Tháng/Năm)</label>
+                  <input type="text" id="inpProjectName" class="form-input" placeholder="Để trống sẽ tự đặt: 2toolne_02070926" />
+                </div>
+
+                <!-- Aspect Ratio & FPS -->
+                <div class="form-row-2">
+                  <div class="input-field">
+                    <label>Tỷ lệ khung hình:</label>
+                    <select id="selAspectRatio" class="form-select">
+                      <option value="9:16" selected>9:16 (TikTok / Reels / Shorts)</option>
+                      <option value="16:9">16:9 (YouTube / Ngang)</option>
+                      <option value="1:1">1:1 (Vuông Instagram)</option>
+                      <option value="4:5">4:5 (Facebook Feed)</option>
+                      <option value="21:9">21:9 (Cinema Màn Rộng)</option>
+                    </select>
+                  </div>
+
+                  <div class="input-field">
+                    <label>FPS:</label>
+                    <select id="selFps" class="form-select">
+                      <option value="60" selected>60 FPS (Siêu mượt)</option>
+                      <option value="30">30 FPS (Tiêu chuẩn)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- Media Import Dropzone -->
+                <div class="input-field">
+                  <div class="drop-zone" id="mediaDropZone">
+                    <div class="dz-inner">
+                      <span class="dz-icon">🖼️</span>
+                      <span class="dz-title">Kéo thả ảnh, thư mục hoặc file ZIP / RAR vào đây</span>
+                      <span class="dz-hint">Hỗ trợ PNG, JPG, WEBP, BMP, TIFF, ZIP, RAR, Folder</span>
+                      <div class="dz-buttons">
+                        <button type="button" class="btn-subtle" id="btnBrowseFiles">📁 Chọn tệp</button>
+                        <button type="button" class="btn-subtle" id="btnBrowseFolder">📂 Chọn thư mục</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Upscale Checkbox -->
+                <div class="checkbox-field">
+                  <label class="checkbox-container">
+                    <input type="checkbox" id="chkAutoUpscale" />
+                    <span class="checkmark"></span>
+                    <span class="chk-label">⚡ Tự động AI Upscale ảnh lên 2K/4K (Trừ Token ví)</span>
+                    <span class="badge-hint" id="lblUpscaleTokenHint" style="display:none; color: var(--color-accent, #3b82f6); font-size: 11px; margin-left: 6px; font-weight: 500;">(Ước tính: 1-2 token/ảnh)</span>
+                  </label>
+                </div>
+
+                <!-- Media List Header -->
+                <div class="media-list-header">
+                  <span class="lbl-small">Danh sách hình ảnh (<span id="mediaCount">0</span> ảnh)</span>
+                  <button type="button" class="btn-link-danger" id="btnClearMedia" style="display:none">✕ Xóa tất cả</button>
+                </div>
+
+                <!-- Missing Sequence Banner (001-xxx) -->
+                <div id="missingImagesBanner" class="missing-banner" style="display:none;">
+                  <div class="missing-banner-info">
+                    <span class="missing-icon">⚠️</span>
+                    <span id="missingImagesText">Phát hiện thiếu ảnh trong chuỗi</span>
+                  </div>
+                  <button type="button" class="btn-missing-action" id="btnOpenMissingModal">Xử lý bù ảnh ➔</button>
+                </div>
+
+                <!-- Media Thumbnail Grid -->
+                <div class="media-grid-scroll" id="mediaGrid">
+                  <div class="empty-media-hint">Chưa có ảnh nào được chọn.</div>
+                </div>
+              </div>
+            </section>
+
+            <!-- ── COLUMN 2: SUBTITLES & SCRIPT ALIGNMENT (From FFmpeg Prototype) ── -->
+            <section class="studio-card">
+              <div class="card-head">
+                <span class="card-icon">2</span>
+                <span class="card-title">Phụ Đề &amp; So Khớp Thoại</span>
+              </div>
+              <div class="card-body">
+                <!-- Workflow Tabs -->
+                <div class="tab-pill-group">
+                  <button type="button" class="pill-btn active" id="tabModeFA">🎯 1. So Khớp Kịch Bản (Forced Align)</button>
+                  <button type="button" class="pill-btn" id="tabModeSTT">🎙️ 2. Tự Động Tạo Sub (AutoSub)</button>
+                </div>
+
+                <!-- Ground Truth Script Box -->
+                <div class="input-field">
+                  <div class="row-between">
+                    <label for="inpScriptText">📜 Kịch bản lời thoại:</label>
+                    <button type="button" class="btn-link" id="btnLoadScriptFile">📁 Nạp file .txt</button>
+                  </div>
+                  <textarea id="inpScriptText" class="form-textarea" style="height: 105px;"
+                            placeholder="Nhập kịch bản tại đây...
+Quy tắc:
+• Xuống dòng 1 lần (\n) = Câu phụ đề mới
+• Cách 1 dòng trống (\n\n) = Chuyển sang ảnh/cảnh mới"></textarea>
+                  <span class="hint-text">💡 Đoạn văn cách dòng trống sẽ chia cảnh tương ứng với từng ảnh.</span>
+                </div>
+
+                <!-- Voice / Audio Source -->
+                <div class="input-field">
+                  <div class="row-between">
+                    <label>🎙️ Tệp Âm Thanh / Giọng Đọc:</label>
+                    <button type="button" class="btn-link-danger" id="btnRemoveAudio" style="display:none">✕ Bỏ chọn</button>
+                  </div>
+                  <div class="audio-picker-box" id="audioPickerBox">
+                    <button type="button" class="btn-subtle w-full" id="btnSelectAudioFile">🎵 Chọn file âm thanh (.mp3, .wav, .m4a)</button>
+                    <span class="audio-file-name" id="audioFileName">Chưa chọn âm thanh</span>
+                  </div>
+                </div>
+
+                <!-- Forced Alignment Run Button -->
+                <div class="action-wrap" style="margin-top: 6px;">
+                  <button type="button" class="btn-align-action" id="btnStartAlign">
+                    🎯 BẮT ĐẦU SO KHỚP KỊCH BẢN (Forced Alignment)
+                  </button>
+                </div>
+
+                <!-- Progress Bar -->
+                <div class="progress-box" id="alignProgressWrap" style="display:none">
+                  <div class="progress-header">
+                    <span id="alignProgressMsg">Đang phân tích âm học...</span>
+                    <span id="alignProgressPct">0%</span>
+                  </div>
+                  <div class="progress-bar-track">
+                    <div class="progress-bar-fill" id="alignProgressFill" style="width: 0%;"></div>
+                  </div>
+                </div>
+
+                <!-- SRT Output & Editor -->
+                <div class="input-field" style="margin-top: 8px;">
+                  <div class="row-between">
+                    <label for="outSrtContent">📝 Mốc Phụ Đề .SRT Hoàn Thiện:</label>
+                    <div class="action-links">
+                      <button type="button" class="btn-link" id="btnDownloadSrt">📥 Tải .SRT</button>
+                      <button type="button" class="btn-link-danger" id="btnClearSrt">✕ Xóa</button>
+                    </div>
+                  </div>
+                  <textarea id="outSrtContent" class="form-textarea" style="height: 100px; font-family: monospace; font-size: 11px;"
+                            placeholder="Mốc phụ đề sẽ xuất hiện ở đây sau khi so khớp hoặc có thể tự dán SRT vào..."></textarea>
+                  <div class="srt-status-line" id="srtStatusLine" style="display:none">
+                    ✅ Sẵn sàng <strong id="srtLineCount">0</strong> câu phụ đề
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- ── COLUMN 3: MOTION & EXPORT ── -->
+            <section class="studio-card">
+              <div class="card-head">
+                <span class="card-icon">3</span>
+                <span class="card-title">Chuyển Động &amp; Xuất Dự Án</span>
+              </div>
+              <div class="card-body">
+                <!-- Ken Burns Weights -->
+                <div class="input-field">
+                  <label>✨ Trọng số Chuyển động Ngẫu nhiên (Ken Burns %):</label>
+                  <div class="weight-sliders">
+                    <div class="weight-row">
+                      <span class="w-label">🔍 Zoom In:</span>
+                      <input type="range" class="w-range" id="slZoomIn" min="0" max="100" value="25" />
+                      <span class="w-val" id="valZoomIn">25%</span>
+                    </div>
+                    <div class="weight-row">
+                      <span class="w-label">🔎 Zoom Out:</span>
+                      <input type="range" class="w-range" id="slZoomOut" min="0" max="100" value="25" />
+                      <span class="w-val" id="valZoomOut">25%</span>
+                    </div>
+                    <div class="weight-row">
+                      <span class="w-label">↔️ Pan (Trái/Phải):</span>
+                      <input type="range" class="w-range" id="slPan" min="0" max="100" value="25" />
+                      <span class="w-val" id="valPan">25%</span>
+                    </div>
+                    <div class="weight-row">
+                      <span class="w-label">↕️ Tilt (Lên/Xuống):</span>
+                      <input type="range" class="w-range" id="slTilt" min="0" max="100" value="25" />
+                      <span class="w-val" id="valTilt">25%</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Subtitle Style Options -->
+                <div class="sub-style-box">
+                  <label class="box-title">🎨 Định dạng phụ đề CapCut:</label>
+                  <div class="form-row-2">
+                    <div class="input-field">
+                      <label>Cỡ chữ:</label>
+                      <input type="number" id="inpSubFontSize" class="form-input" min="4" max="30" value="8" />
+                    </div>
+                    <div class="input-field">
+                      <label>Vị trí Y:</label>
+                      <input type="number" id="inpSubPosY" class="form-input" min="-1" max="1" step="0.1" value="-0.6" />
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Fixed Clip Duration fallback -->
+                <div class="input-field" id="wrapFixedDuration">
+                  <label for="inpDefaultDuration">Thời lượng mặc định mỗi ảnh (nếu không có kịch bản):</label>
+                  <div class="input-unit-wrap">
+                    <input type="number" id="inpDefaultDuration" class="form-input" min="1" max="60" step="0.5" value="5.0" />
+                    <span class="unit-text">giây</span>
+                  </div>
+                </div>
+
+                <!-- Big Primary Actions -->
+                <div class="export-actions-wrap">
+                  <button type="button" class="btn-hero-primary" id="btnGenerateProject">
+                    🚀 TẠO DỰ ÁN CAPCUT NGAY
+                  </button>
+                  <button type="button" class="btn-hero-secondary" id="btnAddToQueue">
+                    ➕ Thêm Vào Hàng Đợi (Queue)
+                  </button>
+                </div>
+              </div>
+            </section>
+
+          </div>
+        </div>
+
+        <!-- ════════ TAB 2: QUEUE VIEW ════════ -->
+        <div class="view-pane" id="view-queue">
+          <div class="pane-header-actions">
+            <div>
+              <div style="display:flex;align-items:center;gap:10px;">
+                <h3 class="pane-title">Hàng Đợi Xử Lý (Job Queue)</h3>
+                <span class="status-badge" id="queueStatusBadge" style="font-size:11.5px;padding:3px 8px;">⚪ Đang Chờ</span>
+              </div>
+              <span class="pane-sub">Tự động xuất video tuần tự qua Python RenderQueueManager</span>
+            </div>
+            <div class="pane-buttons">
+              <button type="button" class="btn-action-primary" id="btnStartQueue">▶️ Chạy Hàng Đợi</button>
+              <button type="button" class="btn-subtle" id="btnPauseQueue">⏸️ Tạm Dừng</button>
+              <button type="button" class="btn-subtle" id="btnStopAfterCurrent">⏹️ Dừng Sau Tác Vụ Này</button>
+              <button type="button" class="btn-subtle" id="btnClearQueue">🧹 Xóa Đã Xong</button>
+            </div>
+          </div>
+
+          <div class="queue-table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Tên Dự Án</th>
+                  <th>Trạng Thái</th>
+                  <th>Giai Đoạn / Tiến Trình</th>
+                  <th>Nơi Xuất</th>
+                  <th>Thời Gian</th>
+                  <th>Thao Tác</th>
+                </tr>
+              </thead>
+              <tbody id="queueTableBody">
+                <tr class="empty-row">
+                  <td colspan="6">Hàng đợi xuất video đang trống. Hãy bấm "Render Ngay" hoặc "Thêm Hàng Đợi" từ tab Dự Án!</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ════════ TAB 3: PROJECTS VIEW ════════ -->
+        <div class="view-pane" id="view-projects">
+          <div class="pane-header-actions">
+            <div>
+              <h3 class="pane-title">Dự Án CapCut Đã Cài Đặt</h3>
+              <span class="pane-sub">Các dự án đã được ghi nhận vào thư viện CapCut Desktop</span>
+            </div>
+            <div style="display:flex; gap:10px; align-items:center;">
+              <input type="text" id="inpProjectSearch" class="form-input" placeholder="🔍 Tìm kiếm dự án..." style="width:240px; font-size:12px; padding:6px 10px;" />
+              <button type="button" class="btn-subtle" id="btnRefreshProjects">🔄 Làm Mới</button>
+            </div>
+          </div>
+
+          <div class="projects-grid" id="projectsGrid">
+            <div class="empty-projects-hint">Chưa có dự án nào được tạo.</div>
+          </div>
+        </div>
+
+        <!-- ════════ TAB 4: UPSCALE VIEW ════════ -->
+        <div class="view-pane" id="view-upscale">
+          <div class="upscale-hero-box">
+            <h3>🔍 Phân Hệ 2TOOLNE AI Upscale 4K</h3>
+            <p>Xử lý nâng cấp độ phân giải ảnh 2K / 4K trực tiếp bằng GPU Vulkan NCNN nội bộ.</p>
+            <div class="token-cost-badge">
+              <span>💎 <strong>2K</strong>: 1 Token / ảnh</span>
+              <span>💎 <strong>4K</strong>: 2 Token / ảnh</span>
+            </div>
+          </div>
+
+          <div class="studio-card" style="margin-top: 14px;">
+            <div class="card-head">
+              <span class="card-icon">⚡</span>
+              <span class="card-title">Khu Vực Phóng To Ảnh</span>
+            </div>
+            <div class="card-body">
+              <div class="drop-zone" id="upscaleDropZone">
+                <div class="dz-inner">
+                  <span class="dz-icon">🚀</span>
+                  <span class="dz-title">Chọn ảnh cần Upscale 2K / 4K</span>
+                  <div class="dz-buttons">
+                    <button type="button" class="btn-subtle" id="btnBrowseUpscale">📁 Chọn ảnh</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Selected files summary -->
+              <div id="upscaleFilesContainer" style="display: none; margin-top: 12px; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <span style="font-weight: 600; font-size: 13px;">Danh sách ảnh đã chọn (<span id="upscaleCount">0</span> ảnh):</span>
+                  <button type="button" class="btn-link-danger" id="btnClearUpscale">✕ Xóa tất cả</button>
+                </div>
+                <div id="upscaleFileList" style="max-height: 140px; overflow-y: auto; font-size: 12px; color: var(--color-text-muted);"></div>
+              </div>
+
+              <div class="form-row-2" style="margin-top: 12px;">
+                <div class="input-field">
+                  <label>Mức phóng to:</label>
+                  <select id="selUpscaleModel" class="form-select">
+                    <option value="2x_2k" selected>2K (Tối đa 2560px - 1 Token)</option>
+                    <option value="4x_4k">4K (Tối đa 3840px - 2 Token)</option>
+                  </select>
+                </div>
+                <div class="input-field" style="display:flex;align-items:flex-end;">
+                  <button type="button" class="btn-hero-primary w-full" id="btnRunUpscale">
+                    ✨ BẮT ĐẦU UPSCALE
+                  </button>
+                </div>
+              </div>
+
+              <!-- Real Upscale Progress Bar -->
+              <div id="upscaleProgressWrap" style="display: none; margin-top: 14px; background: rgba(0,0,0,0.25); border-radius: 8px; padding: 12px;">
+                <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px;">
+                  <span id="upscaleProgressMsg">Đang chuẩn bị phân hệ Upscale...</span>
+                  <span id="upscaleProgressPct" style="font-weight: bold; color: var(--color-accent, #3b82f6);">0%</span>
+                </div>
+                <div style="background: rgba(255,255,255,0.1); border-radius: 4px; height: 8px; overflow: hidden;">
+                  <div id="upscaleProgressFill" style="background: var(--color-accent, #3b82f6); height: 100%; width: 0%; transition: width 0.2s ease;"></div>
+                </div>
+              </div>
+
+              <!-- Upscale Result Card -->
+              <div id="upscaleResultBox" style="display: none; margin-top: 14px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 12px; align-items: center; justify-content: space-between;">
+                <div>
+                  <div style="color: #10b981; font-weight: 600; font-size: 13px;">✅ Hoàn tất phóng to ảnh!</div>
+                  <div id="upscaleResultPath" style="font-size: 11px; color: var(--color-text-muted); margin-top: 2px;"></div>
+                </div>
+                <button type="button" class="btn-subtle" id="btnOpenUpscaleDir">📂 Mở Thư Mục</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ════════ TAB 5: ACCOUNT & LICENSE ════════ -->
+        <div class="view-pane" id="view-account">
+          <div class="studio-card" style="max-width: 680px; margin: 0 auto;">
+            <div class="card-head">
+              <span class="card-icon">👤</span>
+              <span class="card-title">Quản Lý Bản Quyền &amp; Tài Khoản</span>
+            </div>
+            <div class="card-body">
+              <div class="info-row">
+                <span class="info-lbl">Tài Khoản Portal:</span>
+                <span class="info-val font-semibold" id="accUserEmail">Chưa đăng nhập</span>
+              </div>
+              <div class="info-row">
+                <span class="info-lbl">Khóa Bản Quyền:</span>
+                <span class="info-val" id="accMaskedKey">Chưa kích hoạt</span>
+              </div>
+              <div class="info-row">
+                <span class="info-lbl">Trạng Thái:</span>
+                <span class="info-val status-badge" id="accStatus">Unknown</span>
+              </div>
+              <div class="info-row">
+                <span class="info-lbl">Mã Thiết Bị (HWID):</span>
+                <span class="info-val font-mono" id="accDeviceId">--</span>
+              </div>
+              <div class="info-row">
+                <span class="info-lbl">Số Dư Ví Token:</span>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span class="info-val"><strong id="accTokenCount">0</strong> Token</span>
+                  <button type="button" class="btn-subtle" id="btnRefreshWallet" style="padding:2px 8px; font-size:11px;" title="Cập nhật số dư ví">🔄</button>
+                </div>
+              </div>
+
+              <div class="account-actions-box" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:16px;">
+                <button type="button" class="btn-action-primary" id="btnOpenLoginModal">👤 Đăng Nhập Tài Khoản</button>
+                <button type="button" class="btn-subtle" id="btnLogoutAccount" style="display:none;">🚪 Đăng Xuất</button>
+                <button type="button" class="btn-action-primary" id="btnOpenActivateModal">🔑 Kích Hoạt Khóa Mới</button>
+                <button type="button" class="btn-subtle btn-danger" id="btnDeactivateLicense">✕ Hủy Kích Hoạt Thiết Bị</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ════════ TAB 6: SETTINGS ════════ -->
+        <div class="view-pane" id="view-settings">
+          <div class="studio-card" style="max-width: 680px; margin: 0 auto;">
+            <div class="card-head">
+              <span class="card-icon">⚙️</span>
+              <span class="card-title">Cấu Hình Ứng Dụng</span>
+            </div>
+            <div class="card-body">
+              <div class="info-row">
+                <span class="info-lbl">Phiên Bản CapCut:</span>
+                <span class="info-val" id="cfgCapcutVer">Đang quét...</span>
+              </div>
+              <div class="info-row">
+                <span class="info-lbl">Thư Mục Dự Án CapCut:</span>
+                <span class="info-val font-mono" id="cfgCapcutPath">--</span>
+              </div>
+              <div class="checkbox-field" style="margin-top: 14px;">
+                <label class="checkbox-container">
+                  <input type="checkbox" id="chkAutoOpenCapcut" />
+                  <span class="checkmark"></span>
+                  <span class="chk-label">Tự động kích hoạt CapCut mở dự án ngay khi tạo xong (Mặc định: Tắt để chỉ lưu vào thư viện)</span>
+                </label>
+              </div>
+
+              <!-- Default Render Output Folder (GAP-06) -->
+              <div style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 16px;">
+                <h4 style="font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 10px;">📁 Thư Mục Xuất File MP4 Mặc Định</h4>
+                <div style="display:flex; gap:8px; align-items:center;">
+                  <input type="text" id="inpRenderOutputDir" class="form-input font-mono" placeholder="Mặc định: Thư mục dự án hoặc Desktop" readonly style="flex:1; font-size:12px;" />
+                  <button type="button" class="btn-subtle" id="btnBrowseRenderOutputDir" title="Chọn thư mục xuất">📂 Chọn</button>
+                  <button type="button" class="btn-subtle" id="btnOpenRenderOutputDir" title="Mở thư mục hiện tại">↗️ Mở</button>
+                  <button type="button" class="btn-subtle" id="btnResetRenderOutputDir" title="Đặt lại mặc định">🔄 Đặt lại</button>
+                </div>
+                <span class="hint-text">💡 Các tác vụ xuất video (Render Queue &amp; Xuất Trực Tiếp) sẽ tự động lưu file MP4 hoàn chỉnh vào thư mục này.</span>
+              </div>
+
+              <!-- Language / Localization Settings (GAP-13) -->
+              <div style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 16px;">
+                <h4 style="font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 10px;" data-i18n="settings.language">🌐 Ngôn Ngữ Giao Diện (Language)</h4>
+                <div style="display:flex; gap:10px; align-items:center;">
+                  <select id="selAppLanguage" class="form-select" style="max-width: 240px;">
+                    <option value="vi" selected>🇻🇳 Tiếng Việt (Mặc định)</option>
+                    <option value="en">🇺🇸 English</option>
+                  </select>
+                  <span class="hint-text">💡 Chuyển đổi ngôn ngữ hiển thị trên toàn bộ giao diện làm việc.</span>
+                </div>
+              </div>
+
+              <!-- Faster Whisper & ASR Engine Settings -->
+              <div style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 16px;">
+                <h4 style="font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 10px;">⚡ Động Cơ Nhận Diện Thoại &amp; Phụ Đề (ASR Engine)</h4>
+                <div class="input-field">
+                  <label for="selAsrEngine">Chế Độ Xử Lý:</label>
+                  <select id="selAsrEngine" class="form-select">
+                    <option value="tiny" selected>⚡ Offline Model Tiny (Siêu Tốc Độ, Khuyên Dùng Cho Kịch Bản Có Sẵn)</option>
+                    <option value="base">🎯 Offline Model Base (Cân Bằng Tiêu Chuẩn)</option>
+                    <option value="groq">🚀 Online Cloud Groq API (Xử Lý 1-2 Giây Siêu Tốc)</option>
+                  </select>
+                  <span class="hint-text">💡 Do đã có sẵn kịch bản text gốc, Model Tiny xử lý nhanh gấp 3-4 lần mà vẫn căn mốc thời gian chính xác 100%.</span>
+                </div>
+              </div>
+
+              <!-- Diagnostic Bundle Export (GAP-26) -->
+              <div style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 16px;">
+                <h4 style="font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 6px;">🩺 Chẩn Đoán &amp; Hỗ Trợ Kỹ Thuật</h4>
+                <p style="font-size:12px; color:#94a3b8; margin-bottom:10px;">Xuất gói thông tin hệ thống, cấu hình CapCut, môi trường thực thi và nhật ký hàng đợi ra màn hình Desktop để hỗ trợ xử lý sự cố.</p>
+                <button type="button" class="btn-subtle" id="btnExportDiagnostics">📦 Xuất Gói Chẩn Đoán (Diagnostic Bundle)</button>
+              </div>
+
+              <!-- Auto Update Check (GAP-05) -->
+              <div style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 16px;">
+                <h4 style="font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 10px;">🔄 Cập Nhật Phiên Bản Ứng Dụng</h4>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <div>
+                    <span style="font-size:12.5px; color:#e2e8f0;">Phiên bản hiện tại: <strong id="txtAppCurrentVersion">v2.0.0</strong></span>
+                    <div style="font-size:11.5px; color:#94a3b8; margin-top:2px;" id="txtUpdateStatus">Đang sử dụng phiên bản ổn định mới nhất.</div>
+                  </div>
+                  <button type="button" class="btn-subtle" id="btnCheckUpdate">🔄 Kiểm Tra Cập Nhật</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════
+       MODALS & POPUPS (TẤT CẢ ĐỀU CÓ NÚT ✕ ĐÓNG VÀ ESCAPE)
+       ════════════════════════════════════════════════════════════════════ -->
+
+  <!-- Modal 1: Kích Hoạt Bản Quyền -->
+  <div class="modal-backdrop" id="modalLicense" style="display:none">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">🔑 Kích Hoạt Bản Quyền 2TOOLNE</h3>
+        <button type="button" class="btn-close-modal" id="btnCloseModalLicense" title="Đóng (Esc)">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">Nhập mã bản quyền được cung cấp từ portal <strong>https://www.2tamne.site</strong></p>
+        <div class="input-field">
+          <label for="inpLicenseKeyModal">License Key:</label>
+          <input type="text" id="inpLicenseKeyModal" class="form-input font-mono" placeholder="2TL-CAP-XXXX-XXXX-XXXX" />
+        </div>
+        <div class="modal-error-msg" id="licenseModalError" style="display:none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-subtle" id="btnCancelModalLicense">Hủy</button>
+        <button type="button" class="btn-action-primary" id="btnSubmitModalLicense">Xác Nhận Kích Hoạt</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 2: Tiến Trình Tạo Dự Án (Progress Modal) -->
+  <div class="modal-backdrop" id="modalProgress" style="display:none">
+    <div class="modal-box modal-box-sm">
+      <div class="modal-header">
+        <h3 class="modal-title" id="progressModalTitle">Đang Tạo Dự Án CapCut...</h3>
+        <button type="button" class="btn-close-modal" id="btnCloseModalProgress" title="Đóng (Esc)">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="progress-box">
+          <div class="progress-header">
+            <span id="progressModalStage">Đang chuẩn bị...</span>
+            <span id="progressModalPct">0%</span>
+          </div>
+          <div class="progress-bar-track">
+            <div class="progress-bar-fill" id="progressModalFill" style="width: 0%;"></div>
+          </div>
+        </div>
+        <p class="modal-desc" id="progressModalDetail" style="margin-top: 10px; font-size: 11.5px; color: var(--text-dim);">
+          Vui lòng đợi trong giây lát...
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-subtle" id="btnCancelProgressModal">Ẩn xuống nền</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 3: Thông Báo Chung / Alert Modal -->
+  <div class="modal-backdrop" id="modalAlert" style="display:none">
+    <div class="modal-box modal-box-sm">
+      <div class="modal-header">
+        <h3 class="modal-title" id="alertModalTitle">Thông Báo</h3>
+        <button type="button" class="btn-close-modal" id="btnCloseModalAlert" title="Đóng (Esc)">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc" id="alertModalMessage">Nội dung thông báo</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-action-primary" id="btnOkModalAlert">Đồng Ý</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 4: Xử Lý Thiếu Ảnh Trong Chuỗi (001-xxx) -->
+  <div class="modal-backdrop" id="modalMissingImages" style="display:none">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">⚠️ Phát Hiện Thiếu Ảnh Trong Chuỗi (001-xxx)</h3>
+        <button type="button" class="btn-close-modal" id="btnCloseModalMissingImages" title="Đóng (Esc)">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">
+          Hệ thống phát hiện các số thứ tự sau đây bị khuyết trong danh sách ảnh:
+        </p>
+        <div id="missingIndicesDetails" style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:6px;padding:8px 12px;margin:10px 0;font-family:monospace;color:#f87171;font-size:12px;max-height:80px;overflow-y:auto;">
+          --
+        </div>
+        <p style="font-size:12px;font-weight:600;color:#fff;margin:12px 0 6px;">Chọn phương án xử lý bù đắp thời lượng cảnh:</p>
+        <div style="display:flex;flex-direction:column;gap:8px;font-size:12px;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="radio" name="radMissingOption" value="stretch_prev" checked />
+            <span><strong>Kéo giãn ảnh liền trước (Khuyên dùng):</strong> Tự động lấy ảnh ngay trước đó bù vào vị trí khuyết với chuyển động camera mới.</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="radio" name="radMissingOption" value="stretch_next" />
+            <span><strong>Kéo giãn ảnh liền sau:</strong> Tự động lùi ảnh ngay sau đó về bù thời lượng.</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="radio" name="radMissingOption" value="manual" />
+            <span><strong>Bổ sung ảnh thủ công:</strong> Mở hộp thoại để tôi tự chọn thêm file còn thiếu.</span>
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-subtle" id="btnCancelModalMissing">Hủy</button>
+        <button type="button" class="btn-action-primary" id="btnApplyMissingOption">Áp Dụng Phương Án</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 5: Kết Quả Render Video (Hoàn Thành / Lỗi) -->
+  <div class="modal-backdrop" id="modalRenderResult" style="display:none">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title" id="renderResultTitle">🎬 Kết Quả Xuất Video CapCut</h3>
+        <button type="button" class="btn-close-modal" id="btnCloseModalRenderResult" title="Đóng (Esc)">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="renderResultSuccessContent" style="display:none;">
+          <div style="text-align:center;margin-bottom:16px;">
+            <div style="font-size:42px;margin-bottom:8px;">🎉</div>
+            <h4 style="font-size:16px;color:#34d399;font-weight:700;" id="renderResultProjectName">Tên Dự Án</h4>
+            <p style="font-size:13px;color:#94a3b8;margin-top:4px;">Video MP4 đã được xuất và xác thực toàn vẹn bằng OutputVerifier!</p>
+          </div>
+          <div class="info-row">
+            <span class="info-lbl">Tệp Video:</span>
+            <span class="info-val font-mono" id="renderResultOutputPath" style="font-size:11.5px;word-break:break-all;">--</span>
+          </div>
+          <div class="info-row" id="wrapRenderDuration" style="display:none;">
+            <span class="info-lbl">Thời lượng:</span>
+            <span class="info-val" id="renderResultDuration">--</span>
+          </div>
+        </div>
+
+        <div id="renderResultErrorContent" style="display:none;">
+          <div style="text-align:center;margin-bottom:16px;">
+            <div style="font-size:42px;margin-bottom:8px;">⚠️</div>
+            <h4 style="font-size:16px;color:#f87171;font-weight:700;" id="renderResultErrorProject">Không thể xuất video</h4>
+            <p style="font-size:13px;color:#cbd5e1;margin-top:6px;" id="renderResultErrorMessage">Mô tả lỗi</p>
+          </div>
+          <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:6px;padding:10px;font-size:11.5px;color:#fca5a5;max-height:100px;overflow-y:auto;" id="renderResultErrorDetails">
+            --
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer" style="display:flex;justify-content:space-between;width:100%;">
+        <div id="renderResultSuccessActions" style="display:flex;gap:8px;">
+          <button type="button" class="btn-action-primary" id="btnOpenRenderedFile">🎬 Mở File MP4</button>
+          <button type="button" class="btn-subtle" id="btnOpenRenderedFolder">📁 Mở Thư Mục</button>
+        </div>
+        <div id="renderResultErrorActions" style="display:none;gap:8px;">
+          <button type="button" class="btn-action-primary" id="btnRetryRenderJobModal">🔄 Thử Lại</button>
+        </div>
+        <button type="button" class="btn-subtle" id="btnCloseRenderResultModal">Đóng</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 6: Xác Nhận Xóa Dự Án -->
+  <div class="modal-backdrop" id="modalDeleteProject" style="display:none">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">🗑️ Xác Nhận Xóa Dự Án</h3>
+        <button type="button" class="btn-close-modal" id="btnCloseModalDeleteProject" title="Đóng (Esc)">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:13.5px;color:#e2e8f0;margin-bottom:12px;">Bạn có chắc chắn muốn xóa dự án <strong id="deleteProjectTargetName" style="color:#f87171;">--</strong> khỏi danh sách quản lý?</p>
+        <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.18);border-radius:6px;padding:12px;margin-bottom:14px;">
+          <label class="checkbox-container" style="font-size:12.5px;color:#cbd5e1;cursor:pointer;">
+            <input type="checkbox" id="chkDeleteDraftFolder" checked />
+            <span class="checkmark"></span>
+            <span class="chk-label">Đồng thời xóa thư mục draft CapCut đã tạo trên ổ đĩa</span>
+          </label>
+          <div style="font-size:11px;color:#94a3b8;margin-top:6px;margin-left:24px;">
+            ⚠️ Lưu ý an toàn: Tệp video và âm thanh gốc của bạn sẽ <strong>KHÔNG</strong> bị ảnh hưởng.
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-subtle" id="btnCancelDeleteProject">Hủy</button>
+        <button type="button" class="btn-action-primary" style="background:#ef4444;border-color:#dc2626;" id="btnConfirmDeleteProject">🗑️ Xác Nhận Xóa</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 7: Đăng Nhập Tài Khoản Portal -->
+  <div class="modal-backdrop" id="modalLogin" style="display:none">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">👤 Đăng Nhập Tài Khoản 2TOOLNE</h3>
+        <button type="button" class="btn-close-modal" id="btnCloseModalLogin" title="Đóng (Esc)">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">Đăng nhập bằng tài khoản đăng ký trên portal <strong>https://www.2tamne.site</strong> để đồng bộ bản quyền và ví token.</p>
+        <div class="input-field" style="margin-bottom:12px;">
+          <label for="inpLoginEmail">Email / Tên đăng nhập:</label>
+          <input type="text" id="inpLoginEmail" class="form-input" placeholder="user@example.com" />
+        </div>
+        <div class="input-field">
+          <label for="inpLoginPassword">Mật khẩu:</label>
+          <input type="password" id="inpLoginPassword" class="form-input" placeholder="••••••••" />
+        </div>
+        <div class="modal-error-msg" id="loginModalError" style="display:none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-subtle" id="btnCancelModalLogin">Hủy</button>
+        <button type="button" class="btn-action-primary" id="btnSubmitModalLogin">Đăng Nhập</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="i18n.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

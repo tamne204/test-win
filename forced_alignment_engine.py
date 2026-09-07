@@ -14,6 +14,7 @@ import re
 import time
 import threading
 import subprocess
+import shutil
 import json
 import sys
 import tempfile
@@ -36,10 +37,12 @@ def get_faster_whisper_aligner(model_size="tiny"):
 def get_ffmpeg_bin() -> str:
     """Return best available ffmpeg binary, supporting Windows, macOS, and Linux."""
     local_dir = os.path.dirname(os.path.abspath(__file__))
+    local_app_data = os.environ.get('LOCALAPPDATA', '')
     candidates = [
         os.path.join(local_dir, 'bin', 'ffmpeg.exe'),
         os.path.join(local_dir, 'bin', 'ffmpeg'),
         os.path.join(local_dir, 'ffmpeg.exe'),
+        os.path.join(local_app_data, 'Microsoft', 'WinGet', 'Links', 'ffmpeg.exe') if local_app_data else '',
         'C:\\ffmpeg\\bin\\ffmpeg.exe',
         'C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe',
         '/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg',
@@ -47,33 +50,37 @@ def get_ffmpeg_bin() -> str:
         '/usr/local/opt/ffmpeg-full/bin/ffmpeg',
         '/opt/homebrew/bin/ffmpeg',
         '/usr/local/bin/ffmpeg',
-        'ffmpeg.exe',
-        'ffmpeg'
     ]
     for c in candidates:
-        if os.path.isabs(c) and os.path.isfile(c):
+        if c and os.path.isabs(c) and os.path.isfile(c):
             return c
+    resolved = shutil.which('ffmpeg') or shutil.which('ffmpeg.exe')
+    if resolved and os.path.isfile(resolved):
+        return resolved
     return 'ffmpeg'
 
 
 def get_ffprobe_bin() -> str:
     """Return best available ffprobe binary, supporting Windows, macOS, and Linux."""
     local_dir = os.path.dirname(os.path.abspath(__file__))
+    local_app_data = os.environ.get('LOCALAPPDATA', '')
     candidates = [
         os.path.join(local_dir, 'bin', 'ffprobe.exe'),
         os.path.join(local_dir, 'bin', 'ffprobe'),
         os.path.join(local_dir, 'ffprobe.exe'),
+        os.path.join(local_app_data, 'Microsoft', 'WinGet', 'Links', 'ffprobe.exe') if local_app_data else '',
         'C:\\ffmpeg\\bin\\ffprobe.exe',
         'C:\\Program Files\\ffmpeg\\bin\\ffprobe.exe',
         '/opt/homebrew/opt/ffmpeg-full/bin/ffprobe',
         '/opt/homebrew/bin/ffprobe',
         '/usr/local/bin/ffprobe',
-        'ffprobe.exe',
-        'ffprobe'
     ]
     for c in candidates:
-        if os.path.isabs(c) and os.path.isfile(c):
+        if c and os.path.isabs(c) and os.path.isfile(c):
             return c
+    resolved = shutil.which('ffprobe') or shutil.which('ffprobe.exe')
+    if resolved and os.path.isfile(resolved):
+        return resolved
     return 'ffprobe'
 
 

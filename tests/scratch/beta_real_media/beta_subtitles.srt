@@ -1,0 +1,11 @@
+1
+00:00:00,000 --> 00:00:04,000
+2TOOLNE AutoEdit V2 - Khoi dong nen tang Beta cho CapCut Desktop.
+
+2
+00:00:04,000 --> 00:00:08,000
+Dong bo timing SRT tu dong, chuyen dong native keyframe muot ma.
+
+3
+00:00:08,000 --> 00:00:12,000
+Khong can AI - Hoan toan xac dinh, an toan tuyet doi cho du an.

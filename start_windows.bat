@@ -1,5 +1,5 @@
 @echo off
-title Slideshow Builder AI - 2tamne.site
+title Slideshow Builder AI v2.3.9 - 2tamne.site
 cd /d "%~dp0"
 
 set "PYTHONUTF8=1"
@@ -8,7 +8,7 @@ set "HF_HUB_DISABLE_SYMLINKS_WARNING=1"
 chcp 65001 >nul 2>nul
 
 echo ========================================================
-echo        SLIDESHOW BUILDER AI - 2TAMNE.SITE (x64)
+echo        SLIDESHOW BUILDER AI v2.3.9 - 2TAMNE.SITE (x64)
 echo ========================================================
 echo.
 
@@ -26,6 +26,10 @@ if %errorlevel% equ 0 (
     goto :run_server
 )
 
+if exist "%LOCALAPPDATA%\Programs\Python\Python313\python.exe" (
+    set "PYCMD=%LOCALAPPDATA%\Programs\Python\Python313\python.exe"
+    goto :run_server
+)
 if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" (
     set "PYCMD=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
     goto :run_server
@@ -38,6 +42,10 @@ if exist "%LOCALAPPDATA%\Programs\Python\Python310\python.exe" (
     set "PYCMD=%LOCALAPPDATA%\Programs\Python\Python310\python.exe"
     goto :run_server
 )
+if exist "C:\Program Files\Python313\python.exe" (
+    set "PYCMD=C:\Program Files\Python313\python.exe"
+    goto :run_server
+)
 if exist "C:\Program Files\Python312\python.exe" (
     set "PYCMD=C:\Program Files\Python312\python.exe"
     goto :run_server
@@ -48,6 +56,10 @@ if exist "C:\Program Files\Python311\python.exe" (
 )
 if exist "C:\Program Files\Python310\python.exe" (
     set "PYCMD=C:\Program Files\Python310\python.exe"
+    goto :run_server
+)
+if exist "C:\Python313\python.exe" (
+    set "PYCMD=C:\Python313\python.exe"
     goto :run_server
 )
 if exist "C:\Python312\python.exe" (
@@ -79,7 +91,7 @@ if %errorlevel% equ 0 (
     echo [WARN] Architecture: 32-bit (Limited to 2GB RAM. Recommend installing Python 64-bit)
 )
 echo [*] Checking dependencies...
-"%PYCMD%" -c "import flask, faster_whisper, requests, PIL, psutil" >nul 2>nul
+"%PYCMD%" -c "import flask, faster_whisper, requests, PIL, psutil, cv2, numpy" >nul 2>nul
 if %errorlevel% neq 0 (
     echo [*] Installing missing requirements (one-time setup)...
     "%PYCMD%" -m pip install -r requirements.txt

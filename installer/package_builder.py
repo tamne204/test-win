@@ -33,6 +33,7 @@ CORE_FILES = [
     "renderer_e_engine.py",
     "renderer_g.py",
     "subtitles_engine.py",
+    "subpixel_affine_engine.py",
     "translation_utils.py",
     "tts_utils.py",
     "version.py",
@@ -68,7 +69,21 @@ EXCLUDE_PATTERNS = {
     "outputs",
     "tts_outputs",
     "projects",
-    "diagnostics"
+    "diagnostics",
+    "website",
+    "node_modules",
+    ".venv",
+}
+
+WIN_ONLY_FILES = {
+    "start_windows.bat",
+    "start_windows.ps1",
+    "SlideshowStudio.vbs",
+    "run.bat",
+}
+
+MAC_ONLY_FILES = {
+    "start_mac.command",
 }
 
 
@@ -91,9 +106,10 @@ def build_package():
 
     print(f"📦 [Package Builder] Packaging VibeCode Studio v{APP_VERSION}...")
 
-    # Build Windows ZIP
+    # 1. Build Windows ZIP (Excludes Mac-only scripts)
+    win_core_files = [f for f in CORE_FILES if f not in MAC_ONLY_FILES]
     with zipfile.ZipFile(win_zip_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
-        for fname in CORE_FILES:
+        for fname in win_core_files:
             fpath = ROOT_DIR / fname
             if fpath.is_file():
                 zf.write(fpath, arcname=fname)
@@ -109,29 +125,63 @@ def build_package():
                         rel_p = full_p.relative_to(ROOT_DIR)
                         zf.write(full_p, arcname=str(rel_p))
 
+    # 2. Build macOS ZIP (Excludes Windows batch/vbs scripts)
+    mac_core_files = [f for f in CORE_FILES if f not in WIN_ONLY_FILES]
+    with zipfile.ZipFile(mac_zip_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
+        for fname in mac_core_files:
+            fpath = ROOT_DIR / fname
+            if fpath.is_file():
+                zf.write(fpath, arcname=fname)
+        for dname in CORE_DIRS:
+            dpath = ROOT_DIR / dname
+            if dpath.is_dir():
+                for root, dirs, files in os.walk(dpath):
+                    dirs[:] = [d for d in dirs if d not in EXCLUDE_PATTERNS]
+                    for file in files:
+                        if file in EXCLUDE_PATTERNS or file.endswith((".pyc", ".mp4", ".wav", ".png.tmp", ".bat", ".vbs", ".ps1")):
+                            continue
+                        full_p = Path(root) / file
+                        rel_p = full_p.relative_to(ROOT_DIR)
+                        zf.write(full_p, arcname=str(rel_p))
+
+    # Update latest aliases
     shutil.copy2(win_zip_path, win_latest_path)
-    shutil.copy2(win_zip_path, mac_zip_path)
-    shutil.copy2(win_zip_path, mac_latest_path)
+    shutil.copy2(mac_zip_path, mac_latest_path)
 
     win_sha256 = compute_sha256(win_zip_path)
     win_size_mb = win_zip_path.stat().st_size / (1024 * 1024)
+
+    mac_sha256 = compute_sha256(mac_zip_path)
+    mac_size_mb = mac_zip_path.stat().st_size / (1024 * 1024)
 
     # Write checksums file
     checksum_file = DIST_DIR / "checksums.sha256"
     with open(checksum_file, "w", encoding="utf-8") as f:
         f.write(f"{win_sha256}  {win_zip_name}\n")
         f.write(f"{win_sha256}  SlideshowBuilder_Windows_latest.zip\n")
+        f.write(f"{mac_sha256}  {mac_zip_name}\n")
+        f.write(f"{mac_sha256}  SlideshowBuilder_macOS_latest.zip\n")
 
     # Write release metadata
     metadata = {
         "version": APP_VERSION,
         "release_tag": f"v{APP_VERSION}",
-        "build_target": "Windows 10/11 x64 (Compatible with macOS Darwin)",
-        "package_filename": win_zip_name,
+        "build_target": "Windows 10/11 x64 & macOS Darwin",
         "sha256": win_sha256,
-        "size_mb": round(win_size_mb, 2),
-        "code_signing_status": "UNSIGNED (PLANNED FUTURE ACTION)",
-        "nvidia_cuda_status": "IMPLEMENTED / NOT HARDWARE VERIFIED",
+        "packages": {
+            "windows": {
+                "package_filename": win_zip_name,
+                "sha256": win_sha256,
+                "size_mb": round(win_size_mb, 2),
+                "size_bytes": win_zip_path.stat().st_size
+            },
+            "mac": {
+                "package_filename": mac_zip_name,
+                "sha256": mac_sha256,
+                "size_mb": round(mac_size_mb, 2),
+                "size_bytes": mac_zip_path.stat().st_size
+            }
+        },
         "renderer_default": "Renderer G (Glide GPU Subpixel)",
         "renderer_fallback": "Renderer D (Golden Baseline 4X)",
         "mandatory_license_gate": "ENABLED",
@@ -143,8 +193,10 @@ def build_package():
     with open(metadata_file, "w", encoding="utf-8") as f:
         json.dump(metadata, f, indent=2, ensure_ascii=False)
 
-    print(f"✅ Package built: {win_zip_name} ({win_size_mb:.2f} MB)")
-    print(f"🔒 SHA-256: {win_sha256}")
+    print(f"✅ Windows Package built: {win_zip_name} ({win_size_mb:.2f} MB)")
+    print(f"🔒 Win SHA-256: {win_sha256}")
+    print(f"✅ macOS Package built: {mac_zip_name} ({mac_size_mb:.2f} MB)")
+    print(f"🔒 Mac SHA-256: {mac_sha256}")
     print(f"📄 Metadata generated at: {metadata_file}")
 
 

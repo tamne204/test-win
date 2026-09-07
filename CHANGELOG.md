@@ -4,6 +4,15 @@ All notable changes to **Slideshow Builder AI** will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.9] - 2026-09-06
+
+### Added
+- **Subpixel Affine Motion Engine**: True floating-point affine matrix rendering via OpenCV (`cv2.warpAffine`) streaming rawvideo to FFmpeg encoder.
+- **Zero Jitter & Micro-Stutter Elimination**: Replaced FFmpeg `zoompan` integer canvas truncation with subpixel analytical glide.
+- **Lanczos4 Single-Pass Resampling**: Direct source-to-target transform using `cv2.INTER_LANCZOS4`, retaining +10% to +20% higher edge contrast.
+- **Production Motion Default**: Promoted `MOTION_RENDER_ENGINE = 'SUBPIXEL_AFFINE'` to default with zero silent fallback (`MOTION_ENGINE_UNAVAILABLE`).
+- **Windows Integration**: Bundled `opencv-python-headless>=4.8.0` and `numpy>=1.24.0` in `requirements.txt` with auto-installer synchronization.
+
 ## [2.0.0] - 2026-08-26
 
 ### Added

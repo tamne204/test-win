@@ -1,0 +1,18 @@
+{
+  "app_version_mac": "2.3.9",
+  "app_version_win": "2.3.9",
+  "app_version": "2.3.9",
+  "download_url_win": "https://www.2tamne.site/downloads/SlideshowBuilder_Windows_v2.3.9.zip",
+  "download_url_mac": "https://www.2tamne.site/downloads/SlideshowBuilder_macOS_v2.3.9.zip",
+  "release_notes": "Slideshow Builder AI v2.3.9: Nâng cấp động cơ chuyển động Subpixel Affine Motion Engine số thực (Zero Jitter, loại bỏ triệt để rung giật micro-jitter, bảo toàn chi tiết sắc nét chuẩn Lanczos4, đồng bộ khung hình 60 FPS mượt mà).",
+  "broadcast_notice": {
+    "id": "NOTIC_V239_SUBPIXEL_AFFINE_RELEASE",
+    "active": true,
+    "type": "update",
+    "title": "🚀 BẢN CẬP NHẬT MỚI: SLIDESHOW BUILDER AI v2.3.9",
+    "content": "Bản phát hành chính thức v2.3.9: Tích hợp động cơ chuyển động Subpixel Affine Engine loại bỏ hoàn toàn rung lắc micro-jitter, bảo toàn chi tiết biên cạnh sắc nét chuẩn Lanczos4.",
+    "button_text": "🚀 Tải Bản v2.3.9 Ngay",
+    "button_url": "/downloads/SlideshowBuilder_Windows_v2.3.9.zip",
+    "created_at": "2026-09-06 22:15:00"
+  }
+}

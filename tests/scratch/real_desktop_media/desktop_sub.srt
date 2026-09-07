@@ -1,0 +1,11 @@
+1
+00:00:00,000 --> 00:00:04,000
+2TOOLNE AutoEdit Desktop - Hoan toan Native khong dung Flask.
+
+2
+00:00:04,000 --> 00:00:08,000
+Giao tiep IPC stdin stdout JSON-RPC truc tiep giua Electron va Sidecar.
+
+3
+00:00:08,000 --> 00:00:12,000
+Dong bo tuyet doi voi CapCut Desktop 9.3.0 macOS.

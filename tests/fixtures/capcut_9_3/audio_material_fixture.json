@@ -1,0 +1,10 @@
+{
+  "id": "MAT-AUDIO-FIXTURE-00000000001",
+  "type": "music",
+  "name": "audio_000.wav",
+  "duration": 15000000,
+  "path": "sanitized_workspace/audio/audio_000.wav",
+  "category_name": "",
+  "wave_points": [],
+  "check_flag": 1
+}

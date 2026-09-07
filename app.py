@@ -1392,8 +1392,21 @@ if __name__ == '__main__':
     print("✅  AutoSub: ready (Gemini 3.6 Flash Cloud)")
     print()
     print("🎬  Slideshow Builder  →  http://localhost:8080")
-    print("=" * 55)
-    app.run(host='0.0.0.0', port=8080, debug=False, threaded=True)
+    try:
+        app.run(host='0.0.0.0', port=8080, debug=False, threaded=True)
+    except OSError as exc:
+        if getattr(exc, 'errno', None) in (10048, 98) or 'already in use' in str(exc).lower():
+            print("\n" + "=" * 55)
+            print("⚠️  CẢNH BÁO: Cổng 8080 đang được sử dụng bởi một tiến trình khác!")
+            print("👉 Ứng dụng đã đang chạy sẵn tại: http://localhost:8080")
+            print("=" * 55 + "\n")
+            try:
+                import webbrowser
+                webbrowser.open("http://localhost:8080")
+            except Exception:
+                pass
+        else:
+            raise
 
 # ---------------------------------------------------------------------------
 # Client Diagnostic Routes

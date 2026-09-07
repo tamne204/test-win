@@ -1,0 +1,146 @@
+{
+  "id": "FIXTURE-93-DRAFT-INFO-000000000001",
+  "version": 360000,
+  "new_version": "171.0.0",
+  "name": "Fixture Project 9.3",
+  "duration": 15000000,
+  "create_time": 1788700000000000,
+  "update_time": 1788700000000000,
+  "fps": 60.0,
+  "is_drop_frame_timecode": false,
+  "color_space": -1,
+  "config": {
+    "video_mute": false,
+    "maintrack_adsorb": true,
+    "material_save_mode": 0,
+    "multi_language_mode": "none"
+  },
+  "canvas_config": {
+    "ratio": "9:16",
+    "width": 1080,
+    "height": 1920,
+    "background": null
+  },
+  "tracks": [
+    {
+      "id": "TRACK-VIDEO-000000000001",
+      "type": "video",
+      "flag": 0,
+      "segments": [
+        {
+          "id": "SEG-VIDEO-000000000001",
+          "source_timerange": {"start": 0, "duration": 5000000},
+          "target_timerange": {"start": 0, "duration": 5000000},
+          "render_timerange": {"start": 0, "duration": 0},
+          "desc": "",
+          "state": 0,
+          "speed": 1.0,
+          "is_loop": false,
+          "is_tone_modify": false,
+          "reverse": false,
+          "intensifies_audio": false,
+          "cartoon": false,
+          "volume": 1.0,
+          "last_nonzero_volume": 1.0,
+          "clip": {
+            "scale": {"x": 1.0, "y": 1.0},
+            "rotation": 0.0,
+            "transform": {"x": 0.0, "y": 0.0},
+            "flip": {"vertical": false, "horizontal": false},
+            "alpha": 1.0
+          },
+          "uniform_scale": {"on": true, "value": 1.0},
+          "material_id": "MAT-VIDEO-000000000001",
+          "extra_material_refs": [
+            "MAT-SPEED-000000000001",
+            "MAT-PLACEHOLDER-000001",
+            "MAT-CANVAS-000000000001",
+            "MAT-SOUND-MAP-000000001",
+            "MAT-COLOR-0000000000001",
+            "MAT-VOCAL-SEP-000000001"
+          ],
+          "render_index": 0,
+          "keyframe_refs": [],
+          "visible": true,
+          "common_keyframes": [
+            {
+              "id": "KF-SCALEX-000000000001",
+              "material_id": "",
+              "property_type": "KFTypeScaleX",
+              "keyframe_list": [
+                {
+                  "id": "KF-PT-000000000001",
+                  "curveType": "Line",
+                  "time_offset": 0,
+                  "left_control": {"x": 0.0, "y": 0.0},
+                  "right_control": {"x": 0.0, "y": 0.0},
+                  "values": [1.0],
+                  "string_value": "",
+                  "graphID": ""
+                },
+                {
+                  "id": "KF-PT-000000000002",
+                  "curveType": "Line",
+                  "time_offset": 5000000,
+                  "left_control": {"x": 0.0, "y": 0.0},
+                  "right_control": {"x": 0.0, "y": 0.0},
+                  "values": [1.15],
+                  "string_value": "",
+                  "graphID": ""
+                }
+              ]
+            }
+          ],
+          "caption_info": null,
+          "source": "segmentsourcenormal"
+        }
+      ]
+    }
+  ],
+  "materials": {
+    "videos": [
+      {
+        "id": "MAT-VIDEO-000000000001",
+        "unique_id": "",
+        "type": "photo",
+        "duration": 5000000,
+        "path": "sanitized_workspace/media/clip_000.png",
+        "media_path": "",
+        "local_id": "",
+        "has_audio": false,
+        "width": 1080,
+        "height": 1920,
+        "material_name": "clip_000.png",
+        "crop": {
+          "upper_left_x": 0.0, "upper_left_y": 0.0,
+          "upper_right_x": 1.0, "upper_right_y": 0.0,
+          "lower_left_x": 0.0, "lower_left_y": 1.0,
+          "lower_right_x": 1.0, "lower_right_y": 1.0
+        },
+        "crop_ratio": "free",
+        "crop_scale": 1.0,
+        "source": 0,
+        "source_platform": 0,
+        "check_flag": 62978047
+      }
+    ],
+    "speeds": [{"id": "MAT-SPEED-000000000001", "type": "speed", "mode": 0, "speed": 1.0, "curve_speed": null}],
+    "placeholder_infos": [{"id": "MAT-PLACEHOLDER-000001", "type": "placeholder_info", "meta_type": "none", "res_path": "", "res_text": "", "error_path": "", "error_text": ""}],
+    "canvases": [{"id": "MAT-CANVAS-000000000001", "type": "canvas_color", "color": "", "blur": 0.0, "image": "", "album_image": "", "image_id": "", "image_name": "", "source_platform": 0, "team_id": ""}],
+    "sound_channel_mappings": [{"id": "MAT-SOUND-MAP-000000001", "type": "", "audio_channel_mapping": 0, "is_config_open": false}],
+    "material_colors": [{"id": "MAT-COLOR-0000000000001", "is_color_clip": false, "is_gradient": false, "solid_color": "", "gradient_colors": [], "gradient_percents": [], "gradient_angle": 90.0, "width": 0.0, "height": 0.0}],
+    "vocal_separations": [{"id": "MAT-VOCAL-SEP-000000001", "type": "vocal_separation", "choice": 0, "removed_sounds": [], "time_range": null, "production_path": "", "final_algorithm": "", "enter_from": ""}],
+    "audios": [],
+    "texts": [],
+    "beats": [],
+    "flowers": [],
+    "tail_leaders": [],
+    "images": [],
+    "effects": [],
+    "stickers": [],
+    "transitions": []
+  },
+  "keyframes": {"videos": [], "audios": [], "texts": [], "stickers": [], "filters": [], "adjusts": [], "handwrites": [], "effects": []},
+  "platform": {"os": "mac", "os_version": "26.1", "app_id": 359289, "app_version": "9.3.0", "app_source": "cc"},
+  "draft_type": "video"
+}

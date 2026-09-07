@@ -2,7 +2,7 @@
 ; VibeCode Slideshow Studio AI Production Installer
 
 #define MyAppName "VibeCode Studio"
-#define MyAppVersion "2.3.0"
+#define MyAppVersion "2.3.9"
 #define MyAppPublisher "2tamne.site"
 #define MyAppURL "https://www.2tamne.site/"
 #define MyAppExeName "SlideshowStudio.vbs"
@@ -20,7 +20,7 @@ DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 LicenseFile=..\LICENSE_INFO.txt
 OutputDir=..\dist
-OutputBaseFilename=VibeCode_Setup_v2.3.0
+OutputBaseFilename=VibeCode_Setup_v2.3.9
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
@@ -46,6 +46,7 @@ Source: "..\\license_manager.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\\renderer_e_engine.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\\renderer_g.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\\subtitles_engine.py"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\\subpixel_affine_engine.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\\translation_utils.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\\tts_utils.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\\version.py"; DestDir: "{app}"; Flags: ignoreversion

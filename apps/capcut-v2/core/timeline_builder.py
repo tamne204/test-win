@@ -1,0 +1,236 @@
+"""
+apps/capcut-v2/core/timeline_builder.py
+Deterministic timeline builder supporting Fixed and SRT-Driven timing modes.
+Builds an EditPlan from input media, audio, and style presets.
+Zero AI. Fully deterministic.
+"""
+from __future__ import annotations
+
+import os
+import uuid
+from typing import List, Optional, Dict, Any
+
+from .edit_plan import (
+    EditPlan,
+    EditPlanProject,
+    EditPlanClip,
+    EditPlanAudio,
+    EditPlanCaption,
+)
+from .preset_manager import RulePreset, PRESET_BASIC_SLIDESHOW
+from .rule_engine import RuleEngine
+from .srt_timeline import (
+    parse_srt_file,
+    compute_srt_scene_boundaries,
+    compute_script_paragraphs_scene_boundaries,
+    SubtitleEntry,
+)
+
+TIMING_MODE_FIXED = "FIXED"
+TIMING_MODE_SRT_DRIVEN = "SRT_DRIVEN"
+
+
+class TimelineBuilder:
+    """
+    Constructs an EditPlan from input media according to deterministic rules.
+    Supports fixed durations and subtitle-driven scene boundary segmentation.
+    """
+
+    def __init__(self, preset: Optional[RulePreset] = None):
+        self.preset = preset or PRESET_BASIC_SLIDESHOW
+        self.rule_engine = RuleEngine(self.preset)
+
+    def build(
+        self,
+        images: List[str],
+        audio_path: Optional[str] = None,
+        srt_source: Optional[str] = None,
+        captions: Optional[List[Dict[str, Any]]] = None,
+        project_name: str = "AutoEdit Project",
+        custom_clip_duration_s: Optional[float] = None,
+        timing_mode: str = TIMING_MODE_FIXED,
+        script_text: Optional[str] = None,
+        motion_weights: Optional[Dict[str, float]] = None,
+        aspect_ratio: Optional[str] = None,
+    ) -> EditPlan:
+        """
+        Build an EditPlan from provided image files, audio, and timing mode.
+
+        Args:
+            images: List of file paths to images.
+            audio_path: Optional file path to audio file.
+            srt_source: Optional path to SRT file or raw SRT string.
+            captions: Optional manual captions list.
+            project_name: Display name of the project.
+            custom_clip_duration_s: Override default clip duration if in FIXED mode.
+            timing_mode: TIMING_MODE_FIXED or TIMING_MODE_SRT_DRIVEN.
+            script_text: Raw user script text with \n for cues and \n\n for scene breaks.
+            motion_weights: Random weights for Ken Burns camera motions.
+            aspect_ratio: Canvas aspect ratio ("9:16", "16:9", "1:1", "4:5", "21:9").
+        """
+        if not images:
+            raise ValueError("TimelineBuilder requires at least one image.")
+
+        clips: List[EditPlanClip] = []
+        caption_list: List[EditPlanCaption] = []
+        total_timeline_duration_us = 0
+
+        # Branch 1: SRT-Driven Timing Mode
+        if timing_mode == TIMING_MODE_SRT_DRIVEN and srt_source:
+            subtitles = parse_srt_file(srt_source)
+            if not subtitles:
+                # Fallback to fixed if SRT has no valid entries
+                timing_mode = TIMING_MODE_FIXED
+            else:
+                if script_text and script_text.strip():
+                    scenes = compute_script_paragraphs_scene_boundaries(
+                        script_text=script_text,
+                        subtitles=subtitles,
+                    )
+                else:
+                    scenes = compute_srt_scene_boundaries(
+                        subtitles=subtitles,
+                        min_duration_s=self.preset.min_scene_duration_s,
+                        max_duration_s=self.preset.max_scene_duration_s,
+                    )
+
+                for idx, scene in enumerate(scenes):
+                    img_path = images[idx % len(images)]
+                    motion = self.rule_engine.assign_motion(idx, weights=motion_weights)
+                    params = self.rule_engine.get_motion_parameters(motion)
+
+                    clip = EditPlanClip(
+                        clip_id=str(uuid.uuid4()).upper(),
+                        media_path=os.path.abspath(img_path),
+                        media_type="image",
+                        start_us=scene.start_us,
+                        duration_us=scene.duration_us,
+                        motion_type=motion,
+                        keyframe_params=params,
+                    )
+                    clips.append(clip)
+
+                total_timeline_duration_us = clips[-1].end_us if clips else 0
+
+                # Generate synchronized captions from subtitles
+                for sub in subtitles:
+                    caption_list.append(
+                        EditPlanCaption(
+                            caption_id=str(uuid.uuid4()).upper(),
+                            text=sub.text,
+                            start_us=sub.start_us,
+                            duration_us=sub.duration_us,
+                            font_size=getattr(self.preset, "caption_font_size", 8.0),
+                            position_y=getattr(self.preset, "caption_position_y", -0.6),
+                        )
+                    )
+
+        # Branch 2: Fixed Duration Timing Mode (Default / Fallback)
+        if timing_mode == TIMING_MODE_FIXED or not clips:
+            clip_duration_s = custom_clip_duration_s or self.preset.scene_duration_s
+            clip_duration_us = int(clip_duration_s * 1_000_000)
+
+            current_time_us = 0
+            for idx, img_path in enumerate(images):
+                motion = self.rule_engine.assign_motion(idx, weights=motion_weights)
+                params = self.rule_engine.get_motion_parameters(motion)
+
+                clip = EditPlanClip(
+                    clip_id=str(uuid.uuid4()).upper(),
+                    media_path=os.path.abspath(img_path),
+                    media_type="image",
+                    start_us=current_time_us,
+                    duration_us=clip_duration_us,
+                    motion_type=motion,
+                    keyframe_params=params,
+                )
+                clips.append(clip)
+                current_time_us += clip_duration_us
+
+            total_timeline_duration_us = current_time_us
+
+            # Manual captions if provided
+            if captions:
+                for cap in captions:
+                    start_us = int(cap.get("start_s", 0.0) * 1_000_000)
+                    dur_us = int(cap.get("duration_s", clip_duration_s) * 1_000_000)
+                    caption_list.append(
+                        EditPlanCaption(
+                            caption_id=str(uuid.uuid4()).upper(),
+                            text=cap.get("text", ""),
+                            start_us=start_us,
+                            duration_us=dur_us,
+                            font_size=cap.get("font_size", getattr(self.preset, "caption_font_size", 8.0)),
+                            position_y=cap.get("position_y", getattr(self.preset, "caption_position_y", -0.6)),
+                        )
+                    )
+            elif not caption_list:
+                caption_list.append(
+                    EditPlanCaption(
+                        caption_id=str(uuid.uuid4()).upper(),
+                        text="2TOOLNE AUTOEDIT POC",
+                        start_us=0,
+                        duration_us=min(total_timeline_duration_us, 5_000_000),
+                        font_size=getattr(self.preset, "caption_font_size", 8.0),
+                        position_y=getattr(self.preset, "caption_position_y", -0.6),
+                    )
+                )
+
+        # Audio track assembly
+        audio_list: List[EditPlanAudio] = []
+        if audio_path and os.path.isfile(audio_path):
+            audio_list.append(
+                EditPlanAudio(
+                    audio_id=str(uuid.uuid4()).upper(),
+                    audio_path=os.path.abspath(audio_path),
+                    start_us=0,
+                    duration_us=total_timeline_duration_us,
+                    volume=self.preset.music_volume,
+                    category="music",
+                )
+            )
+
+        # Resolve dimensions based on aspect ratio
+        w = self.preset.width
+        h = self.preset.height
+        ratio = aspect_ratio or getattr(self.preset, "canvas_ratio", "9:16")
+        if ratio == "16:9":
+            w, h = 1920, 1080
+        elif ratio == "9:16":
+            w, h = 1080, 1920
+        elif ratio == "1:1":
+            w, h = 1080, 1080
+        elif ratio == "4:5":
+            w, h = 1080, 1350
+        elif ratio == "21:9":
+            w, h = 2560, 1080
+
+        project = EditPlanProject(
+            name=project_name,
+            width=w,
+            height=h,
+            fps=self.preset.fps,
+            duration_us=total_timeline_duration_us,
+        )
+
+        plan = EditPlan(
+            project=project,
+            clips=clips,
+            audio=audio_list,
+            captions=caption_list,
+            metadata={
+                "preset_name": getattr(self.preset, "name", "Basic Auto Edit"),
+                "preset_id": getattr(self.preset, "id", "basic"),
+                "timing_mode": timing_mode,
+                "clip_count": len(clips),
+                "has_audio": bool(audio_list),
+                "has_captions": bool(caption_list),
+            },
+        )
+
+        # Validate logic
+        errors = plan.validate()
+        if errors:
+            raise ValueError(f"EditPlan validation failed: {'; '.join(errors)}")
+
+        return plan

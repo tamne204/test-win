@@ -1,0 +1,7 @@
+{
+  "id": "MAT-TEXT-FIXTURE-000000000001",
+  "type": "text",
+  "name": "",
+  "recognize_text": "",
+  "content": "{\"styles\": [{\"fill\": {\"content\": {\"solid\": {\"color\": [1.0, 1.0, 1.0]}}, \"render_type\": \"solid\"}, \"range\": [0, 27], \"size\": 8.0, \"useLetterColor\": true}], \"text\": \"2TOOLNE AUTOEDIT FOR CAPCUT\"}"
+}

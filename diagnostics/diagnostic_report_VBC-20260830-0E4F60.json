@@ -1,0 +1,57 @@
+{
+  "app_version": "2.2.3.18",
+  "diagnostic_id": "VBC-20260830-0E4F60",
+  "ffmpeg": {
+    "binary_path": "/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg",
+    "encoders": {
+      "h264_nvenc": false,
+      "h264_videotoolbox": true,
+      "hevc_nvenc": false,
+      "libx264": true
+    },
+    "sha256": "58b8f5171449c6d3...",
+    "version_string": "ffmpeg version 9.0.1 Copyright (c) 2000-2026 the FFmpeg developers"
+  },
+  "gpu_pytorch": {
+    "cuda_available": false,
+    "cuda_device_count": 0,
+    "cuda_version": "UNAVAILABLE",
+    "grid_sample_bilinear_supported": true,
+    "mps_available": true,
+    "nvidia_smi": {
+      "available": false,
+      "driver_version": "UNAVAILABLE",
+      "gpu_name": "UNAVAILABLE",
+      "vram_free_mb": 0,
+      "vram_total_mb": 0
+    },
+    "pytorch_installed": true,
+    "pytorch_version": "2.8.0",
+    "selected_device": "Apple Metal (MPS)"
+  },
+  "license_state": {
+    "is_licensed": false,
+    "status": "HWID_MISMATCH",
+    "tier": "NONE"
+  },
+  "recent_error": {},
+  "recent_job": {},
+  "renderer": {
+    "default_mode": "auto",
+    "fallback": "Renderer D (Golden Baseline 4X)",
+    "primary": "Renderer G (Glide GPU Subpixel)"
+  },
+  "system": {
+    "architecture": "arm64",
+    "cpu_cores_logical": 12,
+    "cpu_cores_physical": 12,
+    "cpu_model": "arm",
+    "os_platform": "Darwin",
+    "os_release": "25.6.0",
+    "os_version": "Darwin Kernel Version 25.6.0: Fri Jul 31 19:17:26 PDT 2026; root:xnu-12377.161.14~5/RELEASE_ARM64_T6041",
+    "python_version": "3.12.14",
+    "ram_available_gb": 8.49,
+    "ram_total_gb": 24.0
+  },
+  "timestamp": "2026-08-30T10:21:57.784675"
+}

@@ -12,6 +12,7 @@ import sys
 import re
 import random
 import subprocess
+import shutil
 from typing import List, Tuple, Dict, Any, Optional, Union, Callable, Set
 try:
     from PIL import Image, ImageDraw, ImageFont
@@ -197,10 +198,12 @@ def get_ffmpeg_security_info() -> Dict[str, Any]:
 def get_ffmpeg_bin() -> str:
     """Return best available ffmpeg binary, supporting Windows, macOS, and Linux."""
     local_dir = os.path.dirname(os.path.abspath(__file__))
+    local_app_data = os.environ.get('LOCALAPPDATA', '')
     candidates = [
         os.path.join(local_dir, 'bin', 'ffmpeg.exe'),
         os.path.join(local_dir, 'bin', 'ffmpeg'),
         os.path.join(local_dir, 'ffmpeg.exe'),
+        os.path.join(local_app_data, 'Microsoft', 'WinGet', 'Links', 'ffmpeg.exe') if local_app_data else '',
         'C:\\ffmpeg\\bin\\ffmpeg.exe',
         'C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe',
         '/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg',
@@ -208,13 +211,38 @@ def get_ffmpeg_bin() -> str:
         '/usr/local/opt/ffmpeg-full/bin/ffmpeg',
         '/opt/homebrew/bin/ffmpeg',
         '/usr/local/bin/ffmpeg',
-        'ffmpeg.exe',
-        'ffmpeg'
     ]
     for c in candidates:
-        if os.path.isabs(c) and os.path.isfile(c):
+        if c and os.path.isabs(c) and os.path.isfile(c):
             return c
+    resolved = shutil.which('ffmpeg') or shutil.which('ffmpeg.exe')
+    if resolved and os.path.isfile(resolved):
+        return resolved
     return 'ffmpeg'
+
+
+def get_ffprobe_bin() -> str:
+    """Return best available ffprobe binary, supporting Windows, macOS, and Linux."""
+    local_dir = os.path.dirname(os.path.abspath(__file__))
+    local_app_data = os.environ.get('LOCALAPPDATA', '')
+    candidates = [
+        os.path.join(local_dir, 'bin', 'ffprobe.exe'),
+        os.path.join(local_dir, 'bin', 'ffprobe'),
+        os.path.join(local_dir, 'ffprobe.exe'),
+        os.path.join(local_app_data, 'Microsoft', 'WinGet', 'Links', 'ffprobe.exe') if local_app_data else '',
+        'C:\\ffmpeg\\bin\\ffprobe.exe',
+        'C:\\Program Files\\ffmpeg\\bin\\ffprobe.exe',
+        '/opt/homebrew/opt/ffmpeg-full/bin/ffprobe',
+        '/opt/homebrew/bin/ffprobe',
+        '/usr/local/bin/ffprobe',
+    ]
+    for c in candidates:
+        if c and os.path.isabs(c) and os.path.isfile(c):
+            return c
+    resolved = shutil.which('ffprobe') or shutil.which('ffprobe.exe')
+    if resolved and os.path.isfile(resolved):
+        return resolved
+    return 'ffprobe'
 
 
 def check_ffmpeg() -> bool:
@@ -1660,6 +1688,10 @@ def render_video_chunked(
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 
+# Production Motion Engine: 'SUBPIXEL_AFFINE' (Default) | 'ZOOMPAN_LEGACY' (Diagnostic/Historical Only)
+MOTION_RENDER_ENGINE = os.environ.get("MOTION_RENDER_ENGINE", "SUBPIXEL_AFFINE")
+
+
 def render_video(
     image_paths: List[str],
     audio_path: Optional[str],
@@ -1669,30 +1701,56 @@ def render_video(
     subtitle_path: Optional[str] = None
 ) -> None:
     """
-    Intelligently route to Single-Pass Turbo Engine (<= 250 slides) or Chunked Engine (> 250 slides).
-    Single-pass eliminates 100% redundant re-encoding passes and renders 171+ slides in minutes.
+    Renders slideshow video using the production default Subpixel Affine Engine.
+    Supports ZOOMPAN_LEGACY strictly for developer diagnostics and historical testing.
     """
     images = sort_images(image_paths)
     if not images:
         raise ValueError("No images provided")
 
-    if len(images) > 250:
-        print(f"📦 [Render Router] Large slideshow ({len(images)} slides > 250) -> Chunked Engine")
-        render_video_chunked(
-            images=images,
-            audio_path=audio_path,
-            output_path=output_path,
-            settings=settings,
-            progress_callback=progress_callback,
-            subtitle_path=subtitle_path
+    engine_mode = str(settings.get('motion_engine') or os.environ.get('MOTION_RENDER_ENGINE', 'SUBPIXEL_AFFINE')).upper()
+
+    # Explicit developer override for legacy testing
+    if engine_mode == 'ZOOMPAN_LEGACY':
+        print("🏛️ [Render Router] Explicit override: Using ZOOMPAN_LEGACY Engine (Historical Baseline)")
+        if len(images) > 250:
+            return render_video_chunked(
+                images=images,
+                audio_path=audio_path,
+                output_path=output_path,
+                settings=settings,
+                progress_callback=progress_callback,
+                subtitle_path=subtitle_path
+            )
+        else:
+            return render_video_single_pass(
+                image_paths=images,
+                audio_path=audio_path,
+                output_path=output_path,
+                settings=settings,
+                progress_callback=progress_callback,
+                subtitle_path=subtitle_path
+            )
+
+    # Production Default: SUBPIXEL_AFFINE
+    try:
+        from subpixel_affine_engine import SubpixelAffineEngine
+    except ImportError as imp_err:
+        raise RuntimeError(
+            "MOTION_ENGINE_UNAVAILABLE: Không thể khởi tạo bộ dựng chuyển động. Vui lòng sửa/cài lại ứng dụng."
+        ) from imp_err
+
+    if not SubpixelAffineEngine.is_available():
+        raise RuntimeError(
+            "MOTION_ENGINE_UNAVAILABLE: Không thể khởi tạo bộ dựng chuyển động. Vui lòng sửa/cài lại ứng dụng."
         )
-    else:
-        print(f"🚀 [Render Router] Slideshow ({len(images)} slides <= 250) -> Single-Pass Turbo Engine")
-        render_video_single_pass(
-            image_paths=images,
-            audio_path=audio_path,
-            output_path=output_path,
-            settings=settings,
-            progress_callback=progress_callback,
-            subtitle_path=subtitle_path
-        )
+
+    print("✨ [Render Router] Production Default: Subpixel Affine Engine (Zero-Jitter Floating-Point Pipeline)")
+    return SubpixelAffineEngine.render_video(
+        image_paths=images,
+        audio_path=audio_path,
+        output_path=output_path,
+        settings=settings,
+        progress_callback=progress_callback,
+        subtitle_path=subtitle_path
+    )

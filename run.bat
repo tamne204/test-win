@@ -1,9 +1,9 @@
 @echo off
-title Slideshow Builder AI - 2tamne.site
+title Slideshow Builder AI v2.3.9 - 2tamne.site
 cd /d "%~dp0"
 
 echo ========================================================
-echo        SLIDESHOW BUILDER AI - 2TAMNE.SITE
+echo        SLIDESHOW BUILDER AI v2.3.9 - 2TAMNE.SITE
 echo ========================================================
 echo.
 
@@ -21,6 +21,10 @@ if %errorlevel% equ 0 (
     goto :run_server
 )
 
+if exist "%LOCALAPPDATA%\Programs\Python\Python313\python.exe" (
+    set "PYCMD=%LOCALAPPDATA%\Programs\Python\Python313\python.exe"
+    goto :run_server
+)
 if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" (
     set "PYCMD=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
     goto :run_server
@@ -33,6 +37,10 @@ if exist "%LOCALAPPDATA%\Programs\Python\Python310\python.exe" (
     set "PYCMD=%LOCALAPPDATA%\Programs\Python\Python310\python.exe"
     goto :run_server
 )
+if exist "C:\Program Files\Python313\python.exe" (
+    set "PYCMD=C:\Program Files\Python313\python.exe"
+    goto :run_server
+)
 if exist "C:\Program Files\Python312\python.exe" (
     set "PYCMD=C:\Program Files\Python312\python.exe"
     goto :run_server
@@ -43,6 +51,10 @@ if exist "C:\Program Files\Python311\python.exe" (
 )
 if exist "C:\Program Files\Python310\python.exe" (
     set "PYCMD=C:\Program Files\Python310\python.exe"
+    goto :run_server
+)
+if exist "C:\Python313\python.exe" (
+    set "PYCMD=C:\Python313\python.exe"
     goto :run_server
 )
 if exist "C:\Python312\python.exe" (

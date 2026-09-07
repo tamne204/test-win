@@ -1,0 +1,12 @@
+{
+  "version": 90300,
+  "platform": "windows",
+  "name": "Job_1_Project",
+  "duration": 5000000,
+  "materials": {
+    "videos": [],
+    "audios": [],
+    "texts": []
+  },
+  "tracks": []
+}

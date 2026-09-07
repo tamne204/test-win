@@ -6,7 +6,7 @@ Follows Semantic Versioning (MAJOR.MINOR.PATCH).
 from __future__ import annotations
 from typing import List, Tuple, Dict, Any, Optional, Union, Callable, Set
 
-__version__ = "2.3.0"
+__version__ = "2.3.9"
 APP_NAME = "Slideshow Builder AI"
 GITHUB_REPO = "tamne204/ffmpeg-tool"
 RELEASE_PROXY_URL = "https://www.2tamne.site/api/license/check_update.php"

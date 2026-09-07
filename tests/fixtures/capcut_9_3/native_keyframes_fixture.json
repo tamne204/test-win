@@ -1,0 +1,56 @@
+[
+  {
+    "id": "KF-SCALEX-FIXTURE-000000000001",
+    "material_id": "",
+    "property_type": "KFTypeScaleX",
+    "keyframe_list": [
+      {
+        "id": "KF-PT-SCALE-001",
+        "curveType": "Line",
+        "time_offset": 0,
+        "left_control": {"x": 0.0, "y": 0.0},
+        "right_control": {"x": 0.0, "y": 0.0},
+        "values": [1.0],
+        "string_value": "",
+        "graphID": ""
+      },
+      {
+        "id": "KF-PT-SCALE-002",
+        "curveType": "Line",
+        "time_offset": 5000000,
+        "left_control": {"x": 0.0, "y": 0.0},
+        "right_control": {"x": 0.0, "y": 0.0},
+        "values": [1.15],
+        "string_value": "",
+        "graphID": ""
+      }
+    ]
+  },
+  {
+    "id": "KF-POSX-FIXTURE-0000000000001",
+    "material_id": "",
+    "property_type": "KFTypePositionX",
+    "keyframe_list": [
+      {
+        "id": "KF-PT-POS-001",
+        "curveType": "Line",
+        "time_offset": 0,
+        "left_control": {"x": 0.0, "y": 0.0},
+        "right_control": {"x": 0.0, "y": 0.0},
+        "values": [0.1],
+        "string_value": "",
+        "graphID": ""
+      },
+      {
+        "id": "KF-PT-POS-002",
+        "curveType": "Line",
+        "time_offset": 5000000,
+        "left_control": {"x": 0.0, "y": 0.0},
+        "right_control": {"x": 0.0, "y": 0.0},
+        "values": [-0.1],
+        "string_value": "",
+        "graphID": ""
+      }
+    ]
+  }
+]

@@ -42,6 +42,8 @@ license.json
 *.pem
 *.token
 credentials.json
+client_secret_*.json
+*secret*.json
 
 # Runtime & User Uploads / Outputs
 uploads/
@@ -88,3 +90,9 @@ worktrees/
 # Archive builds
 *.zip
 *.tar.gz
+
+# 2TOOLNE AI Company Security Gate - Ignore Secrets
+*.p12
+*.pfx
+id_rsa
+service_account.json

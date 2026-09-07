@@ -1,0 +1,70 @@
+{
+  "cloud_draft_cover": false,
+  "cloud_draft_sync": false,
+  "draft_cover": "draft_cover.jpg",
+  "draft_fold_path": "/Users/2tamne/tool ffmpeg/tests/scratch/phase5c_workspace/785E0520-D7FA-4767-8947-E86ACA2CAC01/generated/2toolne_1788719368_2toolne_phase5c_subtitle_test",
+  "draft_id": "E2CA5F75-66FC-4748-8639-2F0234A5CD93",
+  "draft_materials": [
+    {
+      "type": 0,
+      "value": [
+        {
+          "create_time": 1788719368,
+          "duration": 4470000,
+          "file_Path": "/Users/2tamne/tool ffmpeg/tests/scratch/phase5c_workspace/785E0520-D7FA-4767-8947-E86ACA2CAC01/generated/2toolne_1788719368_2toolne_phase5c_subtitle_test/media/clip_000.png",
+          "height": 1920,
+          "width": 1080,
+          "id": "d16053c5-f9a7-4e56-8f58-a0f7bc7c8ab5",
+          "import_time": 1788719368,
+          "import_time_ms": 1788719368740130,
+          "item_source": 1,
+          "metetype": "photo",
+          "type": 0
+        },
+        {
+          "create_time": 1788719368,
+          "duration": 2510000,
+          "file_Path": "/Users/2tamne/tool ffmpeg/tests/scratch/phase5c_workspace/785E0520-D7FA-4767-8947-E86ACA2CAC01/generated/2toolne_1788719368_2toolne_phase5c_subtitle_test/media/clip_001.png",
+          "height": 1920,
+          "width": 1080,
+          "id": "dab116fb-e79e-432c-a00a-336f22c1bf96",
+          "import_time": 1788719368,
+          "import_time_ms": 1788719368740130,
+          "item_source": 1,
+          "metetype": "photo",
+          "type": 0
+        }
+      ]
+    },
+    {
+      "type": 1,
+      "value": []
+    },
+    {
+      "type": 2,
+      "value": []
+    },
+    {
+      "type": 3,
+      "value": []
+    },
+    {
+      "type": 6,
+      "value": []
+    },
+    {
+      "type": 7,
+      "value": []
+    },
+    {
+      "type": 8,
+      "value": []
+    }
+  ],
+  "draft_name": "2toolne_phase5c_subtitle_test",
+  "draft_root_path": "/Users/2tamne/Movies/CapCut/User Data/Projects/com.lveditor.draft",
+  "draft_timeline_materials_size_": 1024,
+  "tm_draft_create": 1788719368740130,
+  "tm_draft_modified": 1788719368740130,
+  "tm_duration": 6980000
+}
