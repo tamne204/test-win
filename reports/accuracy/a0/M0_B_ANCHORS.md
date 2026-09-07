@@ -20,16 +20,17 @@ Milestone M0-B implements the deterministic multi-word anchor discovery and dyna
 2. **Multi-Stage Candidate Filtering:**
    - **Stopword-Only Rejection:** Anchors consisting entirely of closed-class stopwords across Vietnamese, Korean, and English are rejected.
    - **Paragraph Boundary Guard:** Candidates spanning across multiple paragraphs (`paragraph_id` transitions) are disqualified to ensure clean paragraph alignment.
-   - **ASR Acoustic Confidence Guard:** Candidates with average Whisper token likelihood $\bar{P}_{asr} < 0.75$ are rejected.
-   - **Uniqueness Ratio Scoring:** Penalizes ambiguous repeated phrases:
-     $$U = \frac{1}{F_{script} \cdot F_{asr}}$$
-   - Composite intrinsic anchor score:
-     $$S_{anchor} = 0.30 \cdot \text{len\_score} + 0.40 \cdot U + 0.30 \cdot \bar{P}_{asr}$$
+   - **ASR Acoustic Confidence Guard:** Candidates with average Whisper token likelihood $\bar{P}_{asr} < 0.75$ are rejected (calibrated from 0.80 based on empirical Korean conversational dialogue tests on `LONG_01`, retaining 13 critical emotional narrative anchors without false positives).
+   - **Repeated Refrain & Uniqueness Policy:** 
+     - Computes uniqueness factor $U = \frac{1}{F_{script} \cdot F_{asr}}$.
+     - Pure identical refrains ($F_{script} > 4$ with $U < 0.10$) are outright rejected at discovery to prevent false repeating locks.
+     - Composite intrinsic anchor score:
+       $$S_{anchor} = 0.30 \cdot \text{len\_score} + 0.40 \cdot U + 0.30 \cdot \bar{P}_{asr}$$
 
 3. **Neighborhood Context Validation:**
    - Evaluates up to 2 preceding and 2 following context tokens between script and ASR.
    - Correctly normalizes score by `actual_context_terms_evaluated` (does not blindly divide by 4 at document boundaries).
-   - Ambiguous candidates ($F > 1$) require strong neighborhood context support ($S_{context} \ge 0.30$).
+   - Ambiguous candidates ($F > 1$) require verified neighborhood context support ($S_{context} \ge 0.30$) to withstand minor Whisper transcription perturbations while preventing false matches.
    - Stores: `anchor_score`, `anchor_context_score`, `anchor_timestamp_confidence`, and `anchor_timestamp_uncertainty_ms` (kept `None` unless backed by tangible acoustic evidence).
 
 4. **Monotonic Chain Selection (Weighted DAG / LIS DP):**

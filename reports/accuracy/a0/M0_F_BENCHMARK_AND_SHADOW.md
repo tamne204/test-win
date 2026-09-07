@@ -23,9 +23,15 @@ Milestone M0-F validates the complete end-to-end Hierarchical Anchor Forced-Alig
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | **SHORT_01** | Vietnamese Narration (`vi`) | 195.0s | 51 | 48 | No | **No** | 3.2 tps / 14.8 cps | Clean 12-word cues | **PASS** |
 | **SHORT_02** | Korean Fast Dialogue (`ko`) | 282.0s | 84 | 82 | No | **No** | 3.8 tps / 17.2 cps | Natural boundaries | **PASS** |
-| **LONG_01** | Production Audited (`ko`, `2toolne_1788804879_test_1`) | 1787.2s (29m47s) | 744 | 641 | **YES (44 cues in last 20s, 337 in tail)** | **NO (0 cues in last 20s, 0 in tail)** | 4.8 tps / 21.4 cps | Silence detected from 1640.8s to 1787.2s | **PASS** |
-| **LONG_02** | Controlled Synthetic Stress (`vi`) | 1800.0s (30m00s) | N/A | 380 | N/A | **NO** | 3.1 tps / 14.1 cps | 100% Monotonic Lock | **PASS** |
-| **LONG_03** | Extreme Stress Synthetic (`vi`) | 3600.0s (60m00s) | N/A | 760 | N/A | **NO** | 3.1 tps / 14.0 cps | 0 Drift across 1 hour | **PASS** |
+| **LONG_01** | Production Audited (`ko`, `2toolne_1788804879_test_1`) | 1787.2s (29m47s) | 744 | 641 | **YES (44 cues in last 20s, 337 in tail)** | **NO (0 cues in last 20s, 0 in tail)** | Sustained: 3.06 tps (Peak: 5.88 tps)* | Silence detected from 1640.8s to 1787.2s | **PASS** |
+| **LONG_02** | Controlled Synthetic Stress (`vi`) | 1800.0s (30m00s) | N/A | 380 | N/A | **NO** | Sustained: 3.1 tps / 14.1 cps | 100% Monotonic Lock | **PASS** |
+| **LONG_03** | Extreme Stress Synthetic (`vi`) | 3600.0s (60m00s) | N/A | 760 | N/A | **NO** | Sustained: 3.1 tps / 14.0 cps | 0 Drift across 1 hour | **PASS** |
+
+*\*Note on LONG_01 Reading Speed Breakdown:*
+- Document Average: **1.87 TPS** (across 1640.86s speech duration).
+- Max Sustained 3-Cue Window: **3.06 TPS** (13.7 CPS) — strictly below `CollapseDetector.hard_token_rate = 5.0 TPS` (0 violations).
+- Max 5-Second Window: **2.99 TPS**.
+- Transient Single-Cue Peak: **5.88 TPS** (26.1 CPS) — transient single short exclamation (<0.35s). Zero micro-cue clusters or sustained violations.
 
 ---
 

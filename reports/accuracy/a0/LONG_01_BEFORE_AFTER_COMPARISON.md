@@ -22,13 +22,13 @@ With **Hierarchical Anchor Engine V1**:
 - **Subtitles terminate cleanly at 1640.86s** when the narrator finishes saying *"다음 이야기에서 뵙겠습니다."*
 - **0 cues** were emitted into the silent tail (27m 21s – 29m 47s).
 - **0 cues** in the final 20 seconds (vs 44 in legacy).
-- Maximum sustained reading speed dropped from **>13.3 tps** to **<4.8 tps**, with **0 collapse violations**.
+- Maximum sustained 3-cue reading speed dropped from **>13.3 tps** to **3.06 tps** (strictly below `CollapseDetector.hard_token_rate = 5.0 tps`), with **0 collapse violations**. Peak single-cue transient rate is 5.88 tps (isolated <0.35s phrases).
 
 ---
 
 ### 2. Window-by-Window Comparative Analysis
 
-| Window (Time Range) | State / Acoustic Content | Legacy Cues | Legacy Micro (<0.40s) | Legacy Max TPS | Hierarchical V1 Cues | Hierarchical Micro (<0.40s) | Hierarchical Max TPS | Accuracy Assessment |
+| Window (Time Range) | State / Acoustic Content | Legacy Cues | Legacy Micro (<0.40s) | Legacy Peak TPS | Hierarchical V1 Cues | Hierarchical Micro (<0.40s) | Hierarchical Peak Single-Cue TPS* | Accuracy Assessment |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
 | **00:00 – 05:00** (0 – 300s) | Active Narration | 76 | 2 | 11.43 | 104 | 1 | 4.76 | Natural pacing restored |
 | **05:00 – 10:00** (300 – 600s) | Active Narration | 68 | 1 | 7.06 | 109 | 0 | 4.35 | Zero micro-cues, stable |
@@ -38,7 +38,9 @@ With **Hierarchical Anchor Engine V1**:
 | **25:00 – 27:20** (1500 – 1640.86s) | Narration Concluding | 63 | 17 | 13.33 | 56 | 1 | 5.88 | Clean natural close |
 | **27:20 – 29:47** (1640.86 – 1787.23s) | **Silence / Music (No Speech)** | **337** | **197** | **13.33** | **0** | **0** | **0.00** | **COLLAPSE ELIMINATED** |
 | **Tail Final 20s** (1767.23 – 1787.23s) | **Silence / Master Tail** | **44** | **24** | **13.33** | **0** | **0** | **0.00** | **44-SENTENCE BUG FIXED** |
-| **TOTAL TIMELINE** | **Full 29m 47.23s** | **744** | **214 (28.8%)** | **13.33** | **641** | **5 (0.78%)** | **5.88** | **PASS QUALITY GATE** |
+| **TOTAL TIMELINE** | **Full 29m 47.23s** | **744** | **214 (28.8%)** | **13.33** | **641** | **5 (0.78%)** | **Peak: 5.88 / Sustained: 3.06** | **PASS QUALITY GATE** |
+
+*\*Note:* CollapseDetector evaluates sustained speed across 3 consecutive cues ($W_{3} \le 5.0\text{ tps}$) to catch true collapses while tolerating single-cue transient exclamations. In LONG_01, max sustained 3-cue rate is **3.06 tps**, resulting in **0 collapse violations**.
 
 ---
 

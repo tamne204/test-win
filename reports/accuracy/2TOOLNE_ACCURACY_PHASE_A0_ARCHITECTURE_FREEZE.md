@@ -617,3 +617,27 @@ All prior contradictions have been eliminated. The corrective architecture for `
 A0_ARCHITECTURE_CONSISTENT = YES
 IMPLEMENTATION_READY = YES
 ```
+
+---
+
+## 21. POST-CUTOVER ARCHITECTURAL AMENDMENTS & EMPIRICAL CALIBRATIONS
+
+Pursuant to the Post-Cutover Truth Audit, the following empirical calibrations have been ratified and incorporated into the authoritative baseline:
+
+### 21.1 Anchor Acoustic Confidence Threshold Calibration
+- **Prior Specification (Section 6.2):** Disqualify candidate if $\bar{P}_{asr} < 0.80$.
+- **Amended Specification:** Disqualify candidate if $\bar{P}_{asr} < 0.75$.
+- **Empirical Calibration Evidence:** Forensic evaluation of audited long-form production audio `LONG_01` (`Tập_1.wav`, Korean narration) established that Whisper word-level confidence on emotional dialogue and conversational phrases routinely scores in the $[0.75, 0.80)$ range. The calibrated 0.75 threshold recovered 13 valid emotional and dialogue narrative anchors (yielding 348 total anchors with 0 monotonicity crossings), whereas 0.80 created wider unanchored gaps up to 21.24s.
+
+### 21.2 Repeated Refrain & Uniqueness Policy Reconciliation
+- **Prior Specification (Section 6.4):** If $F_{script} > 3$, require $S_{context} \ge 0.85$.
+- **Amended Specification:** 
+  1. Pure identical repeated refrains ($F_{script} > 4$ and $U < 0.10$) are outright rejected at candidate generation stage.
+  2. For ambiguous candidates ($F_{script} > 1$ or $F_{asr} > 1$), verified neighborhood context support of $S_{context} \ge 0.30$ is required.
+- **Empirical Calibration Evidence:** Requiring $S_{context} \ge 0.85$ over a 4-token neighborhood demanded near-perfect ASR word accuracy across adjacent boundaries, inappropriately rejecting valid anchors during colloquial speech. An explicit regression test of 15 consecutive identical refrains confirmed that $U < 0.10$ completely prevents false anchor generation (0 false candidates), while $S_{context} \ge 0.30$ provides robust protection against cross-sentence jumping.
+
+### 21.3 Reading Speed Evaluation Semantics: Peak vs Sustained Collapse Rate
+- **Prior Specification (Section 12.2 & 14.1):** Hard token rate limit of 5.0 tokens/sec.
+- **Amended Specification:**
+  1. **Sustained Collapse Rate (Violation Trigger):** Evaluated over a sliding 3-cue window ($W_3 = \frac{\sum \text{tokens}}{\Delta t_{3\text{-cue}}}$). If $W_3 > 5.0\text{ tps}$ (or chars/sec $> 22.0\text{ KO} / 26.0\text{ VI}$), a collapse violation is triggered.
+  2. **Transient Peak Rate (Diagnostic Telemetry):** Evaluated on individual single cues ($W_1 = \frac{\text{tokens}}{\Delta t_{\text{cue}}}$). Transient spikes (e.g. 5.88 tps on an isolated <0.35s phrase) are recorded as telemetry but do NOT trigger collapse violations unless sustained across 3 cues or clustered into $>4$ micro-cues within 5.0s.

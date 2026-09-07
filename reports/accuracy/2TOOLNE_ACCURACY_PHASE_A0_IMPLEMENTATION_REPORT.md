@@ -45,10 +45,21 @@ A forensic before-and-after re-benchmark was conducted on the exact project that
 - Real narration finishes at **1640.86s** (27m 20.86s) with the spoken Korean phrase *"다음 이야기에서 뵙겠습니다."*
 - From **1640.86s to 1787.23s** (final 146.37 seconds), the audio contains **zero speech**.
 - **Legacy Engine Result:** Lost monotonic alignment lock, shoved **337 cues** into the silent tail, including **197 micro-cues (<0.40s)** and **44 cues jammed into the final 20 seconds** at >13.3 tokens/sec.
-- **Hierarchical Engine V1 Result:**
+- **Hierarchical Engine V1 Forensic Results:**
+  - `SCRIPT_TOKEN_COUNT = 3068`
+  - `ASR_WORD_COUNT = 3053`
+  - `EXACT_MATCHED = 2129` (69.39%)
+  - `FUZZY_MATCHED = 592` (19.30%)
+  - `INTERPOLATED = 347` (11.31%)
+  - `OMITTED = 0`
+  - `UNMATCHED = 0`
+  - `SCRIPT_MUTATION_RATE = 0.000%`
+  - **Reading Speed Profile:**
+    - Document Average: **1.87 TPS**
+    - Max Sustained (3-cue window): **3.06 TPS** (13.7 CPS) — strictly below 5.0 TPS limit
+    - Transient Peak Single-Cue: **5.88 TPS** (26.1 CPS) — single isolated exclamation (<0.35s)
   - Emitted **0 cues** into the silent tail (1640.86s – 1787.23s).
   - Emitted **0 cues** in the final 20 seconds.
-  - Subtitles terminate smoothly at 1640.86s with 100% natural reading speed.
   - Collapse violations: **0**.
   - Detailed forensic report available at: [`LONG_01_BEFORE_AFTER_COMPARISON.md`](file:///Users/2tamne/tool%20ffmpeg/reports/accuracy/a0/LONG_01_BEFORE_AFTER_COMPARISON.md).
 
@@ -56,7 +67,7 @@ A forensic before-and-after re-benchmark was conducted on the exact project that
 
 ## 4. ADVERSARIAL & BENCHMARK VALIDATION RESULTS
 
-The entire automated test suite was executed against the merged codebase on `main`:
+The entire test suite was executed against the merged codebase on `main`:
 
 ```
 ============================= test session starts ==============================
@@ -72,23 +83,38 @@ tests/test_a0_hierarchical_aligner.py ....                               [ 83%]
 tests/test_a0_paragraph_mapping.py ...                                   [ 89%]
 tests/test_a0_pipeline_shadow.py .....                                   [100%]
 
-============================== 48 passed in 1.83s ==============================
+============================== 48 passed in 1.71s ==============================
 ```
 
-- **Adversarial Suite (ADV_01 to ADV_12):** 12/12 passed (100%).
-- **Benchmark Corpus (SHORT_01, SHORT_02, LONG_01, LONG_02, LONG_03):** 5/5 passed (100%).
-- **Legacy Regression Suite (`tests/test_forced_alignment.py`):** 5/5 passed (100%).
+Legacy regression suite verification:
+```
+tests/test_forced_alignment.py .....                                     [100%]
+============================== 5 passed in 5.42s ===============================
+```
+
+### Reconciled Test Inventory:
+- **A0_NEW_TESTS:** 48 / 48 passed (100%)
+- **LEGACY_REGRESSION_TESTS:** 5 / 5 passed (100%)
+- **TOTAL_EXECUTED_TESTS:** 53 / 53 passed (100%)
+- **TOTAL_FAILED:** 0
 
 ---
 
-## 5. PHASE A0 IMPLEMENTATION VERDICT
+## 5. PHASE A0 IMPLEMENTATION & CUTOVER VERDICTS
 
-In accordance with Section 19.1 of the Authoritative Architecture Freeze Specification:
-
+### Verdict 1: Implementation & Shadow Validation (Milestone M0-F Complete)
 ```
 ================================================================================
-VERDICT: A0_HIERARCHICAL_IMPLEMENTATION_COMPLETE_SHADOW_VALIDATED
+VERDICT 1: A0_HIERARCHICAL_IMPLEMENTATION_COMPLETE_SHADOW_VALIDATED
 ================================================================================
 ```
 
-The hierarchical anchor forced-alignment architecture is completely implemented, tested, and validated in shadow mode. The system is ready for the final production cutover.
+### Verdict 2: Production Cutover Complete (Merged into Main at Commit 564caf1)
+- **Active Production Default:** `AlignmentOptions.engine = AlignmentEngineType.HIERARCHICAL_V1`
+- **Shadow Mode:** `AlignmentOptions.shadow_mode = False`
+- **Emergency Rollback:** `AlignmentEngineType.LEGACY` verified intact and available.
+```
+================================================================================
+VERDICT 2: A0_HIERARCHICAL_PRODUCTION_CUTOVER_COMPLETE
+================================================================================
+```
