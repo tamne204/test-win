@@ -138,6 +138,7 @@ def _tokenize_spaced_script(script_text: str, language: str) -> List[ScriptToken
 
         # Check paragraph transition: any double newline / blank line between last token end and this token
         inter_text = script_text[last_char_end:start_char]
+        leading_ws = inter_text
         if re.search(r"\n\s*\n", inter_text):
             if token_idx > 0:
                 curr_para_id += 1
@@ -185,7 +186,7 @@ def _tokenize_spaced_script(script_text: str, language: str) -> List[ScriptToken
             )
         )
         token_idx += 1
-        last_char_end = end_char
+        last_char_end = end_char + len(trailing_punct)
         prev_was_sentence_break = is_sentence
         prev_was_clause_break = is_clause
 

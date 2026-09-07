@@ -16,6 +16,7 @@ from .models import (
     AlignedToken,
     SubtitleCue,
     ConfidenceLevel,
+    MatchType,
     AlignmentOptions,
 )
 
@@ -35,6 +36,15 @@ class SubtitleSegmenter:
         if not aligned_tokens:
             return []
 
+        # Invariant: Unspoken script tokens (UNMATCHED / OMITTED) must not be emitted as subtitle cues
+        tokens_to_segment = [
+            t for t in aligned_tokens
+            if t.confidence not in (ConfidenceLevel.UNMATCHED, ConfidenceLevel.OMITTED)
+            and t.match_type not in (MatchType.UNMATCHED, MatchType.OMITTED)
+        ]
+        if not tokens_to_segment:
+            return []
+
         max_words = self.options.max_words_per_cue
         max_dur = self.options.max_duration_s
         min_dur = self.options.min_duration_s
@@ -43,9 +53,9 @@ class SubtitleSegmenter:
         cues: List[SubtitleCue] = []
         curr_tokens: List[AlignedToken] = []
 
-        total_tokens = len(aligned_tokens)
+        total_tokens = len(tokens_to_segment)
 
-        for i, token in enumerate(aligned_tokens):
+        for i, token in enumerate(tokens_to_segment):
             curr_tokens.append(token)
 
             is_last = (i == total_tokens - 1)
@@ -104,14 +114,19 @@ class SubtitleSegmenter:
         start_s = tokens[0].start_s
         end_s = tokens[-1].end_s
 
-        # Reconstruct text using exact raw_text and trailing_punctuation
+        # Reconstruct text using exact raw_text, leading whitespace/punctuation, and trailing_punctuation
         words_formatted: List[str] = []
-        for t in tokens:
+        for idx, t in enumerate(tokens):
             st = t.script_token
-            word_str = st.raw_text + (st.trailing_punctuation or "")
+            lead = st.leading_whitespace or ""
+            if idx == 0:
+                lead = lead.lstrip(" \t\r\n")
+            elif not lead:
+                lead = " "
+            word_str = lead + st.raw_text + (st.trailing_punctuation or "")
             words_formatted.append(word_str)
 
-        cue_text = " ".join(words_formatted).strip()
+        cue_text = "".join(words_formatted).strip()
 
         # Compute aggregate confidence
         conf_scores = {
