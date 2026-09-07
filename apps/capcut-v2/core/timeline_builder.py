@@ -87,10 +87,7 @@ class TimelineBuilder:
         caption_list: List[EditPlanCaption] = []
         total_timeline_duration_us = 0
         shadow_metadata: Dict[str, Any] = {}
-        v_opts = visual_options or VisualPlannerOptions(
-            engine=VisualPlannerEngine.LEGACY,
-            shadow_mode=True,
-        )
+        v_opts = visual_options or VisualPlannerOptions()
 
         # Branch 1: SRT-Driven Timing Mode
         if timing_mode == TIMING_MODE_SRT_DRIVEN and (srt_source or subtitle_cues):
