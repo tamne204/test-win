@@ -1,0 +1,46 @@
+{
+  "legacy": {
+    "shot_count": 278,
+    "min_duration_s": 5.0,
+    "p10_duration_s": 5.0,
+    "median_duration_s": 5.0,
+    "p90_duration_s": 5.0,
+    "max_duration_s": 5.0,
+    "shots_lt_2s": 0,
+    "shots_gt_8_5s": 0,
+    "structural_boundary_ratio": 0.5,
+    "arbitrary_cut_ratio": 0.5,
+    "duplicate_image_count": 0,
+    "reuse_count": 0,
+    "min_reuse_distance_s": null,
+    "visual_coverage_s": 1390.0,
+    "tail_black_duration_s": 397.233,
+    "motion_outlier_count": 138
+  },
+  "v1_shadow": {
+    "shot_count": 278,
+    "min_duration_s": 2.3,
+    "p10_duration_s": 2.777,
+    "median_duration_s": 6.185,
+    "p90_duration_s": 8.386,
+    "max_duration_s": 24.396,
+    "shots_lt_2s": 0,
+    "shots_gt_8_5s": 21,
+    "structural_boundary_ratio": 0.0,
+    "arbitrary_cut_ratio": 1.0,
+    "duplicate_image_count": 0,
+    "reuse_count": 0,
+    "min_reuse_distance_s": null,
+    "visual_coverage_s": 1787.233,
+    "tail_black_duration_s": 0.0,
+    "motion_outlier_count": 0
+  },
+  "delta": {
+    "shot_count_delta": 0,
+    "shots_lt_2s_eliminated": 0,
+    "tail_black_seconds_eliminated": 397.233,
+    "duplicate_images_eliminated": 0,
+    "motion_outliers_eliminated": 138,
+    "structural_accuracy_gain": -0.5
+  }
+}

@@ -95,9 +95,17 @@ class VisualPipelineAdapter:
 
         # 2. DP Minimum-Cost Shot Partitioning (Narration Zone)
         speech_dur_s = subtitles[-1].end_s if subtitles else master_audio_duration_s
+        tail_dur_s = max(0.0, master_audio_duration_s - speech_dur_s)
+        available_images = len(images)
+        if tail_dur_s > 10.0 and available_images > 0:
+            tail_reserve = min(available_images // 4, max(1, int(round(tail_dur_s / 24.4))))
+            speech_image_target = max(1, available_images - tail_reserve)
+        else:
+            speech_image_target = available_images
+
         planned_path = self.planner.plan_shots(
             candidates=candidates,
-            physical_image_count=len(images),
+            physical_image_count=speech_image_target,
             spoken_duration_s=speech_dur_s,
         )
 
@@ -140,15 +148,26 @@ class VisualPipelineAdapter:
     def shots_to_editplan_clips(self, shots: List[VisualShot]) -> List[EditPlanClip]:
         """Convert planned VisualShots into EditPlanClips for CapCut adapter."""
         clips: List[EditPlanClip] = []
+        valid_motions = {"ZOOM_IN", "ZOOM_OUT", "PAN_LEFT", "PAN_RIGHT", "PAN_UP", "PAN_DOWN", "NONE"}
         for s in shots:
+            raw_m = s.motion_profile.get("motion_type", "NONE")
+            clean_m = raw_m
+            if clean_m.startswith("ULTRA_SLOW_"):
+                clean_m = clean_m[len("ULTRA_SLOW_"):]
+            elif clean_m.startswith("REDUCED_"):
+                clean_m = clean_m[len("REDUCED_"):]
+            if clean_m not in valid_motions:
+                clean_m = "NONE"
+
+            kf_params = dict(s.motion_profile)
             clip = EditPlanClip(
                 clip_id=str(uuid.uuid4()).upper(),
                 media_path=os.path.abspath(s.image_path),
                 media_type="image",
                 start_us=s.start_us,
                 duration_us=s.duration_us,
-                motion_type=s.motion_profile.get("motion_type", "NONE"),
-                keyframe_params=s.motion_profile.get("keyframe_params", {}),
+                motion_type=clean_m,
+                keyframe_params=kf_params,
             )
             clips.append(clip)
         return clips

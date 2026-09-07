@@ -39,6 +39,7 @@ FAST_SUITES = [
     "tests/test_visual_motion_policy.py",
     "tests/test_visual_validator.py",
     "tests/test_visual_pipeline_integration.py",
+    "tests/test_a1_acceptance_matrix.py",
 ]
 
 INTEGRATION_SUITES = [
@@ -54,6 +55,7 @@ ACCURACY_SUITES = [
     "tests/test_a0_benchmark.py",
     "tests/test_a0_adversarial.py",
     "tests/test_forced_alignment.py",
+    "tests/test_a1_acceptance_matrix.py",
 ]
 
 RELEASE_ADDITIONAL_SUITES = [

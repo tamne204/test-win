@@ -131,6 +131,7 @@ class VisualAccuracyValidator:
             )
 
         # 2. Individual shot checks
+        last_seen_us: Dict[str, int] = {}
         for idx, shot in enumerate(shots):
             dur_s = shot.duration_s
             is_tail = (speech_end_us is not None and shot.start_us >= speech_end_us)
@@ -149,6 +150,25 @@ class VisualAccuracyValidator:
                         message=f"Shot {shot.shot_id} has empty image_path.",
                     )
                 )
+
+            # Asset rapid reuse check (< min_reuse_distance_s)
+            if shot.image_path and shot.image_path in last_seen_us:
+                dist_s = (shot.start_us - last_seen_us[shot.image_path]) / 1_000_000.0
+                if dist_s < self.min_reuse_distance_s and not is_tail:
+                    issues.append(
+                        ValidationIssue(
+                            check_id="VAL-ERR-02",
+                            severity=ValidationSeverity.ERROR,
+                            shot_id=shot.shot_id,
+                            timestamp_us=shot.start_us,
+                            metric_name="reuse_distance_s",
+                            metric_value=round(dist_s, 2),
+                            threshold=self.min_reuse_distance_s,
+                            message=f"Shot {shot.shot_id} reuses '{shot.image_id}' after {dist_s:.1f}s, violating min_reuse_distance {self.min_reuse_distance_s:.1f}s.",
+                        )
+                    )
+            if shot.image_path:
+                last_seen_us[shot.image_path] = shot.end_us
 
             # Micro-shot check (< 2.0s)
             min_thresh = self.tail_policy.hard_min_s if is_tail else self.duration_policy.hard_min_s

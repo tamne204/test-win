@@ -64,6 +64,7 @@ class DurationAwareMotionPolicy:
                 "pan_y_end": 0.0,
                 "target_velocity_pct_per_sec": 1.0,
                 "effective_velocity_pct_per_sec": round(eff_v, 2),
+                "velocity_pct_per_s": round(eff_v, 2),
                 "is_reduced": True,
                 "is_ultra_slow": False,
             }
@@ -88,6 +89,7 @@ class DurationAwareMotionPolicy:
                     "pan_y_end": 0.0,
                     "target_velocity_pct_per_sec": round(eff_v, 2),
                     "effective_velocity_pct_per_sec": round(eff_v, 2),
+                    "velocity_pct_per_s": round(eff_v, 2),
                     "is_reduced": False,
                     "is_ultra_slow": True,
                 }
@@ -104,6 +106,7 @@ class DurationAwareMotionPolicy:
                     "pan_y_end": 0.0,
                     "target_velocity_pct_per_sec": round(eff_v, 2),
                     "effective_velocity_pct_per_sec": round(eff_v, 2),
+                    "velocity_pct_per_s": round(eff_v, 2),
                     "is_reduced": False,
                     "is_ultra_slow": True,
                 }
@@ -138,6 +141,7 @@ class DurationAwareMotionPolicy:
                 "pan_y_end": 0.0,
                 "target_velocity_pct_per_sec": round(clamped_v, 2),
                 "effective_velocity_pct_per_sec": round(effective_v, 2),
+                "velocity_pct_per_s": round(effective_v, 2),
                 "is_reduced": False,
                 "is_ultra_slow": False,
             }
@@ -154,6 +158,7 @@ class DurationAwareMotionPolicy:
                 "pan_y_end": 0.0,
                 "target_velocity_pct_per_sec": round(clamped_v, 2),
                 "effective_velocity_pct_per_sec": round(effective_v, 2),
+                "velocity_pct_per_s": round(effective_v, 2),
                 "is_reduced": False,
                 "is_ultra_slow": False,
             }

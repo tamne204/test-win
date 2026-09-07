@@ -97,38 +97,60 @@ class SilentTailAllocator:
 
             return tail_shots
 
-        # Case B: Extreme tail duration (natural_s > 25.0s): allocate remaining images at soft_max (20-25s)
-        # then hold the final image for the remainder
+        # Case B: Extreme tail duration (natural_s > 25.0s): allocate remaining images up to soft_max (20-25s)
+        # then apply shortage fallback (final hold or reuse) for remainder
         curr_start_us = speech_end_us
-        shot_dur_us = int(round(self.tail_policy.target_max_s * 1_000_000))
+        shot_dur_us = int(round(self.tail_policy.soft_max_s * 1_000_000))
 
         for idx, img in enumerate(remaining_images):
-            is_last = (idx == k_rem - 1)
-            # If last image, it extends all the way to master_audio_duration_us
-            curr_end_us = master_audio_duration_us if is_last else min(master_audio_duration_us, curr_start_us + shot_dur_us)
-            dur_us = curr_end_us - curr_start_us
+            dur = min(shot_dur_us, master_audio_duration_us - curr_start_us)
+            curr_end_us = curr_start_us + dur
             img_id = os.path.basename(img).split(".")[0]
 
             shot = VisualShot(
-                shot_id=start_shot_id + idx,
+                shot_id=start_shot_id + len(tail_shots),
                 start_us=curr_start_us,
                 end_us=curr_end_us,
-                duration_us=dur_us,
+                duration_us=dur,
                 image_id=img_id,
                 image_path=img,
                 cue_ids=[],
                 paragraph_ids=[],
                 sentence_ids=[],
-                boundary_start_reason="speech_end" if idx == 0 else "tail_beat",
-                boundary_end_reason="master_audio_end" if is_last else "tail_beat",
+                boundary_start_reason="speech_end" if len(tail_shots) == 0 else "tail_beat",
+                boundary_end_reason="master_audio_end" if curr_end_us == master_audio_duration_us else "tail_beat",
                 is_internal_split=False,
                 reuse_count=0,
                 motion_profile={"motion_type": "ULTRA_SLOW", "target_velocity": 0.25},
-                diagnostics={"tail_case": "EXTENDED_HOLD_FALLBACK"},
+                diagnostics={"tail_case": "SHORTAGE_INITIAL_ALLOCATION"},
             )
             tail_shots.append(shot)
             curr_start_us = curr_end_us
             if curr_start_us >= master_audio_duration_us:
                 break
+
+        # If remainder exists, hold the last available image or last speech image
+        if curr_start_us < master_audio_duration_us:
+            rem_dur_us = master_audio_duration_us - curr_start_us
+            hold_img = remaining_images[-1] if remaining_images else last_speech_image
+            hold_id = os.path.basename(hold_img).split(".")[0]
+            hold_shot = VisualShot(
+                shot_id=start_shot_id + len(tail_shots),
+                start_us=curr_start_us,
+                end_us=master_audio_duration_us,
+                duration_us=rem_dur_us,
+                image_id=hold_id,
+                image_path=hold_img,
+                cue_ids=[],
+                paragraph_ids=[],
+                sentence_ids=[],
+                boundary_start_reason="tail_beat",
+                boundary_end_reason="master_audio_end",
+                is_internal_split=False,
+                reuse_count=1,
+                motion_profile={"motion_type": "ULTRA_SLOW", "target_velocity": 0.15},
+                diagnostics={"tail_case": "EXTENDED_HOLD_FALLBACK"},
+            )
+            tail_shots.append(hold_shot)
 
         return tail_shots
