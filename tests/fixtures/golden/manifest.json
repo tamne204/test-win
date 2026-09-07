@@ -1,0 +1,220 @@
+{
+  "version": "1.0.0",
+  "total_fixtures": 13,
+  "fixtures": {
+    "GOLDEN_AUTOSUB": {
+      "fixture_id": "GOLDEN_AUTOSUB",
+      "description": "Speech-only mode where subtitles are generated directly from ASR words",
+      "language": "vi",
+      "script": "",
+      "audio_duration_s": 4.0,
+      "words_count": 5,
+      "images_count": 1,
+      "script_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "words_hash": "fd779dbd377171e3215f7b5441e08d7e72cbef1d1fbe14becb8a3b4609ebc31c",
+      "images_hash": "34a2b50c616c8d80af546a03ee8d6f134813c95aeb34c2268e850315df14d712",
+      "fixture_hash": "78c402ae5a5b35d419073b81f99dcc8e77fda34b41b58711baf624706b3ce0ab",
+      "metadata": {
+        "mode": "autosub"
+      }
+    },
+    "GOLDEN_DUPLICATE_FILENAMES": {
+      "fixture_id": "GOLDEN_DUPLICATE_FILENAMES",
+      "description": "Images with duplicate base filenames across different folders",
+      "language": "vi",
+      "script": "Hình ảnh có cùng tên tệp trong các thư mục khác nhau.",
+      "audio_duration_s": 3.5,
+      "words_count": 5,
+      "images_count": 3,
+      "script_hash": "b9c7081a4b293d958d0685760d00cde615992dba18657d690c9b49e2a28deb4a",
+      "words_hash": "aa160f2eb4534565a5d9d1fd8fc88c4efa0d987e164510fbc206fe2f1c3b371d",
+      "images_hash": "579e99d63d1dbcbd05baf3416cf0bea531133a6cdbc650dbc76e8284700ff4f8",
+      "fixture_hash": "7d0f7d51e4590c6bee5ecb204b022113b34cfc16734f6c1ba5055d589f387e85",
+      "metadata": {
+        "duplicate_basename": "slide.png"
+      }
+    },
+    "GOLDEN_FORCED_ALIGNMENT": {
+      "fixture_id": "GOLDEN_FORCED_ALIGNMENT",
+      "description": "Forced alignment with uppercase script preserving original casing",
+      "language": "vi",
+      "script": "TRÍ TUỆ NHÂN TẠO ngày nay phát triển vượt bậc.",
+      "audio_duration_s": 6.0,
+      "words_count": 10,
+      "images_count": 2,
+      "script_hash": "53779e3c4672f1999767d8b69ef3044007fbabca8c91886a02d289698b2b465a",
+      "words_hash": "cf56bf4c9f4415bb5b50979e35f8155a30aac3c9413c1e999667380eb3c414c5",
+      "images_hash": "6fda5359a5ecce785e871817a3109538c1892500fd6182b4d05040218df01454",
+      "fixture_hash": "e90f6a173ccc9b4ad108b3e0142e1d07c4391e901810cadb992088be0233882e",
+      "metadata": {
+        "casing": "UPPERCASE_PRESERVATION"
+      }
+    },
+    "GOLDEN_IMAGE_SHORTAGE": {
+      "fixture_id": "GOLDEN_IMAGE_SHORTAGE",
+      "description": "6 cues but only 2 physical images",
+      "language": "vi",
+      "script": "Một.\nHai.\nBa.\nBốn.\nNăm.\nSáu.",
+      "audio_duration_s": 7.0,
+      "words_count": 6,
+      "images_count": 2,
+      "script_hash": "d33335322d1827de485adf034e4a0fb61b054c3b8354f6e22ece50fcfbb893eb",
+      "words_hash": "76148aad414b75a1640e37158d05dc2723fdd9d3372df396f8e3dc1ce1036d2d",
+      "images_hash": "19943e85e2c9b4322fba7f3f9f4eb56f22dfd6b49282493fc25d6bdc63109e50",
+      "fixture_hash": "6d2c521e9677b0f966be227dc55986ff4f543bda1a44d0df65d6b01a8a086fd4",
+      "metadata": {
+        "cues": 6,
+        "images": 2
+      }
+    },
+    "GOLDEN_IMAGE_SURPLUS": {
+      "fixture_id": "GOLDEN_IMAGE_SURPLUS",
+      "description": "2 cues but 10 images provided",
+      "language": "vi",
+      "script": "Chỉ có hai câu.\nHết rồi.",
+      "audio_duration_s": 4.5,
+      "words_count": 6,
+      "images_count": 10,
+      "script_hash": "16a67e29d9f02a3c61bcac6ef5433053e5c9c6d74ff20a7ece5b6a53090f198c",
+      "words_hash": "22ca31526068ef36bac8fff5364e1ca1c4a7ae751a38c845fa85d86374575465",
+      "images_hash": "7f908ee5dccd24060db61b659db324c0728d34951331e95ffee37627ca75da2e",
+      "fixture_hash": "41486ab7132af60f90ffc7a13fdff889e7c8be2630c5bfa3319fbbbb81f49773",
+      "metadata": {
+        "cues": 2,
+        "images": 10
+      }
+    },
+    "GOLDEN_LONG_01": {
+      "fixture_id": "GOLDEN_LONG_01",
+      "description": "Production regression benchmark (29m47s audio, 1641s speech, 278 images)",
+      "language": "vi",
+      "script": "LONG_01 Master Script Reference (266 paragraphs, 616 sentences)",
+      "audio_duration_s": 1787.233333,
+      "words_count": 3053,
+      "images_count": 278,
+      "script_hash": "647d0285cbecc324e99dbe152121f05b9fa6040e6de8f86ef2b92dd05018b537",
+      "words_hash": "e518690def28a2f2c83070441032527484bf5057e77e69ab6f81123f935528ec",
+      "images_hash": "8f52a4e46a2e7aea2e0f072711d0c7b19f91c8ce21d9a8f87d0379c28eaf36fd",
+      "fixture_hash": "91ce4f1c3d5476e913d664a3881231d0fffb474d9d171d678aa2e3834486c61c",
+      "metadata": {
+        "source": "production_long_01",
+        "real_asr_words_count": 3053,
+        "total_paragraphs": 266,
+        "total_images": 278
+      }
+    },
+    "GOLDEN_LONG_PARAGRAPH": {
+      "fixture_id": "GOLDEN_LONG_PARAGRAPH",
+      "description": "Single uninterrupted paragraph with 30 words testing sentence splitting",
+      "language": "vi",
+      "script": "Đây là một đoạn văn bản rất dài không hề có dấu xuống dòng nhằm mục đích kiểm tra khả năng chia phân đoạn tự động của hệ thống subtitles.",
+      "audio_duration_s": 12.0,
+      "words_count": 30,
+      "images_count": 3,
+      "script_hash": "3a8609f69c3b27a674c0a328cba3c1d7cff5b9910b34c563b4e099e0472e3477",
+      "words_hash": "4ef985d6b5f3a5cae518fbe5a43a3ccd4716f9219a4c076ad723cfd65e050624",
+      "images_hash": "b541308aff34226f208baff576a6316fa7758ed54019c1ebdcf4321561a130d7",
+      "fixture_hash": "74473e9c40f6b9c05819df4126625f8c94c1c253a58b32b70622b09d09cb88bc",
+      "metadata": {
+        "word_count": 30
+      }
+    },
+    "GOLDEN_MANY_PARAGRAPHS": {
+      "fixture_id": "GOLDEN_MANY_PARAGRAPHS",
+      "description": "20 distinct short paragraphs to stress segment boundary logic",
+      "language": "vi",
+      "script": "Mục số 1.\nMục số 2.\nMục số 3.\nMục số 4.\nMục số 5.\nMục số 6.\nMục số 7.\nMục số 8.\nMục số 9.\nMục số 10.\nMục số 11.\nMục số 12.\nMục số 13.\nMục số 14.\nMục số 15.\nMục số 16.\nMục số 17.\nMục số 18.\nMục số 19.\nMục số 20.",
+      "audio_duration_s": 27.0,
+      "words_count": 60,
+      "images_count": 20,
+      "script_hash": "7cf5f177d22c282f0249f0abf0bdc96ee72cc3efeb2636bbf77d5b772a8adf78",
+      "words_hash": "4c1234d992f1d0fa8896210d4c4014de63e77f100dc7541c8368190d1709cdc1",
+      "images_hash": "65f823ec931eb25e4f75959972302b1b275737f7d094d29f5363568b9f7be846",
+      "fixture_hash": "73e986690f956d7e55ba24989681b6fe53c16c157a4a771b892896713fa482d4",
+      "metadata": {
+        "paragraph_count": 20
+      }
+    },
+    "GOLDEN_NO_SUBTITLE": {
+      "fixture_id": "GOLDEN_NO_SUBTITLE",
+      "description": "Slideshow with background audio but without script or subtitles",
+      "language": "und",
+      "script": "",
+      "audio_duration_s": 15.0,
+      "words_count": 0,
+      "images_count": 3,
+      "script_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "words_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "images_hash": "ce240a456c702d71879c5e8b73d4f431581061a71abfe411e4611509e2596c61",
+      "fixture_hash": "5ddf6e1941b519ae2d65af1d3caf0a1f35107dfceec3b496f7f774cc63ad40ab",
+      "metadata": {
+        "has_subtitles": false
+      }
+    },
+    "GOLDEN_SCRIPT_OMISSION": {
+      "fixture_id": "GOLDEN_SCRIPT_OMISSION",
+      "description": "Script contains tail sentence that was omitted by speaker",
+      "language": "vi",
+      "script": "Đoạn này có trong văn bản nhưng người đọc đã bỏ qua hoàn toàn không nói.",
+      "audio_duration_s": 5.0,
+      "words_count": 6,
+      "images_count": 1,
+      "script_hash": "14f8592ee9924cfc75b54c5d5d58e2e82e6369c112b2455c3699fb3847322019",
+      "words_hash": "fcb375a909d53a2e321398afbdd15bf3d31c6c5f7e3c9d9ed36730f97c2856a3",
+      "images_hash": "9d0ac6888066a2799be47c7fe1b8b72b57c040f9b02005e3c2abf26cf220bb95",
+      "fixture_hash": "a458ff41e964596614a2bc0dc9b726d2b0f597753712772af0d7bd7113f10b16",
+      "metadata": {
+        "omitted_words_count": 8
+      }
+    },
+    "GOLDEN_SHORT_KO": {
+      "fixture_id": "GOLDEN_SHORT_KO",
+      "description": "Short Korean script with polite sentence structure",
+      "language": "ko",
+      "script": "안녕하세요.\n오늘도 좋은 하루 되세요.",
+      "audio_duration_s": 5.0,
+      "words_count": 5,
+      "images_count": 2,
+      "script_hash": "b28822d4f0ca5dcb9dc79e3558c91f7f33574e8127d6e3b815261ae65a5f1670",
+      "words_hash": "c13e3e71d949abf9acda532fe3fc43ffc70f6637332094532960138d27a7e6d3",
+      "images_hash": "164e1623dbe2cd85f6a28f83f474e597ca9e69246374a192e79f97ad46e049ab",
+      "fixture_hash": "7c9d2248f68000baf8e8754d9da5d961b380e3e4766ca013af803f5d6e4e404c",
+      "metadata": {
+        "source": "synthetic_standard"
+      }
+    },
+    "GOLDEN_SHORT_VI": {
+      "fixture_id": "GOLDEN_SHORT_VI",
+      "description": "Standard short Vietnamese script with 3 paragraphs",
+      "language": "vi",
+      "script": "Chào bạn.\nĐây là video thử nghiệm.\nChúc bạn một ngày tốt lành.",
+      "audio_duration_s": 6.5,
+      "words_count": 13,
+      "images_count": 3,
+      "script_hash": "90171d17c8a84b9ecee6a8704336d04ca55e596c6c22c29b2cfede2652b5beaa",
+      "words_hash": "14db864cde6c23a87c162cac53f1bf638a05a2eb82ac7501322a22c0fade8c89",
+      "images_hash": "46a6c9a96d5ab5c92bb5c1092fca3a4b4f801aad14f72acf7dba7290fc11ed99",
+      "fixture_hash": "4b4aa0a34de3c519062e416c7052972d26dbeb5fc73a1b21b44dff4de2209203",
+      "metadata": {
+        "source": "synthetic_standard"
+      }
+    },
+    "GOLDEN_SILENT_TAIL": {
+      "fixture_id": "GOLDEN_SILENT_TAIL",
+      "description": "Speech terminates at 4.2s but audio continues silently until 20.0s",
+      "language": "vi",
+      "script": "Lời kết thúc tại giây thứ năm.",
+      "audio_duration_s": 20.0,
+      "words_count": 7,
+      "images_count": 2,
+      "script_hash": "5efb0ba66abe78476d59f31b7cd1616c8818fed47686d061f937aeacdf490a8c",
+      "words_hash": "90078948c5097044b1c6eb7991460010cbfeae11620f6f44aaf05e39cf258278",
+      "images_hash": "015b423178985297857f3c7c630666c8c6ce8aa3e481b7812e59331fb34eacda",
+      "fixture_hash": "6c99dc9e94e574975f285b917b7a03ef1ce56333687080b2df8b8f73d071fe99",
+      "metadata": {
+        "speech_end_s": 4.2,
+        "silence_duration_s": 15.8
+      }
+    }
+  }
+}
