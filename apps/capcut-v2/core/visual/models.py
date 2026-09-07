@@ -166,3 +166,13 @@ class VisualPlannerOptions:
     duration_policy: ShotDurationPolicy = field(default_factory=ShotDurationPolicy)
     tail_policy: TailDurationPolicy = field(default_factory=TailDurationPolicy)
     min_reuse_distance_s: float = 60.0
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "engine": self.engine.value,
+            "shadow_mode": self.shadow_mode,
+            "duration_policy": asdict(self.duration_policy),
+            "tail_policy": asdict(self.tail_policy),
+            "min_reuse_distance_s": self.min_reuse_distance_s,
+        }
+
