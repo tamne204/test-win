@@ -1,0 +1,75 @@
+{
+  "project": {
+    "name": "AutoEdit Project",
+    "width": 1080,
+    "height": 1920,
+    "fps": 60.0,
+    "duration_us": 914140000
+  },
+  "clips": [
+    {
+      "clip_id": "D00B4BFE-DA0C-4081-9729-C73E1360515F",
+      "media_path": "/Users/2tamne/tool ffmpeg/.worktrees/devaccel-8/reports/accuracy/a1/iteration_outputs/mock_images/img_001.png",
+      "start_us": 0,
+      "duration_us": 914140000,
+      "media_type": "image",
+      "motion_type": "ZOOM_IN",
+      "keyframe_params": {
+        "type": "ZOOM_IN",
+        "scale_start": 1.0,
+        "scale_end": 1.15,
+        "pos_x_start": 0.0,
+        "pos_x_end": 0.0,
+        "pos_y_start": 0.0,
+        "pos_y_end": 0.0
+      },
+      "width": 0,
+      "height": 0
+    }
+  ],
+  "audio": [],
+  "captions": [
+    {
+      "caption_id": "A63738C2-2F09-4F3A-9EE2-74CEC28E9B23",
+      "text": "LONG_01 Master Script Reference (266 paragraphs,",
+      "start_us": 910980000,
+      "duration_us": 2270000,
+      "font_size": 8.0,
+      "color_rgb": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "position_x": 0.0,
+      "position_y": -0.6,
+      "background_color": null,
+      "stroke_color": null,
+      "stroke_width": 0.0
+    },
+    {
+      "caption_id": "1235B4BE-76A4-457D-84D7-DDAD534A53EE",
+      "text": "616 sentences)",
+      "start_us": 913300000,
+      "duration_us": 840000,
+      "font_size": 8.0,
+      "color_rgb": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "position_x": 0.0,
+      "position_y": -0.6,
+      "background_color": null,
+      "stroke_color": null,
+      "stroke_width": 0.0
+    }
+  ],
+  "metadata": {
+    "preset_name": "Basic Slideshow",
+    "preset_id": "basic_slideshow",
+    "timing_mode": "SRT_DRIVEN",
+    "clip_count": 1,
+    "has_audio": false,
+    "has_captions": true
+  }
+}
