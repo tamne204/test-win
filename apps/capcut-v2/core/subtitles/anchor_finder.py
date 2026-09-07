@@ -391,22 +391,23 @@ class AnchorFinder:
 
                 delta_s = cand_j.script_start_idx - cand_i.script_end_idx
                 delta_t = cand_j.start_s - cand_i.end_s
+                delta_asr = cand_j.asr_start_idx - cand_i.asr_end_idx
 
                 # VAD-aware speech active duration
                 non_speech = get_inter_silence_duration(cand_i.end_s, cand_j.start_s)
                 speech_active_dur = max(0.2, delta_t - non_speech)
 
-                raw_speed = delta_s / max(0.1, delta_t)
-                speech_active_speed = delta_s / speech_active_dur
+                raw_asr_speed = max(0, delta_asr) / max(0.1, delta_t)
+                speech_active_asr_speed = max(0, delta_asr) / speech_active_dur
 
-                # Rate plausibility guard
-                # 1. Superhuman rate: > 8.0 tokens/sec
-                if raw_speed > 8.0 or speech_active_speed > 9.0:
+                # Rate plausibility guard on acoustic speech rate (allow script omissions where delta_s >> delta_asr)
+                # 1. Superhuman acoustic rate: > 8.0 ASR words/sec
+                if raw_asr_speed > 8.0 or speech_active_asr_speed > 9.0:
                     continue
 
                 # 2. Silence bridge edge: if raw rate is low (< 0.2 tps), allow if non-speech explains it
-                if raw_speed < 0.2:
-                    is_silence_bridge = (non_speech >= 3.0 or delta_t >= 8.0) and (speech_active_speed >= 0.3)
+                if raw_asr_speed < 0.2 and delta_asr > 0:
+                    is_silence_bridge = (non_speech >= 3.0 or delta_t >= 8.0) and (speech_active_asr_speed >= 0.3)
                     if not is_silence_bridge and delta_t > 90.0:
                         # Unexplained extreme gap without speech evidence
                         continue

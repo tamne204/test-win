@@ -386,25 +386,25 @@ class HierarchicalScriptAligner:
                     alignment_operation=op_type,
                 )
             else:
-                # Script Omission inside region
-                omit_cnt += 1
+                interp_cnt += 1
                 aligned_output[s_abs] = AlignedToken(
                     script_token=st,
                     start_s=region.t_start_s,
                     end_s=region.t_end_s,
-                    confidence=ConfidenceLevel.OMITTED,
-                    match_type=MatchType.OMITTED,
+                    confidence=ConfidenceLevel.LOW,
+                    match_type=MatchType.INTERPOLATED,
                     string_similarity=0.0,
-                    token_confidence=0.0,
-                    alignment_operation="omission",
+                    token_confidence=0.25,
+                    alignment_operation="gap_interpolation",
                 )
 
-        # Linear spacing adjustment for any internal gaps/omissions within region
-        self._smooth_region_interpolations(region, aligned_output)
+        # Linear spacing adjustment and omission detection for any internal gaps within region
+        self._smooth_region_interpolations(region, aligned_output, unmatched_spans)
 
-        token_speed = p / max(0.1, t_dur)
+        t_dur_clean = max(0.1, round(t_dur, 3))
+        token_speed = round(p / t_dur_clean, 2)
         char_count = sum(len(t.raw_text) for t in s_tokens)
-        cps = char_count / max(0.1, t_dur)
+        cps = round(char_count / t_dur_clean, 2)
 
         # Health status determination
         hard_cps = self.hard_cps_ko if language.lower() == "ko" else self.hard_cps_default
@@ -467,14 +467,21 @@ class HierarchicalScriptAligner:
 
         if is_impossible_tail:
             # Align only what spoken content exists at healthy cadence; mark rest UNSPOKEN
-            alignable_tokens_count = min(p, int(math.ceil(t_dur * self.target_token_rate)))
+            if q > 0:
+                t_speech_end = a_words[-1].end
+                t_spoken_dur = max(0.2, t_speech_end - region.t_start_s)
+                alignable_tokens_count = min(p, max(q, int(math.ceil(t_spoken_dur * self.target_token_rate))))
+                t_fit_dur = t_spoken_dur
+            else:
+                alignable_tokens_count = 0
+                t_fit_dur = 0.0
 
             # Align supported tokens
             spoken_tokens = s_tokens[:alignable_tokens_count]
             unspoken_tokens = s_tokens[alignable_tokens_count:]
 
             if spoken_tokens:
-                time_per_tok = t_dur / float(len(spoken_tokens))
+                time_per_tok = t_fit_dur / float(len(spoken_tokens))
                 for i, st in enumerate(spoken_tokens):
                     abs_idx = region.script_start_idx + i
                     t_s = region.t_start_s + i * time_per_tok
@@ -792,10 +799,12 @@ class HierarchicalScriptAligner:
         self,
         region: BoundedRegion,
         aligned_output: List[Optional[AlignedToken]],
+        unmatched_spans: Optional[List[UnmatchedScriptSpan]] = None,
     ):
         """
-        Enforce strictly monotonic non-overlapping timing for unaligned / omitted tokens
+        Enforce strictly monotonic non-overlapping timing for unaligned / interpolated tokens
         within the boundaries of this specific region.
+        Detects unvoiced omission spans when impossible reading speeds would occur.
         """
         if region.script_start_idx < 0 or region.script_end_idx < 0:
             return
@@ -803,26 +812,78 @@ class HierarchicalScriptAligner:
         p_start = region.script_start_idx
         p_end = region.script_end_idx
 
-        # Guard boundaries
-        t_left = region.t_start_s
-        t_right = region.t_end_s
+        # Find contiguous runs of INTERPOLATED or unaligned tokens
+        curr_run: List[int] = []
+
+        def process_run(run_indices: List[int]):
+            if not run_indices:
+                return
+            first_idx = run_indices[0]
+            last_idx = run_indices[-1]
+
+            # Determine temporal bounds [t_left, t_right]
+            if first_idx > 0 and aligned_output[first_idx - 1] is not None:
+                t_left = aligned_output[first_idx - 1].end_s
+            else:
+                t_left = region.t_start_s
+
+            if last_idx + 1 < len(aligned_output) and aligned_output[last_idx + 1] is not None:
+                t_right = aligned_output[last_idx + 1].start_s
+            else:
+                t_right = region.t_end_s
+
+            t_right = max(t_left, t_right)
+            dur = t_right - t_left
+            k = len(run_indices)
+
+            # Check if this run is an unvoiced script omission (e.g. >= 4 tokens in insufficient time)
+            if k >= 4 and (dur < (k / self.hard_token_rate)):
+                tokens_span = [aligned_output[idx].script_token for idx in run_indices if aligned_output[idx]]
+                if tokens_span and unmatched_spans is not None:
+                    span_text = " ".join(t.raw_text for t in tokens_span)
+                    unmatched_spans.append(
+                        UnmatchedScriptSpan(
+                            span_id=len(unmatched_spans) + 1,
+                            char_start=tokens_span[0].char_start,
+                            char_end=tokens_span[-1].char_end,
+                            token_start=tokens_span[0].token_index,
+                            token_end=tokens_span[-1].token_index,
+                            text=span_text,
+                            reason="SCRIPT_OMITTED",
+                        )
+                    )
+                for idx in run_indices:
+                    tok = aligned_output[idx]
+                    if tok:
+                        tok.start_s = t_left
+                        tok.end_s = t_left
+                        tok.confidence = ConfidenceLevel.OMITTED
+                        tok.match_type = MatchType.OMITTED
+                        tok.token_confidence = 0.0
+                        tok.alignment_operation = "script_omitted"
+            else:
+                # Normal gap interpolation: linearly distribute across [t_left, t_right]
+                step = dur / float(k) if k > 0 and dur > 0 else 0.15
+                for i, idx in enumerate(run_indices):
+                    tok = aligned_output[idx]
+                    if tok:
+                        tok.start_s = round(t_left + i * step, 3)
+                        tok.end_s = round(t_left + (i + 1) * step, 3)
+                        tok.confidence = ConfidenceLevel.LOW
+                        tok.match_type = MatchType.INTERPOLATED
+                        tok.token_confidence = 0.25
+                        tok.alignment_operation = "gap_interpolation"
 
         for idx in range(p_start, p_end + 1):
             tok = aligned_output[idx]
-            if tok is None:
-                continue
-
-            # Ensure inside region bounds
-            tok.start_s = round(max(t_left, tok.start_s), 3)
-            tok.end_s = round(min(t_right, max(tok.start_s + 0.1, tok.end_s)), 3)
-
-            # Monotonicity with previous token
-            if idx > p_start and aligned_output[idx - 1] is not None:
-                prev = aligned_output[idx - 1]
-                if tok.start_s < prev.end_s:
-                    tok.start_s = prev.end_s
-                    if tok.end_s <= tok.start_s:
-                        tok.end_s = round(min(t_right, tok.start_s + 0.15), 3)
+            if tok is not None and tok.match_type in (MatchType.INTERPOLATED, MatchType.OMITTED, MatchType.UNMATCHED):
+                curr_run.append(idx)
+            else:
+                if curr_run:
+                    process_run(curr_run)
+                    curr_run = []
+        if curr_run:
+            process_run(curr_run)
 
     def _ensure_complete_alignment(
         self,

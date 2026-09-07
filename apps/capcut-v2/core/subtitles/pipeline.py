@@ -12,6 +12,7 @@ import threading
 import time
 from typing import Optional, Callable, Dict, Any, List
 
+import json
 from .models import (
     AlignmentOptions,
     AlignmentResult,
@@ -20,6 +21,9 @@ from .models import (
     ScriptToken,
     AlignedToken,
     MatchType,
+    AlignmentEngineType,
+    RegionHealth,
+    UnmatchedScriptSpan,
 )
 from .script_normalizer import tokenize_script, detect_language
 from .speech_timestamp_provider import (
@@ -31,6 +35,8 @@ from .speech_timestamp_provider import (
     ASRRuntimeIncompleteError,
 )
 from .script_aligner import ScriptAligner
+from .hierarchical_aligner import HierarchicalScriptAligner
+from .collapse_detector import CollapseDetector, AlignmentCollapseError
 from .subtitle_segmenter import SubtitleSegmenter
 from .srt_generator import generate_srt, validate_srt_content
 
@@ -86,7 +92,10 @@ class ScriptToSrtPipeline:
         self.asr_provider = asr_provider or FasterWhisperTimestampProvider(
             model_size=self.options.model_size
         )
-        self.aligner = ScriptAligner()
+        self.legacy_aligner = ScriptAligner()
+        self.aligner = self.legacy_aligner
+        self.hierarchical_aligner = HierarchicalScriptAligner()
+        self.collapse_detector = CollapseDetector()
         self.segmenter = SubtitleSegmenter(self.options)
 
     def run(
@@ -206,25 +215,150 @@ class ScriptToSrtPipeline:
             if not has_script:
                 raise ScriptToSrtError("NO_SPEECH_DETECTED", "Không phát hiện thấy giọng nói hoặc lời thoại nào trong tệp âm thanh.")
 
-        if has_script:
-            # 4. Monotonic Alignment
-            notify("ALIGNING_SCRIPT", 0.7, "Đang căn chỉnh từ gốc vào mốc thời gian âm thanh...")
-            aligned_tokens = self.aligner.align(
-                script_tokens=script_tokens,
-                speech_timestamps=asr_timestamps,
-                audio_duration_s=audio_duration,
-            )
+        engine = self.options.engine
+        is_hierarchical = (
+            engine == AlignmentEngineType.HIERARCHICAL_V1
+            or str(engine).lower() in ("hierarchical-anchor-v1", "hierarchical_v1")
+        )
 
-            if not aligned_tokens:
-                raise ScriptToSrtError("SCRIPT_ALIGNMENT_FAILED", "Không thể căn chỉnh kịch bản với âm thanh.")
+        aligned_tokens: List[AlignedToken] = []
+        anchors: List[Any] = []
+        region_health_list: List[RegionHealth] = []
+        unmatched_spans: List[UnmatchedScriptSpan] = []
+        diagnostics: Dict[str, Any] = {}
+        engine_version: str = "legacy"
+        warnings: List[str] = []
+
+        if has_script:
+            if is_hierarchical:
+                engine_version = "hierarchical_v1"
+                notify("ALIGNING_SCRIPT", 0.7, "Đang căn chỉnh từ gốc qua Hierarchical Anchor Engine...")
+                aligned_tokens, anchors, region_health_list, unmatched_spans = self.hierarchical_aligner.align(
+                    script_tokens=script_tokens,
+                    speech_timestamps=asr_timestamps,
+                    audio_duration_s=audio_duration,
+                    language=detected_lang,
+                )
+
+                if not aligned_tokens:
+                    raise ScriptToSrtError("SCRIPT_ALIGNMENT_FAILED", "Không thể căn chỉnh kịch bản với âm thanh.")
+
+                # 5. Segment into Subtitle Cues
+                notify("BUILDING_SUBTITLES", 0.85, "Đang phân đoạn câu phụ đề (chuẩn 12 từ 2TOOLNE)...")
+                cues = self.segmenter.segment(aligned_tokens)
+
+                # Pre-SRT Collapse Detection Gate
+                try:
+                    inspection = self.collapse_detector.inspect(
+                        cues=cues,
+                        region_health_list=region_health_list,
+                        language=detected_lang,
+                        audio_duration_s=audio_duration,
+                        allow_degraded=self.options.allow_degraded,
+                    )
+                except AlignmentCollapseError as err:
+                    raise ScriptToSrtError("ALIGNMENT_COLLAPSE_DETECTED", str(err))
+
+                diagnostics["collapse_inspection"] = inspection.details
+                if inspection.warnings:
+                    warnings.extend(inspection.warnings)
+
+                if inspection.has_collapse and not self.options.allow_degraded:
+                    raise ScriptToSrtError(
+                        "ALIGNMENT_COLLAPSE_DETECTED",
+                        f"Phát hiện suy thoái căn chỉnh nghiêm trọng (Collapse Gate): {'; '.join(inspection.violations)}"
+                    )
+
+            else:
+                engine_version = "legacy"
+                notify("ALIGNING_SCRIPT", 0.7, "Đang căn chỉnh từ gốc vào mốc thời gian âm thanh...")
+                aligned_tokens = self.legacy_aligner.align(
+                    script_tokens=script_tokens,
+                    speech_timestamps=asr_timestamps,
+                    audio_duration_s=audio_duration,
+                )
+
+                if not aligned_tokens:
+                    raise ScriptToSrtError("SCRIPT_ALIGNMENT_FAILED", "Không thể căn chỉnh kịch bản với âm thanh.")
+
+                # 5. Segment into Subtitle Cues (2TOOLNE Standard 12-Word Style)
+                notify("BUILDING_SUBTITLES", 0.85, "Đang phân đoạn câu phụ đề (chuẩn 12 từ 2TOOLNE)...")
+                cues = self.segmenter.segment(aligned_tokens)
+
+                # Shadow Mode: Run Hierarchical in background if enabled
+                if self.options.shadow_mode:
+                    try:
+                        shadow_tokens, shadow_anchors, shadow_health, shadow_spans = self.hierarchical_aligner.align(
+                            script_tokens=script_tokens,
+                            speech_timestamps=asr_timestamps,
+                            audio_duration_s=audio_duration,
+                            language=detected_lang,
+                        )
+                        shadow_cues = self.segmenter.segment(shadow_tokens)
+                        shadow_insp = self.collapse_detector.inspect(
+                            cues=shadow_cues,
+                            region_health_list=shadow_health,
+                            language=detected_lang,
+                            audio_duration_s=audio_duration,
+                            allow_degraded=True,
+                        )
+                        shadow_report = {
+                            "timestamp": time.time(),
+                            "audio_duration_s": audio_duration,
+                            "detected_language": detected_lang,
+                            "legacy": {
+                                "cue_count": len(cues),
+                                "reading_speed_violations": sum(
+                                    1 for c in cues if (len(c.tokens) / max(0.1, c.duration_s)) > 5.0
+                                ),
+                                "micro_cues": sum(1 for c in cues if c.duration_s < 0.40),
+                            },
+                            "shadow_hierarchical": {
+                                "cue_count": len(shadow_cues),
+                                "has_collapse": shadow_insp.has_collapse,
+                                "violations": shadow_insp.violations,
+                                "micro_cue_count": shadow_insp.micro_cue_count,
+                                "micro_cue_ratio": shadow_insp.micro_cue_ratio,
+                                "max_reading_speed_tps": shadow_insp.max_reading_speed_tps,
+                                "max_reading_speed_cps": shadow_insp.max_reading_speed_cps,
+                                "anchor_count": len(shadow_anchors),
+                                "unmatched_spans_count": len(shadow_spans),
+                            },
+                        }
+                        diagnostics["shadow"] = shadow_report
+
+                        shadow_dir = os.path.join(
+                            os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
+                            "reports", "accuracy", "shadow"
+                        )
+                        os.makedirs(shadow_dir, exist_ok=True)
+                        log_path = os.path.join(shadow_dir, f"shadow_{int(time.time()*1000)}.json")
+                        with open(log_path, "w", encoding="utf-8") as f:
+                            json.dump(shadow_report, f, indent=2, ensure_ascii=False)
+                    except Exception as shadow_err:
+                        diagnostics["shadow_error"] = str(shadow_err)
 
             # Compute match statistics
-            matched_count = sum(1 for t in aligned_tokens if t.confidence in (ConfidenceLevel.HIGH, ConfidenceLevel.MEDIUM))
-            total_count = len(aligned_tokens)
-            matched_pct = (matched_count / total_count * 100.0) if total_count > 0 else 0.0
+            total_script = len(script_tokens)
+            exact_matches = sum(1 for t in aligned_tokens if t.match_type == MatchType.EXACT)
+            fuzzy_matches = sum(
+                1 for t in aligned_tokens if t.match_type in (MatchType.HIGH_FUZZY, MatchType.WEAK_FUZZY, MatchType.FUZZY, MatchType.PHONETIC)
+            )
+            interpolated = sum(1 for t in aligned_tokens if t.match_type == MatchType.INTERPOLATED)
+            omitted = sum(
+                1 for t in aligned_tokens if t.match_type == MatchType.OMITTED or t.confidence == ConfidenceLevel.OMITTED
+            )
+            matched_count = exact_matches + fuzzy_matches
+            matched_pct = (matched_count / total_script * 100.0) if total_script > 0 else 0.0
             unmatched_pct = 100.0 - matched_pct
 
-            warnings: List[str] = []
+            matched_token_ratio = matched_count / total_script if total_script > 0 else 0.0
+            exact_match_ratio = exact_matches / total_script if total_script > 0 else 0.0
+            fuzzy_match_ratio = fuzzy_matches / total_script if total_script > 0 else 0.0
+            interpolated_ratio = interpolated / total_script if total_script > 0 else 0.0
+            omitted_script_ratio = omitted / total_script if total_script > 0 else 0.0
+            anchor_cov = (len(anchors) / max(1, len(region_health_list))) if region_health_list else 0.0
+
             if matched_pct < 40.0:
                 warnings.append(
                     f"Độ khớp kịch bản thấp ({matched_pct:.1f}%). Vui lòng kiểm tra lại kịch bản hoặc âm thanh."
@@ -259,16 +393,18 @@ class ScriptToSrtPipeline:
                         asr_confidence=word.confidence,
                     )
                 )
+            cues = self.segmenter.segment(aligned_tokens)
             matched_pct = 100.0
             unmatched_pct = 0.0
-            warnings = []
+            matched_token_ratio = 1.0
+            exact_match_ratio = 1.0
+            fuzzy_match_ratio = 0.0
+            interpolated_ratio = 0.0
+            omitted_script_ratio = 0.0
+            anchor_cov = 0.0
 
         if cancellation_token and cancellation_token.is_set():
             raise ScriptToSrtError("CANCELLED", "Quy trình đã bị hủy bởi người dùng.")
-
-        # 5. Segment into Subtitle Cues (2TOOLNE Standard 12-Word Style)
-        notify("BUILDING_SUBTITLES", 0.85, "Đang phân đoạn câu phụ đề (chuẩn 12 từ 2TOOLNE)...")
-        cues = self.segmenter.segment(aligned_tokens)
 
         # 6. Generate and Validate SRT
         notify("VALIDATING_SRT", 0.95, "Đang kiểm tra tính toàn vẹn của tệp SRT...")
@@ -292,4 +428,18 @@ class ScriptToSrtPipeline:
             low_confidence_count=low_conf_count,
             detected_language=detected_lang,
             warnings=warnings,
+            aligned_tokens=aligned_tokens,
+            anchors=anchors,
+            regions=region_health_list,
+            matched_token_ratio=matched_token_ratio,
+            exact_match_ratio=exact_match_ratio,
+            fuzzy_match_ratio=fuzzy_match_ratio,
+            interpolated_ratio=interpolated_ratio,
+            omitted_script_ratio=omitted_script_ratio,
+            asr_insertion_ratio=0.0,
+            anchor_coverage_ratio=anchor_cov,
+            region_health_list=region_health_list,
+            unmatched_script_spans=unmatched_spans,
+            alignment_engine_version=engine_version,
+            diagnostics=diagnostics,
         )
