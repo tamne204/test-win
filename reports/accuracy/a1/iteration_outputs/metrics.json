@@ -1,0 +1,58 @@
+{
+  "fixture_id": "GOLDEN_LONG_01",
+  "total_audio_duration_s": 1787.233333,
+  "total_clips": 1,
+  "total_cues": 2,
+  "replay_manifest": {
+    "start_time": 1238319.258983833,
+    "total_duration_ms": 18.119500018656254,
+    "stages": [
+      {
+        "stage_name": "alignment",
+        "cache_hit": true,
+        "duration_ms": 3.5137918312102556,
+        "input_hash": "647d0285cbecc324e99dbe152121f05b9fa6040e6de8f86ef2b92dd05018b537",
+        "artifact_hash": "fca879b37b498a7d0c1365f28daea0ac0fe152829222cd10e15324059737ae50",
+        "warnings": []
+      },
+      {
+        "stage_name": "subtitle_segmenter",
+        "cache_hit": true,
+        "duration_ms": 0.14270911924540997,
+        "input_hash": "fca879b37b498a7d0c1365f28daea0ac0fe152829222cd10e15324059737ae50",
+        "artifact_hash": "ef86add4992ecaf4bd5fc518c816933a027c24897162f19262d71ac472ce0777",
+        "warnings": []
+      },
+      {
+        "stage_name": "timeline_builder",
+        "cache_hit": false,
+        "duration_ms": 0.2512501087039709,
+        "input_hash": "ef86add4992ecaf4bd5fc518c816933a027c24897162f19262d71ac472ce0777",
+        "artifact_hash": "655e2aef08c8f878d32daf448a21df98bba9b191dd8605acc0fc732ee7460529",
+        "warnings": []
+      },
+      {
+        "stage_name": "capcut_adapter",
+        "cache_hit": false,
+        "duration_ms": 13.779624830931425,
+        "input_hash": "655e2aef08c8f878d32daf448a21df98bba9b191dd8605acc0fc732ee7460529",
+        "artifact_hash": "4f0063a602251b2327c96bcade9f173c3653bbb6db38195e4587fcb9d8664caa",
+        "warnings": []
+      }
+    ],
+    "engine_versions": {
+      "alignment": "hierarchical-anchor-v1",
+      "segmenter": "a0_subtitle_v1",
+      "timeline": "timeline_builder_v2",
+      "adapter": "capcut_9_3"
+    },
+    "summary": {
+      "cues_count": 2,
+      "clips_count": 1,
+      "total_timeline_duration_us": 914140000
+    }
+  },
+  "wall_clock_duration_s": 0.143,
+  "whisper_executed": false,
+  "capcut_desktop_opened": false
+}

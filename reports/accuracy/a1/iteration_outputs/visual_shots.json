@@ -1,0 +1,19 @@
+[
+  {
+    "shot_index": 0,
+    "clip_id": "D00B4BFE-DA0C-4081-9729-C73E1360515F",
+    "media_path": "media/img_001.png",
+    "start_s": 0.0,
+    "duration_s": 914.14,
+    "motion_type": "ZOOM_IN",
+    "keyframe_params": {
+      "type": "ZOOM_IN",
+      "scale_start": 1.0,
+      "scale_end": 1.15,
+      "pos_x_start": 0.0,
+      "pos_x_end": 0.0,
+      "pos_y_start": 0.0,
+      "pos_y_end": 0.0
+    }
+  }
+]
