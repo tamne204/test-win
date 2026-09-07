@@ -33,6 +33,7 @@ FAST_SUITES = [
     "tests/test_golden_corpus.py",
     "tests/test_draft_normalizer.py",
     "tests/test_capcut_v2_core.py",
+    "tests/test_visual_boundary_builder.py",
 ]
 
 INTEGRATION_SUITES = [
