@@ -106,6 +106,7 @@ def _tokenize_spaced_script(script_text: str, language: str) -> List[ScriptToken
     """
     Tokenize text that uses space-delimited words (Vietnamese, English, Korean, etc.).
     Preserves internal contractions (don't, it's, let's) while stripping outer punctuation.
+    Maintains hierarchical paragraph_id, sentence_id, and clause_id metadata.
     """
     tokens: List[ScriptToken] = []
     
@@ -120,6 +121,13 @@ def _tokenize_spaced_script(script_text: str, language: str) -> List[ScriptToken
     token_idx = 0
     text_len = len(script_text)
 
+    curr_para_id = 0
+    curr_sent_id = 0
+    curr_clause_id = 0
+    prev_was_sentence_break = False
+    prev_was_clause_break = False
+    last_char_end = 0
+
     for m in pattern.finditer(script_text):
         leading_ws = m.group(1)
         word_raw = m.group(2)
@@ -127,6 +135,23 @@ def _tokenize_spaced_script(script_text: str, language: str) -> List[ScriptToken
 
         start_char = m.start(2)
         end_char = m.end(2)
+
+        # Check paragraph transition: any double newline / blank line between last token end and this token
+        inter_text = script_text[last_char_end:start_char]
+        if re.search(r"\n\s*\n", inter_text):
+            if token_idx > 0:
+                curr_para_id += 1
+                curr_sent_id += 1
+                curr_clause_id = 0
+                prev_was_sentence_break = False
+                prev_was_clause_break = False
+        elif prev_was_sentence_break:
+            curr_sent_id += 1
+            curr_clause_id = 0
+            prev_was_sentence_break = False
+        elif prev_was_clause_break:
+            curr_clause_id += 1
+            prev_was_clause_break = False
 
         # Determine sentence or clause break
         is_sentence = any(p in SENTENCE_ENDINGS for p in trailing_punct)
@@ -154,9 +179,15 @@ def _tokenize_spaced_script(script_text: str, language: str) -> List[ScriptToken
                 trailing_punctuation=trailing_punct,
                 is_sentence_break=is_sentence,
                 is_clause_break=is_clause,
+                paragraph_id=curr_para_id,
+                sentence_id=curr_sent_id,
+                clause_id=curr_clause_id,
             )
         )
         token_idx += 1
+        last_char_end = end_char
+        prev_was_sentence_break = is_sentence
+        prev_was_clause_break = is_clause
 
     return tokens
 
@@ -164,6 +195,7 @@ def _tokenize_spaced_script(script_text: str, language: str) -> List[ScriptToken
 def _tokenize_cjk_script(script_text: str, language: str) -> List[ScriptToken]:
     """
     Tokenize CJK unspaced text (such as Japanese) into manageable character/punctuation tokens.
+    Maintains hierarchical paragraph_id, sentence_id, and clause_id metadata.
     """
     tokens: List[ScriptToken] = []
     token_idx = 0
@@ -171,11 +203,26 @@ def _tokenize_cjk_script(script_text: str, language: str) -> List[ScriptToken]:
     word_start = -1
     leading_ws = ""
 
+    curr_para_id = 0
+    curr_sent_id = 0
+    curr_clause_id = 0
+    prev_was_sentence = False
+    last_char_end = 0
+
     for i, char in enumerate(script_text):
         if char.isspace():
             if curr_word:
                 norm = normalize_for_matching(curr_word, language)
                 if norm:
+                    inter_text = script_text[last_char_end:word_start]
+                    if re.search(r"\n\s*\n", inter_text) and token_idx > 0:
+                        curr_para_id += 1
+                        curr_sent_id += 1
+                        prev_was_sentence = False
+                    elif prev_was_sentence:
+                        curr_sent_id += 1
+                        prev_was_sentence = False
+
                     tokens.append(
                         ScriptToken(
                             token_index=token_idx,
@@ -187,9 +234,14 @@ def _tokenize_cjk_script(script_text: str, language: str) -> List[ScriptToken]:
                             trailing_punctuation="",
                             is_sentence_break=("\n" in char),
                             is_clause_break=False,
+                            paragraph_id=curr_para_id,
+                            sentence_id=curr_sent_id,
+                            clause_id=curr_clause_id,
                         )
                     )
                     token_idx += 1
+                    last_char_end = i
+                    prev_was_sentence = ("\n" in char)
                 curr_word = ""
                 word_start = -1
             leading_ws += char
@@ -199,6 +251,17 @@ def _tokenize_cjk_script(script_text: str, language: str) -> List[ScriptToken]:
             if curr_word:
                 norm = normalize_for_matching(curr_word, language)
                 if norm:
+                    inter_text = script_text[last_char_end:word_start]
+                    if re.search(r"\n\s*\n", inter_text) and token_idx > 0:
+                        curr_para_id += 1
+                        curr_sent_id += 1
+                        prev_was_sentence = False
+                    elif prev_was_sentence:
+                        curr_sent_id += 1
+                        prev_was_sentence = False
+
+                    is_sent = char in SENTENCE_ENDINGS
+                    is_cl = char in CLAUSE_ENDINGS
                     tokens.append(
                         ScriptToken(
                             token_index=token_idx,
@@ -208,11 +271,16 @@ def _tokenize_cjk_script(script_text: str, language: str) -> List[ScriptToken]:
                             char_end=i,
                             leading_whitespace=leading_ws,
                             trailing_punctuation=char,
-                            is_sentence_break=(char in SENTENCE_ENDINGS),
-                            is_clause_break=(char in CLAUSE_ENDINGS),
+                            is_sentence_break=is_sent,
+                            is_clause_break=is_cl,
+                            paragraph_id=curr_para_id,
+                            sentence_id=curr_sent_id,
+                            clause_id=curr_clause_id,
                         )
                     )
                     token_idx += 1
+                    last_char_end = i
+                    prev_was_sentence = is_sent
                 curr_word = ""
                 word_start = -1
                 leading_ws = ""
@@ -226,6 +294,15 @@ def _tokenize_cjk_script(script_text: str, language: str) -> List[ScriptToken]:
         if len(curr_word) >= 3:
             norm = normalize_for_matching(curr_word, language)
             if norm:
+                inter_text = script_text[last_char_end:word_start]
+                if re.search(r"\n\s*\n", inter_text) and token_idx > 0:
+                    curr_para_id += 1
+                    curr_sent_id += 1
+                    prev_was_sentence = False
+                elif prev_was_sentence:
+                    curr_sent_id += 1
+                    prev_was_sentence = False
+
                 tokens.append(
                     ScriptToken(
                         token_index=token_idx,
@@ -237,9 +314,14 @@ def _tokenize_cjk_script(script_text: str, language: str) -> List[ScriptToken]:
                         trailing_punctuation="",
                         is_sentence_break=False,
                         is_clause_break=False,
+                        paragraph_id=curr_para_id,
+                        sentence_id=curr_sent_id,
+                        clause_id=curr_clause_id,
                     )
                 )
                 token_idx += 1
+                last_char_end = i + 1
+                prev_was_sentence = False
             curr_word = ""
             word_start = -1
             leading_ws = ""
@@ -258,6 +340,9 @@ def _tokenize_cjk_script(script_text: str, language: str) -> List[ScriptToken]:
                     trailing_punctuation="",
                     is_sentence_break=True,
                     is_clause_break=False,
+                    paragraph_id=curr_para_id,
+                    sentence_id=curr_sent_id,
+                    clause_id=curr_clause_id,
                 )
             )
 
