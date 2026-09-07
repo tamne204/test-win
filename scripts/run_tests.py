@@ -34,6 +34,7 @@ FAST_SUITES = [
     "tests/test_draft_normalizer.py",
     "tests/test_capcut_v2_core.py",
     "tests/test_visual_boundary_builder.py",
+    "tests/test_visual_dp_planner.py",
 ]
 
 INTEGRATION_SUITES = [

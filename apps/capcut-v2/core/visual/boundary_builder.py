@@ -148,8 +148,9 @@ class VisualBoundaryCandidateBuilder:
         candidates: List[VisualBoundaryCandidate] = []
         cue_dur = cue.duration_s
 
+        import math
         # Target number of splits: e.g. 18.76s -> 2 halves (9.38s each)
-        num_segments = max(2, int(round(cue_dur / self.duration_policy.target_max_s)))
+        num_segments = max(2, math.ceil(cue_dur / self.duration_policy.hard_max_s))
 
         # Priority 1: Check token-level punctuation if aligned tokens exist
         split_found = False
