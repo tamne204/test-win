@@ -14,6 +14,8 @@ from .models import (
 )
 from .boundary_builder import VisualBoundaryCandidateBuilder
 from .dp_planner import VisualShotPlanner, PlannedShotInterval, VisualShotBoundaryPath
+from .image_allocator import ImageAllocationPolicy, AllocationResult, ProjectValidationError
+from .tail_allocator import SilentTailAllocator
 
 __all__ = [
     "VisualBoundaryType",
@@ -28,4 +30,8 @@ __all__ = [
     "VisualShotPlanner",
     "PlannedShotInterval",
     "VisualShotBoundaryPath",
+    "ImageAllocationPolicy",
+    "AllocationResult",
+    "ProjectValidationError",
+    "SilentTailAllocator",
 ]
