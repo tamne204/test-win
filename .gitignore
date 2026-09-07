@@ -96,3 +96,6 @@ worktrees/
 *.pfx
 id_rsa
 service_account.json
+
+# Development acceleration cache
+.dev_cache/
