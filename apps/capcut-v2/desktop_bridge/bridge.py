@@ -437,7 +437,7 @@ class DesktopBridge:
         audio_path = params.get("audio_path")
         srt_source = params.get("srt_source")
         timing_mode = params.get("timing_mode", TIMING_MODE_FIXED)
-        preset_id = params.get("preset_id", "basic_slideshow")
+        preset_id = params.get("preset_id", "normal")
         project_name = params.get("project_name", "2TOOLNE AutoEdit Project")
         custom_duration = params.get("custom_clip_duration_s")
         auto_install = bool(params.get("auto_install", True))

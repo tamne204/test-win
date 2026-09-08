@@ -491,7 +491,7 @@ class ProjectBuildQueueManager:
         audio_path = payload.get("audio_path")
         srt_source = payload.get("srt_source")
         timing_mode = payload.get("timing_mode", TIMING_MODE_FIXED)
-        preset_id = payload.get("preset_id", "basic_slideshow")
+        preset_id = payload.get("preset_id", "normal")
         project_name = payload.get("project_name", "AutoEdit Project")
         custom_duration = payload.get("custom_clip_duration_s")
         script_text = payload.get("script_text")

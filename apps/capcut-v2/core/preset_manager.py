@@ -154,7 +154,79 @@ PRESET_YOUTUBE_SHORTS_DYNAMIC = RulePreset(
     is_builtin=True,
 )
 
+PRESET_NORMAL = RulePreset(
+    id="normal",
+    name="Tiêu Chuẩn (Normal)",
+    description="Nhịp điệu cân bằng 4.0-6.5s, phân bổ Zoom/Pan đều đặn (25/25/25/25)",
+    canvas_ratio="9:16",
+    width=1080,
+    height=1920,
+    fps=60.0,
+    scene_duration_s=5.0,
+    min_scene_duration_s=4.0,
+    max_scene_duration_s=6.5,
+    motion_sequence=[
+        MOTION_ZOOM_IN,
+        MOTION_ZOOM_OUT,
+        MOTION_PAN_LEFT,
+        MOTION_PAN_RIGHT,
+    ],
+    zoom_magnitude=0.12,
+    pan_magnitude=0.08,
+    caption_position_y=-0.6,
+    is_builtin=True,
+)
+
+PRESET_CALM = RulePreset(
+    id="calm",
+    name="Êm Đềm / Trầm Lặng (Calm)",
+    description="Nhịp điệu thư thả 5.5-8.5s, ưu tiên Zoom In/Out nhẹ nhàng (40/40/10/10)",
+    canvas_ratio="9:16",
+    width=1080,
+    height=1920,
+    fps=30.0,
+    scene_duration_s=6.5,
+    min_scene_duration_s=5.5,
+    max_scene_duration_s=8.5,
+    motion_sequence=[
+        MOTION_ZOOM_IN,
+        MOTION_ZOOM_OUT,
+        MOTION_ZOOM_IN,
+        MOTION_PAN_LEFT,
+    ],
+    zoom_magnitude=0.07,
+    pan_magnitude=0.04,
+    caption_position_y=-0.7,
+    is_builtin=True,
+)
+
+PRESET_FAST = RulePreset(
+    id="fast",
+    name="Nhanh / Sôi Động (Fast)",
+    description="Nhịp điệu dồn dập 2.5-4.5s, đảo góc lia mạnh mẽ (15/15/35/35) trong giới hạn an toàn 3.5%/s",
+    canvas_ratio="9:16",
+    width=1080,
+    height=1920,
+    fps=60.0,
+    scene_duration_s=3.2,
+    min_scene_duration_s=2.5,
+    max_scene_duration_s=4.5,
+    motion_sequence=[
+        MOTION_PAN_LEFT,
+        MOTION_PAN_RIGHT,
+        MOTION_ZOOM_IN,
+        MOTION_PAN_LEFT,
+    ],
+    zoom_magnitude=0.18,
+    pan_magnitude=0.12,
+    caption_position_y=-0.5,
+    is_builtin=True,
+)
+
 BUILTIN_PRESETS: Dict[str, RulePreset] = {
+    "normal": PRESET_NORMAL,
+    "calm": PRESET_CALM,
+    "fast": PRESET_FAST,
     "basic_slideshow": PRESET_BASIC_SLIDESHOW,
     "tiktok_fast": PRESET_TIKTOK_FAST,
     "story_calm": PRESET_STORY_CALM,
@@ -199,17 +271,18 @@ class PresetManager:
 
     def get_preset(self, preset_id: str) -> RulePreset:
         """Find a preset by ID, falling back to basic_slideshow if not found."""
-        if preset_id in BUILTIN_PRESETS:
-            return BUILTIN_PRESETS[preset_id]
+        pid = (preset_id or "basic_slideshow").lower().strip()
+        if pid in BUILTIN_PRESETS:
+            return BUILTIN_PRESETS[pid]
 
         custom_fp = os.path.join(self.custom_dir, f"{preset_id}.json")
         if os.path.isfile(custom_fp):
             try:
                 with open(custom_fp, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    p = RulePreset.from_dict(data)
-                    p.is_builtin = False
-                    return p
+                p = RulePreset.from_dict(data)
+                p.is_builtin = False
+                return p
             except Exception as e:
                 print(f"Warning: Failed reading custom preset {preset_id}: {e}")
 

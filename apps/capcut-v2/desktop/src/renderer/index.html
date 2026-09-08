@@ -256,6 +256,17 @@ Quy tắc:
                 <span class="card-title">Chuyển Động &amp; Xuất Dự Án</span>
               </div>
               <div class="card-body">
+                <!-- Preset / Edit Style Selector -->
+                <div class="input-field" style="margin-bottom: 12px;">
+                  <label for="selPresetStyle">🎭 Phong cách dựng (Edit Preset):</label>
+                  <select id="selPresetStyle" class="form-select">
+                    <option value="normal" selected>🎯 Tiêu Chuẩn (Normal) — 4.0-6.5s, Zoom/Pan cân bằng</option>
+                    <option value="calm">🌊 Êm Đềm / Trầm Lặng (Calm) — 5.5-8.5s, Zoom nhẹ nhàng</option>
+                    <option value="fast">⚡ Nhanh / Sôi Động (Fast) — 2.5-4.5s, Pan/Tilt dồn dập</option>
+                    <option value="custom">🛠️ Tùy chỉnh (Custom)...</option>
+                  </select>
+                </div>
+
                 <!-- Ken Burns Weights -->
                 <div class="input-field">
                   <label>✨ Trọng số Chuyển động Ngẫu nhiên (Ken Burns %):</label>
@@ -417,7 +428,13 @@ Quy tắc:
               <span class="pane-sub">Các dự án đã được ghi nhận vào thư viện CapCut Desktop</span>
             </div>
             <div style="display:flex; gap:10px; align-items:center;">
-              <input type="text" id="inpProjectSearch" class="form-input" placeholder="🔍 Tìm kiếm dự án..." style="width:240px; font-size:12px; padding:6px 10px;" />
+              <input type="text" id="inpProjectSearch" class="form-input" placeholder="🔍 Tìm kiếm dự án..." style="width:220px; font-size:12px; padding:6px 10px;" />
+              <select id="selProjectSort" class="form-select" style="width:165px; font-size:12px; padding:6px 10px;">
+                <option value="newest" selected>📅 Mới nhất trước</option>
+                <option value="oldest">📅 Cũ nhất trước</option>
+                <option value="name">🔤 Tên (A-Z)</option>
+                <option value="duration">⏱️ Thời lượng dài nhất</option>
+              </select>
               <button type="button" class="btn-subtle" id="btnRefreshProjects">🔄 Làm Mới</button>
             </div>
           </div>

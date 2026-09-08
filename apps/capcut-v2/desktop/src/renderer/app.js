@@ -173,6 +173,7 @@ const DOM = {
   btnClearSrt: document.getElementById('btnClearSrt'),
 
   // Column 3: Motion & Export
+  selPresetStyle: document.getElementById('selPresetStyle'),
   slZoomIn: document.getElementById('slZoomIn'),
   slZoomOut: document.getElementById('slZoomOut'),
   slPan: document.getElementById('slPan'),
@@ -209,6 +210,7 @@ const DOM = {
   projectsGrid: document.getElementById('projectsGrid'),
   btnRefreshProjects: document.getElementById('btnRefreshProjects'),
   inpProjectSearch: document.getElementById('inpProjectSearch'),
+  selProjectSort: document.getElementById('selProjectSort'),
 
   // Upscale View
   upscaleDropZone: document.getElementById('upscaleDropZone'),
@@ -819,12 +821,57 @@ function syncWeightSlider(slider, labelEl, key) {
   slider.addEventListener('input', () => {
     labelEl.textContent = `${slider.value}%`;
     state.motionWeights[key] = parseFloat(slider.value) || 0;
+    if (DOM.selPresetStyle) DOM.selPresetStyle.value = 'custom';
   });
 }
 syncWeightSlider(DOM.slZoomIn, DOM.valZoomIn, 'zoom_in');
 syncWeightSlider(DOM.slZoomOut, DOM.valZoomOut, 'zoom_out');
 syncWeightSlider(DOM.slPan, DOM.valPan, 'pan');
 syncWeightSlider(DOM.slTilt, DOM.valTilt, 'tilt');
+
+if (DOM.selPresetStyle) {
+  DOM.selPresetStyle.addEventListener('change', () => {
+    const val = DOM.selPresetStyle.value;
+    state.presetId = val;
+    if (val === 'normal') {
+      state.motionWeights = { zoom_in: 25, zoom_out: 25, pan: 25, tilt: 25 };
+      if (DOM.slZoomIn) DOM.slZoomIn.value = 25;
+      if (DOM.slZoomOut) DOM.slZoomOut.value = 25;
+      if (DOM.slPan) DOM.slPan.value = 25;
+      if (DOM.slTilt) DOM.slTilt.value = 25;
+      if (DOM.valZoomIn) DOM.valZoomIn.textContent = '25%';
+      if (DOM.valZoomOut) DOM.valZoomOut.textContent = '25%';
+      if (DOM.valPan) DOM.valPan.textContent = '25%';
+      if (DOM.valTilt) DOM.valTilt.textContent = '25%';
+      if (DOM.inpDefaultDuration) DOM.inpDefaultDuration.value = 5.0;
+      showToast('Đã áp dụng phong cách Tiêu Chuẩn (4.0-6.5s, 25/25/25/25)', 'info', 2000);
+    } else if (val === 'calm') {
+      state.motionWeights = { zoom_in: 40, zoom_out: 40, pan: 10, tilt: 10 };
+      if (DOM.slZoomIn) DOM.slZoomIn.value = 40;
+      if (DOM.slZoomOut) DOM.slZoomOut.value = 40;
+      if (DOM.slPan) DOM.slPan.value = 10;
+      if (DOM.slTilt) DOM.slTilt.value = 10;
+      if (DOM.valZoomIn) DOM.valZoomIn.textContent = '40%';
+      if (DOM.valZoomOut) DOM.valZoomOut.textContent = '40%';
+      if (DOM.valPan) DOM.valPan.textContent = '10%';
+      if (DOM.valTilt) DOM.valTilt.textContent = '10%';
+      if (DOM.inpDefaultDuration) DOM.inpDefaultDuration.value = 6.5;
+      showToast('Đã áp dụng phong cách Êm Đềm / Trầm Lặng (5.5-8.5s, 40/40/10/10)', 'info', 2000);
+    } else if (val === 'fast') {
+      state.motionWeights = { zoom_in: 15, zoom_out: 15, pan: 35, tilt: 35 };
+      if (DOM.slZoomIn) DOM.slZoomIn.value = 15;
+      if (DOM.slZoomOut) DOM.slZoomOut.value = 15;
+      if (DOM.slPan) DOM.slPan.value = 35;
+      if (DOM.slTilt) DOM.slTilt.value = 35;
+      if (DOM.valZoomIn) DOM.valZoomIn.textContent = '15%';
+      if (DOM.valZoomOut) DOM.valZoomOut.textContent = '15%';
+      if (DOM.valPan) DOM.valPan.textContent = '35%';
+      if (DOM.valTilt) DOM.valTilt.textContent = '35%';
+      if (DOM.inpDefaultDuration) DOM.inpDefaultDuration.value = 3.2;
+      showToast('Đã áp dụng phong cách Nhanh / Sôi Động (2.5-4.5s, 15/15/35/35)', 'info', 2000);
+    }
+  });
+}
 
 // -----------------------------------------------------------------------------
 // Project Generator & Progress Tracking
@@ -878,6 +925,7 @@ function assembleCurrentProjectPayload() {
     timing_mode: srt ? 'SRT_DRIVEN' : (script && state.audioPath ? 'SRT_DRIVEN' : 'FIXED'),
     custom_clip_duration_s: parseFloat(DOM.inpDefaultDuration.value) || 5.0,
     motion_weights: { ...state.motionWeights },
+    preset_id: DOM.selPresetStyle ? DOM.selPresetStyle.value : (state.presetId || 'normal'),
     auto_install: true,
     auto_upscale: DOM.chkAutoUpscale.checked,
     caption_font_size: parseFloat(DOM.inpSubFontSize.value) || 8.0,
@@ -930,6 +978,7 @@ DOM.btnGenerateProject.addEventListener('click', async () => {
         name: payload.project_name,
         aspectRatio: payload.aspect_ratio,
         imageCount: payload.images.length,
+        durationS: res.duration_s || res.total_duration_s || 0,
         hasAudio: !!payload.audio_path,
         draftDir: res.final_draft_dir,
         createdAt: Date.now(),
@@ -940,6 +989,7 @@ DOM.btnGenerateProject.addEventListener('click', async () => {
           audioPath: state.audioPath,
           scriptText: DOM.inpScriptText ? DOM.inpScriptText.value : '',
           srtContent: DOM.inpSrtText ? DOM.inpSrtText.value : '',
+          presetId: payload.preset_id || 'normal',
         },
       };
       state.projects.unshift(projectRecord);
@@ -1057,6 +1107,39 @@ function renderBuildQueueTableFromState(queueData) {
   }
 
   updateQueueBadge();
+
+  // Auto-sync completed build jobs into state.projects
+  let newlyAdded = false;
+  state.buildQueue.jobs.forEach((job) => {
+    if (job.state === 'PROJECT_READY' && job.result?.final_draft_dir) {
+      const existing = state.projects.find((p) => p.draftDir === job.result.final_draft_dir || p.id === job.job_id);
+      if (!existing) {
+        state.projects.unshift({
+          id: job.job_id,
+          name: job.project_name,
+          aspectRatio: job.payload?.aspect_ratio || '9:16',
+          imageCount: (job.payload?.images || []).length,
+          durationS: job.result?.duration_s || 0,
+          hasAudio: !!job.payload?.audio_path,
+          draftDir: job.result.final_draft_dir,
+          createdAt: job.completed_at ? Math.round(job.completed_at * 1000) : Date.now(),
+          studioData: {
+            projectName: job.project_name,
+            aspectRatio: job.payload?.aspect_ratio,
+            mediaList: job.payload?.images || [],
+            audioPath: job.payload?.audio_path,
+            scriptText: job.payload?.script_text || '',
+            srtContent: job.payload?.srt_source || '',
+            presetId: job.payload?.preset_id || 'normal',
+          },
+        });
+        newlyAdded = true;
+      }
+    }
+  });
+  if (newlyAdded) {
+    saveProjects();
+  }
 
   if (!DOM.buildQueueTableBody) return;
   DOM.buildQueueTableBody.innerHTML = '';
@@ -1580,9 +1663,23 @@ let targetProjectToDelete = null;
 
 function renderProjectsGrid() {
   const searchTerm = (DOM.inpProjectSearch?.value || '').trim().toLowerCase();
-  const filteredProjects = state.projects.filter((p) => {
+  const sortOption = DOM.selProjectSort?.value || 'newest';
+
+  let filteredProjects = state.projects.filter((p) => {
     if (!searchTerm) return true;
     return (p.name || '').toLowerCase().includes(searchTerm) || (p.draftDir || '').toLowerCase().includes(searchTerm);
+  });
+
+  filteredProjects.sort((a, b) => {
+    if (sortOption === 'oldest') {
+      return (a.createdAt || 0) - (b.createdAt || 0);
+    } else if (sortOption === 'name') {
+      return (a.name || '').localeCompare(b.name || '');
+    } else if (sortOption === 'duration') {
+      return (b.durationS || 0) - (a.durationS || 0);
+    } else {
+      return (b.createdAt || 0) - (a.createdAt || 0);
+    }
   });
 
   if (filteredProjects.length === 0) {
@@ -1603,6 +1700,7 @@ function renderProjectsGrid() {
     const safeProjId = escapeHtml(proj.id || '');
     const safeDraftDir = (proj.draftDir || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     const safeProjName = (proj.name || 'project').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const durationLabel = proj.durationS ? `${Math.round(proj.durationS)}s` : '--';
 
     card.innerHTML = `
       <div class="project-card-body">
@@ -1613,6 +1711,7 @@ function renderProjectsGrid() {
         <div class="project-card-meta">
           <span>Tỷ lệ: ${escapeHtml(proj.aspectRatio || '9:16')}</span> • 
           <span>${proj.imageCount || 0} ảnh</span> • 
+          <span>⏱️ ${durationLabel}</span> • 
           <span>${dateStr}</span>
         </div>
         <div class="project-card-actions" style="display:flex;gap:4px;flex-wrap:wrap;margin-top:8px;">
@@ -1708,6 +1807,10 @@ window.loadProjectToStudio = (projId) => {
       DOM.inpSrtText.value = sData.srtContent || '';
       state.srtContent = sData.srtContent || '';
     }
+    if (sData.presetId && DOM.selPresetStyle) {
+      DOM.selPresetStyle.value = sData.presetId;
+      DOM.selPresetStyle.dispatchEvent(new Event('change'));
+    }
   }
 
   switchTab('studio');
@@ -1768,11 +1871,17 @@ window.openDraftFolder = (draftDir) => {
   window.autoedit.openFolder(draftDir);
 };
 
-DOM.btnRefreshProjects?.addEventListener('click', () => {
+DOM.btnRefreshProjects?.addEventListener('click', async () => {
+  await loadStoredState();
   renderProjectsGrid();
+  showToast('Đã làm mới danh sách dự án!', 'info', 1500);
 });
 
 DOM.inpProjectSearch?.addEventListener('input', () => {
+  renderProjectsGrid();
+});
+
+DOM.selProjectSort?.addEventListener('change', () => {
   renderProjectsGrid();
 });
 

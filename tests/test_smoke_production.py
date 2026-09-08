@@ -22,7 +22,8 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
-import cv2
+import pytest
+cv2 = pytest.importorskip("cv2")
 import numpy as np
 import ffmpeg_utils
 from subpixel_affine_engine import SubpixelAffineEngine
