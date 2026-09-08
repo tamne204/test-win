@@ -10,12 +10,24 @@ files:
   - "**/*"
   - "!dist/**"
   - "!tests/**"
+  - "!reports/**"
+  - "!diagnostics/**"
+  - "!**/.pytest_cache/**"
+  - "!**/__pycache__/**"
+  - "!**/*.pyc"
+  - "!**/*.pyo"
+  - "!**/.DS_Store"
 
 extraResources:
   - from: "../packaging/dist/autoedit-core"
     to: "autoedit-core"
     filter:
       - "**/*"
+      - "!**/reports/**"
+      - "!**/diagnostics/**"
+      - "!**/.pytest_cache/**"
+      - "!**/__pycache__/**"
+      - "!**/*.pyc"
 
 mac:
   category: public.app-category.video

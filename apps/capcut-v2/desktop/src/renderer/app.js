@@ -994,6 +994,9 @@ DOM.btnGenerateProject.addEventListener('click', async () => {
       };
       state.projects.unshift(projectRecord);
       await saveProjects();
+      if (typeof refreshWalletBalance === 'function') {
+        await refreshWalletBalance();
+      }
 
       setTimeout(() => {
         hideModal(DOM.modalProgress);
@@ -1139,6 +1142,9 @@ function renderBuildQueueTableFromState(queueData) {
   });
   if (newlyAdded) {
     saveProjects();
+    if (typeof refreshWalletBalance === 'function') {
+      refreshWalletBalance();
+    }
   }
 
   if (!DOM.buildQueueTableBody) return;
