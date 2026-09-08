@@ -476,6 +476,32 @@ ipcMain.handle('sidecar:generate-project', async (_, projectConfig) => {
   return await sidecar.send('GENERATE_CAPCUT_PROJECT', projectConfig, 600000); // 10 min timeout
 });
 
+// Project Build Queue Handlers (Queue A)
+ipcMain.handle('sidecar:enqueue-build-job', async (_, params) => {
+  return await sidecar.send('ENQUEUE_BUILD_JOB', params || {});
+});
+ipcMain.handle('sidecar:get-build-queue-state', async () => {
+  return await sidecar.send('GET_BUILD_QUEUE_STATE', {});
+});
+ipcMain.handle('sidecar:build-project-job', async (_, params) => {
+  return await sidecar.send('BUILD_PROJECT_JOB', params || {});
+});
+ipcMain.handle('sidecar:build-all-projects', async () => {
+  return await sidecar.send('BUILD_ALL_PROJECTS', {});
+});
+ipcMain.handle('sidecar:cancel-build-job', async (_, params) => {
+  return await sidecar.send('CANCEL_BUILD_JOB', params || {});
+});
+ipcMain.handle('sidecar:retry-build-job', async (_, params) => {
+  return await sidecar.send('RETRY_BUILD_JOB', params || {});
+});
+ipcMain.handle('sidecar:remove-build-job', async (_, params) => {
+  return await sidecar.send('REMOVE_BUILD_JOB', params || {});
+});
+ipcMain.handle('sidecar:clear-completed-build-jobs', async () => {
+  return await sidecar.send('CLEAR_COMPLETED_BUILD_JOBS', {});
+});
+
 ipcMain.handle('sidecar:open-capcut', async (_, { draftPath }) => {
   return await sidecar.send('OPEN_CAPCUT', { draft_path: draftPath });
 });

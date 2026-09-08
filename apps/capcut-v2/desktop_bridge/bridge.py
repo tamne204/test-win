@@ -24,6 +24,7 @@ from core.edit_plan import EditPlan
 from core.rule_engine import RuleEngine, ALL_SUPPORTED_MOTIONS
 from core.preset_manager import PresetManager, RulePreset, PRESET_BASIC_SLIDESHOW
 from core.timeline_builder import TimelineBuilder, TIMING_MODE_FIXED, TIMING_MODE_SRT_DRIVEN
+from core.build_queue_manager import ProjectBuildQueueManager
 from adapters.capcut.detector import CapCutDetector, STATUS_SUPPORTED, STATUS_UNTESTED
 from adapters.capcut.project_manager import CapCutProjectManager, STATUS_READY
 from adapters.capcut.launcher import CapCutLauncher
@@ -93,6 +94,14 @@ COMMERCIAL_METHODS = {
     "GET_RENDER_QUEUE_STATE",
     "CONTROL_RENDER_QUEUE",
     "GET_RENDER_PROFILE",
+    "ENQUEUE_BUILD_JOB",
+    "GET_BUILD_QUEUE_STATE",
+    "BUILD_PROJECT_JOB",
+    "BUILD_ALL_PROJECTS",
+    "CANCEL_BUILD_JOB",
+    "RETRY_BUILD_JOB",
+    "REMOVE_BUILD_JOB",
+    "CLEAR_COMPLETED_BUILD_JOBS",
 }
 
 
@@ -108,6 +117,7 @@ class DesktopBridge:
         notification_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
         license_guard: Optional[LicenseGuard] = None,
         render_queue_manager: Optional[RenderQueueManager] = None,
+        build_queue_manager: Optional[ProjectBuildQueueManager] = None,
     ):
         self.workspace_root = workspace_root or self._get_default_workspace_dir()
         self.user_presets_dir = user_presets_dir or self._get_default_presets_dir()
@@ -117,6 +127,11 @@ class DesktopBridge:
         self.license_guard = license_guard or get_license_guard()
         self.render_queue_manager = render_queue_manager or RenderQueueManager()
         self.render_queue_manager.add_listener(self._on_render_queue_update)
+        self.build_queue_manager = build_queue_manager or ProjectBuildQueueManager(
+            workspace_root=self.workspace_root,
+            generator_fn=self._generate_capcut_project_core,
+        )
+        self.build_queue_manager.add_listener(self._on_build_queue_update)
         self._subtitle_cancel_event = threading.Event()
         self._last_alignment_result = None
         os.makedirs(self.workspace_root, exist_ok=True)
@@ -124,6 +139,9 @@ class DesktopBridge:
 
     def _on_render_queue_update(self, state: Dict[str, Any]) -> None:
         self.notify("render_queue_update", state)
+
+    def _on_build_queue_update(self, state: Dict[str, Any]) -> None:
+        self.notify("build_queue_update", state)
 
     @staticmethod
     def _get_default_workspace_dir() -> str:
@@ -200,6 +218,14 @@ class DesktopBridge:
                 "GET_RENDER_QUEUE_STATE": self._handle_get_render_queue_state,
                 "CONTROL_RENDER_QUEUE": self._handle_control_render_queue,
                 "GET_RENDER_PROFILE": self._handle_get_render_profile,
+                "ENQUEUE_BUILD_JOB": self._handle_enqueue_build_job,
+                "GET_BUILD_QUEUE_STATE": self._handle_get_build_queue_state,
+                "BUILD_PROJECT_JOB": self._handle_build_project_job,
+                "BUILD_ALL_PROJECTS": self._handle_build_all_projects,
+                "CANCEL_BUILD_JOB": self._handle_cancel_build_job,
+                "RETRY_BUILD_JOB": self._handle_retry_build_job,
+                "REMOVE_BUILD_JOB": self._handle_remove_build_job,
+                "CLEAR_COMPLETED_BUILD_JOBS": self._handle_clear_completed_build_jobs,
             }
 
             handler = handler_map.get(method)
@@ -393,11 +419,20 @@ class DesktopBridge:
 
         return plan.to_dict()
 
-    def _handle_generate_capcut_project(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _generate_capcut_project_core(
+        self,
+        params: Dict[str, Any],
+        progress_cb: Optional[Callable[[str, float, str], None]] = None,
+    ) -> Dict[str, Any]:
         """
         Executes complete transactional project creation and installation.
-        Emits progress notifications at each milestone.
+        Emits progress notifications to progress_cb and global IPC notification.
         """
+        def report(stage: str, frac: float, msg: str):
+            if progress_cb:
+                progress_cb(stage, frac, msg)
+            self.notify("progress", {"stage": stage, "percent": int(frac * 100), "message": msg})
+
         images = params.get("images", [])
         audio_path = params.get("audio_path")
         srt_source = params.get("srt_source")
@@ -413,14 +448,14 @@ class DesktopBridge:
         aspect_ratio = params.get("aspect_ratio")
 
         # Milestone 1: VALIDATING INPUT
-        self.notify("progress", {"stage": "VALIDATING_INPUT", "percent": 15, "message": "Kiểm tra tệp tin đầu vào..."})
+        report("VALIDATING_INPUT", 0.15, "Kiểm tra tệp tin đầu vào...")
         val_res = self._handle_validate_inputs(params)
         if not val_res["valid"]:
             raise ValueError(f"Lỗi tệp tin: {'; '.join(val_res['errors'])}")
 
         # Milestone 1.5: SCRIPT-TO-AUDIO ALIGNMENT IF SCRIPT IS GIVEN WITHOUT SRT
         if script_text and script_text.strip() and audio_path and not srt_source:
-            self.notify("progress", {"stage": "ALIGNING_SUBTITLES", "percent": 25, "message": "Đang so khớp kịch bản với giọng nói..."})
+            report("ALIGNING_SUBTITLES", 0.25, "Đang so khớp kịch bản với giọng nói...")
             try:
                 pipeline = ScriptToSrtPipeline()
                 align_res = pipeline.align_script_to_audio(script_text=script_text, audio_path=audio_path)
@@ -430,7 +465,7 @@ class DesktopBridge:
                 print(f"Warning: Script alignment failed: {align_err}. Continuing with fixed timing.")
 
         # Milestone 2: BUILDING TIMELINE
-        self.notify("progress", {"stage": "BUILDING_TIMELINE", "percent": 35, "message": "Xây dựng dòng thời gian và bố cục chuyển động..."})
+        report("BUILDING_TIMELINE", 0.35, "Xây dựng dòng thời gian và bố cục chuyển động...")
         preset = self.preset_manager.get_preset(preset_id)
         builder = TimelineBuilder(preset)
         plan = builder.build(
@@ -446,17 +481,17 @@ class DesktopBridge:
         )
 
         # Milestone 3: VALIDATING EDIT PLAN
-        self.notify("progress", {"stage": "VALIDATING_EDIT_PLAN", "percent": 45, "message": "Thẩm định cấu trúc dòng thời gian..."})
+        report("VALIDATING_EDIT_PLAN", 0.45, "Thẩm định cấu trúc dòng thời gian...")
         plan_errors = plan.validate(check_files_exist=True)
         if plan_errors:
             raise ValueError(f"EditPlan không hợp lệ: {'; '.join(plan_errors)}")
 
         # Milestone 4: GENERATING CAPCUT DRAFT
-        self.notify("progress", {"stage": "GENERATING_CAPCUT_DRAFT", "percent": 65, "message": "Sinh cấu trúc dự án CapCut trong staging..."})
+        report("GENERATING_CAPCUT_DRAFT", 0.65, "Sinh cấu trúc dự án CapCut trong staging...")
         pm = CapCutProjectManager(staging_base_dir=self.workspace_root)
 
         # Milestone 5: INSTALLING PROJECT
-        self.notify("progress", {"stage": "INSTALLING_PROJECT", "percent": 85, "message": "Cài đặt và khóa bảo vệ thư viện dự án CapCut..."})
+        report("INSTALLING_PROJECT", 0.85, "Cài đặt và khóa bảo vệ thư viện dự án CapCut...")
         gen_result = pm.create_project(
             edit_plan=plan,
             project_name=project_name,
@@ -466,7 +501,7 @@ class DesktopBridge:
         )
 
         # Milestone 6: READY
-        self.notify("progress", {"stage": "READY", "percent": 100, "message": "Dự án CapCut đã sẵn sàng!"})
+        report("READY", 1.0, "Dự án CapCut đã sẵn sàng!")
 
         return {
             "ok": True,
@@ -480,6 +515,58 @@ class DesktopBridge:
             "duration_s": plan.project.duration_us / 1_000_000,
             "clip_count": len(plan.clips),
         }
+
+    def _handle_generate_capcut_project(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        return self._generate_capcut_project_core(params)
+
+    # -------------------------------------------------------------------------
+    # Project Build Queue Handlers (Queue A)
+    # -------------------------------------------------------------------------
+
+    def _handle_enqueue_build_job(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        payload = params.get("payload") or params
+        project_name = params.get("project_name") or payload.get("project_name")
+        job = self.build_queue_manager.enqueue_job(payload, project_name)
+        return {"ok": True, "job": job.to_dict()}
+
+    def _handle_get_build_queue_state(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        return self.build_queue_manager.get_state()
+
+    def _handle_build_project_job(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        job_id = params.get("job_id")
+        if not job_id:
+            raise ValueError("job_id is required")
+        started = self.build_queue_manager.build_job(job_id)
+        return {"ok": started}
+
+    def _handle_build_all_projects(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        started = self.build_queue_manager.build_all()
+        return {"ok": started}
+
+    def _handle_cancel_build_job(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        job_id = params.get("job_id")
+        if not job_id:
+            raise ValueError("job_id is required")
+        cancelled = self.build_queue_manager.cancel_job(job_id)
+        return {"ok": cancelled}
+
+    def _handle_retry_build_job(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        job_id = params.get("job_id")
+        if not job_id:
+            raise ValueError("job_id is required")
+        retried = self.build_queue_manager.retry_job(job_id)
+        return {"ok": retried}
+
+    def _handle_remove_build_job(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        job_id = params.get("job_id")
+        if not job_id:
+            raise ValueError("job_id is required")
+        removed = self.build_queue_manager.remove_job(job_id)
+        return {"ok": removed}
+
+    def _handle_clear_completed_build_jobs(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        count = self.build_queue_manager.clear_completed()
+        return {"ok": True, "cleared_count": count}
 
     def _handle_open_capcut(self, params: Dict[str, Any]) -> Dict[str, Any]:
         draft_path = params.get("draft_path")

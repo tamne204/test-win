@@ -322,42 +322,90 @@ Quy tắc:
           </div>
         </div>
 
-        <!-- ════════ TAB 2: QUEUE VIEW ════════ -->
+        <!-- ════════ TAB 2: QUEUE VIEW (Queue A & Queue B) ════════ -->
         <div class="view-pane" id="view-queue">
-          <div class="pane-header-actions">
-            <div>
-              <div style="display:flex;align-items:center;gap:10px;">
-                <h3 class="pane-title">Hàng Đợi Xử Lý (Job Queue)</h3>
-                <span class="status-badge" id="queueStatusBadge" style="font-size:11.5px;padding:3px 8px;">⚪ Đang Chờ</span>
-              </div>
-              <span class="pane-sub">Tự động xuất video tuần tự qua Python RenderQueueManager</span>
-            </div>
-            <div class="pane-buttons">
-              <button type="button" class="btn-action-primary" id="btnStartQueue">▶️ Chạy Hàng Đợi</button>
-              <button type="button" class="btn-subtle" id="btnPauseQueue">⏸️ Tạm Dừng</button>
-              <button type="button" class="btn-subtle" id="btnStopAfterCurrent">⏹️ Dừng Sau Tác Vụ Này</button>
-              <button type="button" class="btn-subtle" id="btnClearQueue">🧹 Xóa Đã Xong</button>
+          <!-- Queue Sub-Tabs -->
+          <div style="margin-bottom: 16px;">
+            <div class="tab-pill-group" style="max-width: 520px;">
+              <button type="button" class="pill-btn active" id="tabSubQueueBuild">📋 1. Hàng Đợi Tạo Dự Án (Build Queue)</button>
+              <button type="button" class="pill-btn" id="tabSubQueueRender">🎬 2. Hàng Đợi Xuất Video (Render Queue)</button>
             </div>
           </div>
 
-          <div class="queue-table-wrap">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Tên Dự Án</th>
-                  <th>Trạng Thái</th>
-                  <th>Giai Đoạn / Tiến Trình</th>
-                  <th>Nơi Xuất</th>
-                  <th>Thời Gian</th>
-                  <th>Thao Tác</th>
-                </tr>
-              </thead>
-              <tbody id="queueTableBody">
-                <tr class="empty-row">
-                  <td colspan="6">Hàng đợi xuất video đang trống. Hãy bấm "Render Ngay" hoặc "Thêm Hàng Đợi" từ tab Dự Án!</td>
-                </tr>
-              </tbody>
-            </table>
+          <!-- SUB-PANE 1: BUILD QUEUE (Queue A) -->
+          <div id="subpane-build-queue">
+            <div class="pane-header-actions">
+              <div>
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <h3 class="pane-title">Hàng Đợi Tạo Dự Án CapCut</h3>
+                  <span class="status-badge" id="buildQueueStatusBadge" style="font-size:11.5px;padding:3px 8px;">⚪ Đang Chờ</span>
+                </div>
+                <span class="pane-sub">Tự động dựng timeline, căn chỉnh kịch bản & sinh CapCut Draft tuần tự</span>
+              </div>
+              <div class="pane-buttons">
+                <button type="button" class="btn-action-primary" id="btnBuildAllProjects">✨ Tạo Tất Cả Dự Án</button>
+                <button type="button" class="btn-subtle" id="btnStopBuildQueue">⏹️ Dừng Sau Tác Vụ Này</button>
+                <button type="button" class="btn-subtle" id="btnClearBuildQueue">🧹 Xóa Đã Xong</button>
+              </div>
+            </div>
+
+            <div class="queue-table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Tên Dự Án</th>
+                    <th>Trạng Thái</th>
+                    <th>Tiến Trình & Bước Xử Lý</th>
+                    <th>Thời Gian</th>
+                    <th>Thao Tác</th>
+                  </tr>
+                </thead>
+                <tbody id="buildQueueTableBody">
+                  <tr class="empty-row">
+                    <td colspan="5">Hàng đợi tạo dự án đang trống. Hãy bấm "Thêm vào hàng đợi" từ Studio!</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- SUB-PANE 2: RENDER QUEUE (Queue B) -->
+          <div id="subpane-render-queue" style="display: none;">
+            <div class="pane-header-actions">
+              <div>
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <h3 class="pane-title">Hàng Đợi Xuất Video (Render Queue)</h3>
+                  <span class="status-badge" id="queueStatusBadge" style="font-size:11.5px;padding:3px 8px;">⚪ Đang Chờ</span>
+                </div>
+                <span class="pane-sub">Tự động xuất video tuần tự qua Python RenderQueueManager</span>
+              </div>
+              <div class="pane-buttons">
+                <button type="button" class="btn-action-primary" id="btnStartQueue">▶️ Chạy Hàng Đợi</button>
+                <button type="button" class="btn-subtle" id="btnPauseQueue">⏸️ Tạm Dừng</button>
+                <button type="button" class="btn-subtle" id="btnStopAfterCurrent">⏹️ Dừng Sau Tác Vụ Này</button>
+                <button type="button" class="btn-subtle" id="btnClearQueue">🧹 Xóa Đã Xong</button>
+              </div>
+            </div>
+
+            <div class="queue-table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Tên Dự Án</th>
+                    <th>Trạng Thái</th>
+                    <th>Giai Đoạn / Tiến Trình</th>
+                    <th>Nơi Xuất</th>
+                    <th>Thời Gian</th>
+                    <th>Thao Tác</th>
+                  </tr>
+                </thead>
+                <tbody id="queueTableBody">
+                  <tr class="empty-row">
+                    <td colspan="6">Hàng đợi xuất video đang trống. Hãy bấm "Render Ngay" hoặc "Thêm Hàng Đợi" từ tab Dự Án!</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
