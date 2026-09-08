@@ -30,6 +30,13 @@ from .script_aligner import ScriptAligner
 from .subtitle_segmenter import SubtitleSegmenter
 from .srt_generator import generate_srt, validate_srt_content
 from .pipeline import ScriptToSrtPipeline, ScriptToSrtError
+from .layout_engine import (
+    LayoutOptions,
+    CaptionLayoutResult,
+    FontMetricsManager,
+    SubtitleLayoutEngine,
+    SubtitleLayoutValidator,
+)
 
 __all__ = [
     "SpeechWordTimestamp",
@@ -56,4 +63,10 @@ __all__ = [
     "validate_srt_content",
     "ScriptToSrtPipeline",
     "ScriptToSrtError",
+    "LayoutOptions",
+    "CaptionLayoutResult",
+    "FontMetricsManager",
+    "SubtitleLayoutEngine",
+    "SubtitleLayoutValidator",
 ]
+

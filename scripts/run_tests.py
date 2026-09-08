@@ -27,6 +27,7 @@ FAST_SUITES = [
     "tests/test_a0_data_models.py",
     "tests/test_a0_anchor_finder.py",
     "tests/test_a0_collapse_detector.py",
+    "tests/test_a0_collapse_healing.py",
     "tests/test_a0_hierarchical_aligner.py",
     "tests/test_a0_paragraph_mapping.py",
     "tests/test_dev_artifact_cache.py",
@@ -41,6 +42,7 @@ FAST_SUITES = [
     "tests/test_visual_pipeline_integration.py",
     "tests/test_a1_acceptance_matrix.py",
     "tests/test_a2_acceptance_matrix.py",
+    "tests/test_subtitle_layout_engine.py",
 ]
 
 INTEGRATION_SUITES = [

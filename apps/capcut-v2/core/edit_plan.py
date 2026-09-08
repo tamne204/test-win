@@ -93,6 +93,9 @@ class EditPlanCaption:
     background_color: Optional[List[float]] = None
     stroke_color: Optional[List[float]] = None
     stroke_width: float = 0.0
+    display_text: Optional[str] = None
+    font_scale: float = 1.0
+    line_count: int = 1
 
 
 @dataclass

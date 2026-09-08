@@ -26,6 +26,7 @@ from .srt_timeline import (
     SubtitleEntry,
 )
 from .subtitles.models import SubtitleCue
+from .subtitles.layout_engine import SubtitleLayoutEngine, LayoutOptions
 from .visual import (
     VisualPlannerEngine,
     VisualPlannerOptions,
@@ -300,6 +301,24 @@ class TimelineBuilder:
             w, h = 1080, 1350
         elif ratio == "21:9":
             w, h = 2560, 1080
+
+        # Subtitle layout and safe area wrapping
+        if caption_list:
+            layout_engine = SubtitleLayoutEngine(
+                LayoutOptions(
+                    canvas_width=w,
+                    canvas_height=h,
+                    safe_width_ratio=0.82,
+                    max_lines=2,
+                    min_font_scale=0.85,
+                    default_font_size=getattr(self.preset, "caption_font_size", 8.0),
+                )
+            )
+            for cap in caption_list:
+                layout_res = layout_engine.layout_caption(cap.text, font_size=cap.font_size)
+                cap.display_text = layout_res.display_text
+                cap.font_scale = layout_res.font_scale
+                cap.line_count = layout_res.line_count
 
         project = EditPlanProject(
             name=project_name,

@@ -430,6 +430,10 @@ class CapCutVersionAdapter_9_3:
             text_segments: List[Dict[str, Any]] = []
             for cap in edit_plan.captions:
                 text_mat_id = str(uuid.uuid4()).upper()
+                render_text = cap.display_text if (getattr(cap, "display_text", None) is not None) else cap.text
+                font_scale = getattr(cap, "font_scale", 1.0)
+                effective_size = round(cap.font_size * font_scale, 3)
+
                 style_obj: Dict[str, Any] = {
                     "fill": {
                         "content": {
@@ -439,8 +443,8 @@ class CapCutVersionAdapter_9_3:
                         },
                         "render_type": "solid"
                     },
-                    "range": [0, len(cap.text)],
-                    "size": cap.font_size,
+                    "range": [0, len(render_text)],
+                    "size": effective_size,
                     "useLetterColor": True,
                 }
                 if getattr(cap, "stroke_color", None) and getattr(cap, "stroke_width", 0.0) > 0:
@@ -455,7 +459,7 @@ class CapCutVersionAdapter_9_3:
 
                 content_payload = json.dumps({
                     "styles": [style_obj],
-                    "text": cap.text,
+                    "text": render_text,
                 })
 
                 materials["texts"].append({
@@ -464,6 +468,8 @@ class CapCutVersionAdapter_9_3:
                     "content": content_payload,
                     "name": "",
                     "recognize_text": "",
+                    "alignment": 1,
+                    "line_max_width": 0.82,
                 })
 
                 pos_x = getattr(cap, "position_x", 0.0)
