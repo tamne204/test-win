@@ -49,8 +49,13 @@ def test_render_profile_registry_lookup():
     assert match is not None
     assert match.profile_id == "windows_capcut_9_3_0_3970"
 
+    # Match exact macOS
+    match_mac = RenderProfileRegistry.find_matching("9.4.0")
+    assert match_mac is not None
+    assert match_mac.profile_id == "macos_capcut_9_4_0"
+
     # Reject wildcard / mismatched version
-    assert RenderProfileRegistry.find_matching("9.4.0") is None
+    assert RenderProfileRegistry.find_matching("9.9.9") is None
     assert RenderProfileRegistry.find_matching("9.3.1") is None
     assert RenderProfileRegistry.find_matching("9.3.0.3970", "0000000000000000000000000000000000000000000000000000000000000000") is None
 

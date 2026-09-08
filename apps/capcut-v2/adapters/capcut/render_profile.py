@@ -39,7 +39,7 @@ class RenderProfile:
         self.platform_name = platform_name
         self.app_version = app_version
         self.product_version = product_version
-        self.sha256_checksum = sha256_checksum.upper()
+        self.sha256_checksum = (sha256_checksum or "").upper()
         self.main_window_class = main_window_class
         self.export_shortcut = export_shortcut
         self.confirm_export_key = confirm_export_key
@@ -139,6 +139,34 @@ WINDOWS_CAPCUT_9_3_0_3970 = RenderProfile(
 )
 
 RenderProfileRegistry.register(WINDOWS_CAPCUT_9_3_0_3970)
+
+# Physical Evidence Verified Profile: macOS CapCut 9.4.0
+MACOS_CAPCUT_9_4_0 = RenderProfile(
+    profile_id="macos_capcut_9_4_0",
+    platform_name="darwin",
+    app_version="9.4.0",
+    product_version="9.4.0",
+    sha256_checksum="554DFDA2B37A333513FB01B9C34B340F450CC53A29E865C8BB9ADF2B53743E0E",
+    main_window_class="CapCut",
+    export_shortcut="Cmd+E",
+    confirm_export_key="Return",
+    dismiss_dialog_key="Escape",
+    architecture="CASE_C_HYBRID_KEYBOARD_HEARTBEAT",
+    heartbeat_poll_interval_sec=1.0,
+    stall_timeout_sec=45.0,
+    file_lock_timeout_sec=15.0,
+    absolute_safety_timeout_sec=600.0,
+    capability_flags={
+        "keyboard_navigation": True,
+        "uia_controls": False,
+        "multi_signal_heartbeat": True,
+        "ffprobe_verification": True,
+        "background_operation": False,
+    },
+    notes="Physical lab verified build on macOS (CapCut 9.4.0 Target /Applications/CapCut.app).",
+)
+
+RenderProfileRegistry.register(MACOS_CAPCUT_9_4_0)
 
 
 def compute_file_sha256(file_path: str) -> str:

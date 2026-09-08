@@ -686,13 +686,14 @@ class DesktopBridge:
         if not draft_path or not output_path:
             raise ValueError("draft_path and output_path are required.")
 
+        default_pid = "macos_capcut_9_4_0" if sys.platform == "darwin" else "windows_capcut_9_3_0_3970"
         job = RenderJob(
             project_id=params.get("project_id", "manual_project"),
             draft_id=params.get("draft_id", "manual_draft"),
             draft_path=draft_path,
             output_path=output_path,
             output_filename=os.path.basename(output_path),
-            render_profile_id=params.get("render_profile_id", "windows_capcut_9_3_0_3970"),
+            render_profile_id=params.get("render_profile_id", default_pid),
             render_settings=params.get("render_settings", {}),
         )
         job_id = self.render_queue_manager.enqueue(job)

@@ -1834,6 +1834,7 @@ window.renderDraftNow = async (draftDir, projName) => {
     if (res && res.ok) {
       showToast(`Đã đưa "${projName}" vào tiến trình xuất video!`, 'success', 3500);
       switchTab('queue');
+      DOM.tabSubQueueRender?.click();
       await refreshRenderQueueUI();
     } else {
       showAlert(`Lỗi xuất video: ${res?.error?.message || res?.error || 'Không xác định'}`, 'Lỗi Render', true);
@@ -1858,6 +1859,8 @@ window.addDraftToRenderQueue = async (draftDir, projName) => {
 
     if (res && res.ok) {
       showToast(`Đã thêm dự án "${projName}" vào hàng đợi xuất video!`, 'success', 3000);
+      switchTab('queue');
+      DOM.tabSubQueueRender?.click();
       await refreshRenderQueueUI();
     } else {
       showAlert(`Không thể thêm vào hàng đợi: ${res?.error?.message || res?.error || 'Không xác định'}`, 'Lỗi Hàng Đợi', true);

@@ -279,7 +279,8 @@ class RenderQueueManager:
 
     def _process_single_job(self, job: RenderJob) -> None:
         """Execute the FSM stages for one job."""
-        profile = RenderProfileRegistry.get(job.render_profile_id) or WINDOWS_CAPCUT_9_3_0_3970
+        default_pid = "macos_capcut_9_4_0" if sys.platform == "darwin" else "windows_capcut_9_3_0_3970"
+        profile = RenderProfileRegistry.get(job.render_profile_id) or RenderProfileRegistry.get(default_pid) or WINDOWS_CAPCUT_9_3_0_3970
 
         def stage_callback(stage_name: str, payload: Dict[str, Any]):
             with self._lock:

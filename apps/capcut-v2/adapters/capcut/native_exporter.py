@@ -12,11 +12,11 @@ import subprocess
 from typing import Dict, Any, Optional, Callable
 
 try:
-    from .render_profile import RenderProfile, WINDOWS_CAPCUT_9_3_0_3970
+    from .render_profile import RenderProfile, WINDOWS_CAPCUT_9_3_0_3970, MACOS_CAPCUT_9_4_0
     from .output_verifier import OutputVerifier, VerificationResult
     from .ownership_manager import CapCutOwnershipManager
 except (ImportError, ValueError):
-    from adapters.capcut.render_profile import RenderProfile, WINDOWS_CAPCUT_9_3_0_3970
+    from adapters.capcut.render_profile import RenderProfile, WINDOWS_CAPCUT_9_3_0_3970, MACOS_CAPCUT_9_4_0
     from adapters.capcut.output_verifier import OutputVerifier, VerificationResult
     from adapters.capcut.ownership_manager import CapCutOwnershipManager
 
@@ -116,6 +116,60 @@ class Win32AutomationDriver(AutomationDriver):
             return True
 
 
+class MacOSAutomationDriver(AutomationDriver):
+    """Production driver executing osascript / AppleScript commands on macOS."""
+
+    def find_and_activate_window(self, window_class: str = "CapCut", timeout_sec: float = 10.0) -> bool:
+        if sys.platform != "darwin":
+            return False
+        try:
+            script = 'tell application "CapCut" to activate'
+            res = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=timeout_sec)
+            time.sleep(0.5)
+            return res.returncode == 0
+        except Exception:
+            return False
+
+    def send_shortcut(self, shortcut: str) -> bool:
+        if sys.platform != "darwin":
+            return False
+        try:
+            if "E" in shortcut.upper():
+                script = 'tell application "System Events" to tell process "CapCut" to keystroke "e" using command down'
+                res = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=5.0)
+                return res.returncode == 0
+            return False
+        except Exception:
+            return False
+
+    def send_key(self, key_name: str) -> bool:
+        if sys.platform != "darwin":
+            return False
+        try:
+            key_upper = key_name.upper()
+            if key_upper in ("ENTER", "RETURN"):
+                script = 'tell application "System Events" to tell process "CapCut" to key code 36'
+            elif key_upper == "ESCAPE":
+                script = 'tell application "System Events" to tell process "CapCut" to key code 53'
+            elif key_upper == "TAB":
+                script = 'tell application "System Events" to tell process "CapCut" to key code 48'
+            elif key_upper == "SPACE":
+                script = 'tell application "System Events" to tell process "CapCut" to key code 49'
+            else:
+                return False
+            res = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=5.0)
+            return res.returncode == 0
+        except Exception:
+            return False
+
+    def is_process_alive(self, pid_or_name: str) -> bool:
+        try:
+            res = subprocess.run(["pgrep", "-if", pid_or_name], capture_output=True, text=True)
+            return bool(res.stdout.strip())
+        except Exception:
+            return True
+
+
 class MockAutomationDriver(AutomationDriver):
     """Mock driver for unit tests and non-Windows continuous integration."""
 
@@ -166,11 +220,19 @@ class CapCutNativeExporter:
         driver: Optional[AutomationDriver] = None,
         progress_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None,
     ):
-        self.profile = profile or WINDOWS_CAPCUT_9_3_0_3970
+        if profile:
+            self.profile = profile
+        elif sys.platform == "darwin":
+            self.profile = MACOS_CAPCUT_9_4_0
+        else:
+            self.profile = WINDOWS_CAPCUT_9_3_0_3970
+
         if driver:
             self.driver = driver
         elif sys.platform.startswith("win"):
             self.driver = Win32AutomationDriver()
+        elif sys.platform == "darwin":
+            self.driver = MacOSAutomationDriver()
         else:
             self.driver = MockAutomationDriver()
 

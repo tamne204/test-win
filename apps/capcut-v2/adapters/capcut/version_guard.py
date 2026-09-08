@@ -107,6 +107,18 @@ class CapCutVersionGuard:
         if parent_dir and parent_dir[0].isdigit() and "." in parent_dir:
             return parent_dir
 
+        if sys.platform == "darwin":
+            # Check Info.plist if inside an app bundle
+            info_plist = os.path.join(os.path.dirname(os.path.dirname(exe_path)), "Info.plist")
+            if os.path.isfile(info_plist):
+                try:
+                    import plistlib
+                    with open(info_plist, "rb") as f:
+                        plist_data = plistlib.load(f)
+                        return plist_data.get("CFBundleShortVersionString") or plist_data.get("CFBundleVersion") or "Unknown"
+                except Exception:
+                    pass
+
         if sys.platform.startswith("win"):
             try:
                 import win32api
