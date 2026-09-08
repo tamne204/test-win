@@ -8,6 +8,7 @@ const path = require('path');
 const fs = require('fs');
 const readline = require('readline');
 const { randomUUID } = require('crypto');
+const { app } = require('electron');
 
 class SidecarManager {
   constructor() {
@@ -22,9 +23,31 @@ class SidecarManager {
    * Determine path to sidecar executable or fallback python script in dev mode.
    */
   resolveSidecarTarget() {
-    const isPackaged = process.mainModule && process.mainModule.filename.indexOf('app.asar') !== -1;
+    const isPackaged = app ? app.isPackaged : (process.mainModule && process.mainModule.filename.indexOf('app.asar') !== -1);
     const isWin = process.platform === 'win32';
     const binName = isWin ? 'autoedit-core.exe' : 'autoedit-core';
+
+    // In development mode (unpackaged source run), always prioritize the active venv and Python scripts
+    if (!isPackaged) {
+      const repoRoot = path.resolve(__dirname, '../../../../..');
+      const venvPythonMac = path.join(repoRoot, '.venv', 'bin', 'python3');
+      const venvPythonWin = path.join(repoRoot, '.venv', 'Scripts', 'python.exe');
+      const scriptPath = path.resolve(__dirname, '../../../desktop_bridge/sidecar_main.py');
+
+      if (fs.existsSync(scriptPath)) {
+        let pythonExec = 'python3';
+        if (isWin && fs.existsSync(venvPythonWin)) {
+          pythonExec = venvPythonWin;
+        } else if (fs.existsSync(venvPythonMac)) {
+          pythonExec = venvPythonMac;
+        }
+        return {
+          command: pythonExec,
+          args: [scriptPath],
+          isBinary: false,
+        };
+      }
+    }
 
     // 1. Packaged location (process.resourcesPath/autoedit-core/...)
     if (process.resourcesPath) {
@@ -48,11 +71,11 @@ class SidecarManager {
       return { command: localDistBin, args: [], isBinary: true };
     }
 
-    // 3. Dev fallback: Run Python directly with venv or system python
+    // 3. Fallback: Run Python directly with venv or system python
     const repoRoot = path.resolve(__dirname, '../../../../..');
     const venvPythonMac = path.join(repoRoot, '.venv', 'bin', 'python3');
     const venvPythonWin = path.join(repoRoot, '.venv', 'Scripts', 'python.exe');
-    const scriptPath = path.resolve(__dirname, '../../desktop_bridge/sidecar_main.py');
+    const scriptPath = path.resolve(__dirname, '../../../desktop_bridge/sidecar_main.py');
 
     let pythonExec = 'python3';
     if (isWin && fs.existsSync(venvPythonWin)) {
@@ -75,11 +98,19 @@ class SidecarManager {
     const target = this.resolveSidecarTarget();
     console.log(`[Sidecar] Spawning sidecar: ${target.command} ${target.args.join(' ')}`);
 
+    const v2Root = path.resolve(__dirname, '../../..');
+    const repoRoot = path.resolve(__dirname, '../../../../..');
+
     const spawnOptions = {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: {
         ...process.env,
         PYTHONUNBUFFERED: '1',
+        PYTHONPATH: [
+          v2Root,
+          repoRoot,
+          process.env.PYTHONPATH || '',
+        ].filter(Boolean).join(path.delimiter),
       },
       windowsHide: true, // Prevent console window on Windows
     };
