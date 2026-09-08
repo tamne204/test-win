@@ -22,7 +22,9 @@ const state = {
     zoom_out: 25,
     pan: 25,
     tilt: 25,
+  },
   autoUpscale: false,
+
   upscaleFiles: [],
   lastUpscaleOutputDir: null,
   queue: [], // Array of job objects { id, name, ratio, images, audio, script, srt, status, progress, error, draftDir }
