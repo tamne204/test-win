@@ -34,6 +34,12 @@ const state = {
   currentUser: null,
   licenseInfo: null,
   capcutInfo: null,
+  buildQueue: {
+    status: 'IDLE',
+    jobs: [],
+    totalJobs: 0,
+    activeJob: null,
+  },
   renderQueue: {
     status: 'IDLE',
     jobs: [],
@@ -181,7 +187,17 @@ const DOM = {
   btnGenerateProject: document.getElementById('btnGenerateProject'),
   btnAddToQueue: document.getElementById('btnAddToQueue'),
 
-  // Queue View
+  // Queue View (Sub-tabs, Build Queue, Render Queue)
+  tabSubQueueBuild: document.getElementById('tabSubQueueBuild'),
+  tabSubQueueRender: document.getElementById('tabSubQueueRender'),
+  subpaneBuildQueue: document.getElementById('subpane-build-queue'),
+  subpaneRenderQueue: document.getElementById('subpane-render-queue'),
+  buildQueueStatusBadge: document.getElementById('buildQueueStatusBadge'),
+  btnBuildAllProjects: document.getElementById('btnBuildAllProjects'),
+  btnStopBuildQueue: document.getElementById('btnStopBuildQueue'),
+  btnClearBuildQueue: document.getElementById('btnClearBuildQueue'),
+  buildQueueTableBody: document.getElementById('buildQueueTableBody'),
+
   queueTableBody: document.getElementById('queueTableBody'),
   queueStatusBadge: document.getElementById('queueStatusBadge'),
   btnStartQueue: document.getElementById('btnStartQueue'),
@@ -379,7 +395,10 @@ function switchTab(tabId) {
   DOM.viewSub.textContent = meta.sub;
 
   if (tabId === 'projects') renderProjectsGrid();
-  if (tabId === 'queue') renderQueueTable();
+  if (tabId === 'queue') {
+    refreshBuildQueueUI();
+    refreshRenderQueueUI();
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -944,8 +963,29 @@ DOM.btnGenerateProject.addEventListener('click', async () => {
 });
 
 // -----------------------------------------------------------------------------
-// Job Queue Manager
+// Sub-Tab Switcher for Queue View (Queue A: Build vs Queue B: Render)
 // -----------------------------------------------------------------------------
+if (DOM.tabSubQueueBuild && DOM.tabSubQueueRender) {
+  DOM.tabSubQueueBuild.addEventListener('click', () => {
+    DOM.tabSubQueueBuild.classList.add('active');
+    DOM.tabSubQueueRender.classList.remove('active');
+    if (DOM.subpaneBuildQueue) DOM.subpaneBuildQueue.style.display = 'block';
+    if (DOM.subpaneRenderQueue) DOM.subpaneRenderQueue.style.display = 'none';
+  });
+
+  DOM.tabSubQueueRender.addEventListener('click', () => {
+    DOM.tabSubQueueRender.classList.add('active');
+    DOM.tabSubQueueBuild.classList.remove('active');
+    if (DOM.subpaneBuildQueue) DOM.subpaneBuildQueue.style.display = 'none';
+    if (DOM.subpaneRenderQueue) DOM.subpaneRenderQueue.style.display = 'block';
+  });
+}
+
+// -----------------------------------------------------------------------------
+// Project Build Queue Manager (Queue A - Wave 1)
+// Connects 1:1 to Python ProjectBuildQueueManager FSM
+// -----------------------------------------------------------------------------
+
 DOM.btnAddToQueue.addEventListener('click', async () => {
   if (state.mediaList.length === 0) {
     showAlert('Vui lòng chọn ít nhất 1 hình ảnh trước khi thêm vào hàng đợi.', 'Thiếu Ảnh');
@@ -953,44 +993,246 @@ DOM.btnAddToQueue.addEventListener('click', async () => {
   }
 
   const payload = assembleCurrentProjectPayload();
-  const queueItem = {
-    id: `job_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-    name: payload.project_name,
-    payload,
-    status: 'WAITING', // WAITING, RUNNING, COMPLETED, ERROR
-    progress: 0,
-    error: null,
-    draftDir: null,
-    addedAt: Date.now(),
-  };
-
-  state.queue.push(queueItem);
-  await saveQueue();
-  updateQueueBadge();
-  showAlert(`Đã thêm dự án "${queueItem.name}" vào hàng đợi!`, 'Đã Thêm Vào Queue');
-
-  // Reset name for next project
-  DOM.inpProjectName.value = generateDefaultProjectName();
+  try {
+    const res = await window.autoedit.enqueueBuildJob({
+      payload,
+      project_name: payload.project_name,
+    });
+    if (res && res.ok) {
+      showToast(`Đã thêm dự án "${payload.project_name}" vào Hàng Đợi Tạo Dự Án!`, 'success', 3000);
+      DOM.inpProjectName.value = generateDefaultProjectName();
+      await refreshBuildQueueUI();
+    } else {
+      showAlert('Không thể thêm vào hàng đợi: ' + (res?.error || 'Lỗi không xác định'), 'Lỗi');
+    }
+  } catch (err) {
+    showAlert('Lỗi thêm vào hàng đợi: ' + err.message, 'Lỗi');
+  }
 });
+
+function updateQueueBadge() {
+  let pendingBuild = 0;
+  if (state.buildQueue && state.buildQueue.jobs) {
+    pendingBuild = state.buildQueue.jobs.filter((j) =>
+      ['QUEUED', 'VALIDATING', 'PINNING_INPUTS', 'UPSCALING', 'SUBTITLE', 'WAITING_SRT_REVIEW', 'TIMELINE', 'BUILDING_DRAFT', 'VERIFYING'].includes(j.state)
+    ).length;
+  }
+  let pendingRender = 0;
+  if (state.renderQueue && state.renderQueue.jobs) {
+    pendingRender = state.renderQueue.jobs.filter((j) =>
+      ['QUEUED', 'PRECHECK', 'STARTING_CAPCUT', 'OPENING_PROJECT', 'TRIGGERING_EXPORT', 'CONFIRMING_EXPORT', 'RENDERING', 'VERIFYING_OUTPUT'].includes(j.status)
+    ).length;
+  }
+  const totalPending = pendingBuild + pendingRender;
+  if (DOM.queueBadge) {
+    DOM.queueBadge.textContent = String(totalPending);
+    DOM.queueBadge.style.display = totalPending > 0 ? 'inline-block' : 'none';
+  }
+}
+
+function renderBuildQueueTableFromState(queueData) {
+  if (!queueData) return;
+
+  state.buildQueue.status = queueData.queue_status || 'IDLE';
+  state.buildQueue.jobs = queueData.jobs || [];
+  state.buildQueue.totalJobs = queueData.total_jobs || state.buildQueue.jobs.length;
+  state.buildQueue.activeJob = queueData.active_job || null;
+
+  // Update Status Badge in Header
+  if (DOM.buildQueueStatusBadge) {
+    const bStatus = state.buildQueue.status;
+    if (bStatus === 'RUNNING') {
+      DOM.buildQueueStatusBadge.textContent = '▶️ Đang Xử Lý';
+      DOM.buildQueueStatusBadge.style.color = '#34d399';
+      DOM.buildQueueStatusBadge.style.borderColor = 'rgba(52,211,153,0.3)';
+    } else if (bStatus === 'STOPPING') {
+      DOM.buildQueueStatusBadge.textContent = '⏹️ Đang Dừng Dần...';
+      DOM.buildQueueStatusBadge.style.color = '#facc15';
+      DOM.buildQueueStatusBadge.style.borderColor = 'rgba(250,204,21,0.3)';
+    } else {
+      DOM.buildQueueStatusBadge.textContent = '⚪ Đang Chờ';
+      DOM.buildQueueStatusBadge.style.color = '#94a3b8';
+      DOM.buildQueueStatusBadge.style.borderColor = 'rgba(148,163,184,0.3)';
+    }
+  }
+
+  updateQueueBadge();
+
+  if (!DOM.buildQueueTableBody) return;
+  DOM.buildQueueTableBody.innerHTML = '';
+
+  if (state.buildQueue.jobs.length === 0) {
+    DOM.buildQueueTableBody.innerHTML = `
+      <tr class="empty-row">
+        <td colspan="5">Hàng đợi tạo dự án đang trống. Hãy bấm "Thêm vào hàng đợi" từ Studio!</td>
+      </tr>
+    `;
+    return;
+  }
+
+  state.buildQueue.jobs.forEach((job) => {
+    const tr = document.createElement('tr');
+    const st = job.state;
+
+    let statusBadge = '';
+    if (st === 'QUEUED') {
+      statusBadge = '<span class="status-badge" style="color:#94a3b8;border-color:rgba(148,163,184,0.3)">⏳ Đang Chờ</span>';
+    } else if (st === 'PROJECT_READY') {
+      statusBadge = '<span class="status-badge" style="color:#34d399;border-color:rgba(52,211,153,0.3)">✅ Dự Án Sẵn Sàng</span>';
+    } else if (st === 'FAILED') {
+      statusBadge = '<span class="status-badge" style="color:#f87171;border-color:rgba(248,113,113,0.3)">❌ Lỗi</span>';
+    } else if (st === 'CANCELLED') {
+      statusBadge = '<span class="status-badge" style="color:#94a3b8;border-color:rgba(148,163,184,0.3)">⏹️ Đã Hủy</span>';
+    } else if (st === 'WAITING_SRT_REVIEW') {
+      statusBadge = '<span class="status-badge" style="color:#fb923c;border-color:rgba(251,146,60,0.3)">📝 Chờ Duyệt SRT</span>';
+    } else {
+      statusBadge = `<span class="status-badge" style="color:#facc15;border-color:rgba(250,204,21,0.3)">⚡ ${escapeHtml(job.current_step || 'Đang xử lý...')}</span>`;
+    }
+
+    // Step / Progress Display
+    let stepDisplay = `
+      <div style="font-size:12px; font-weight:500;">${escapeHtml(job.current_step || '')}</div>
+      <div class="progress-bar-wrap" style="height:4px; background:rgba(255,255,255,0.1); border-radius:2px; margin-top:4px; overflow:hidden;">
+        <div style="height:100%; width:${Math.min(100, Math.max(0, job.progress || 0))}%; background:var(--color-primary); transition:width 0.3s;"></div>
+      </div>
+    `;
+    if (st === 'FAILED' && job.error) {
+      stepDisplay += `<div style="font-size:11px; color:#f87171; margin-top:3px;">${escapeHtml(job.error)}</div>`;
+    }
+
+    // Time display
+    let timeStr = '--';
+    if (job.started_at && job.completed_at) {
+      timeStr = `${Math.round(job.completed_at - job.started_at)}s`;
+    } else if (job.created_at) {
+      timeStr = new Date(job.created_at * 1000).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // Actions
+    let actionsHtml = '';
+    const safeJobId = escapeHtml(job.job_id);
+    if (st === 'QUEUED') {
+      actionsHtml = `
+        <button class="btn-action-primary" style="padding:2px 8px; font-size:11px;" onclick="buildSingleProject('${safeJobId}')">⚡ Tạo Dự Án</button>
+        <button class="btn-subtle" style="padding:2px 8px; font-size:11px;" onclick="cancelBuildJob('${safeJobId}')">✕ Hủy</button>
+        <button class="btn-subtle btn-danger" style="padding:2px 8px; font-size:11px;" onclick="removeBuildJob('${safeJobId}')">🗑️ Xóa</button>
+      `;
+    } else if (st === 'PROJECT_READY') {
+      const draftDir = job.result?.final_draft_dir || '';
+      const safeDraftDir = draftDir.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      const safeProjName = (job.project_name || 'project').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      actionsHtml = `
+        <button class="btn-action-primary" style="padding:2px 8px; font-size:11px;" onclick="openDraftInCapCut('${safeDraftDir}')">🎬 Mở CapCut</button>
+        <button class="btn-subtle" style="padding:2px 8px; font-size:11px;" onclick="renderDraftNow('${safeDraftDir}', '${safeProjName}')">⚡ Render Ngay</button>
+        <button class="btn-subtle" style="padding:2px 8px; font-size:11px;" onclick="addDraftToRenderQueue('${safeDraftDir}', '${safeProjName}')">➕ Render Queue</button>
+        <button class="btn-subtle btn-danger" style="padding:2px 8px; font-size:11px;" onclick="removeBuildJob('${safeJobId}')">🗑️</button>
+      `;
+    } else if (st === 'FAILED' || st === 'CANCELLED') {
+      actionsHtml = `
+        <button class="btn-subtle" style="padding:2px 8px; font-size:11px;" onclick="retryBuildJob('${safeJobId}')">🔄 Thử Lại</button>
+        <button class="btn-subtle btn-danger" style="padding:2px 8px; font-size:11px;" onclick="removeBuildJob('${safeJobId}')">🗑️ Xóa</button>
+      `;
+    } else {
+      actionsHtml = `
+        <button class="btn-subtle" style="padding:2px 8px; font-size:11px;" onclick="cancelBuildJob('${safeJobId}')">✕ Hủy</button>
+      `;
+    }
+
+    tr.innerHTML = `
+      <td>
+        <div style="font-weight:600; color:var(--color-text-main);">${escapeHtml(job.project_name)}</div>
+        <div style="font-size:10.5px; color:var(--color-text-muted); margin-top:2px;">
+          Tỷ lệ: ${escapeHtml(job.payload?.aspect_ratio || '9:16')} • ${job.payload?.images?.length || 0} ảnh
+        </div>
+      </td>
+      <td>${statusBadge}</td>
+      <td>${stepDisplay}</td>
+      <td style="font-size:11.5px; color:var(--color-text-muted);">${timeStr}</td>
+      <td><div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap;">${actionsHtml}</div></td>
+    `;
+    DOM.buildQueueTableBody.appendChild(tr);
+  });
+}
+
+window.buildSingleProject = async (jobId) => {
+  try {
+    await window.autoedit.buildProjectJob({ job_id: jobId });
+    await refreshBuildQueueUI();
+  } catch (err) {
+    showAlert('Lỗi tạo dự án: ' + err.message, 'Lỗi');
+  }
+};
+
+window.cancelBuildJob = async (jobId) => {
+  try {
+    await window.autoedit.cancelBuildJob({ job_id: jobId });
+    await refreshBuildQueueUI();
+  } catch (err) {
+    showAlert('Lỗi hủy dự án: ' + err.message, 'Lỗi');
+  }
+};
+
+window.retryBuildJob = async (jobId) => {
+  try {
+    await window.autoedit.retryBuildJob({ job_id: jobId });
+    await refreshBuildQueueUI();
+  } catch (err) {
+    showAlert('Lỗi thử lại: ' + err.message, 'Lỗi');
+  }
+};
+
+window.removeBuildJob = async (jobId) => {
+  try {
+    await window.autoedit.removeBuildJob({ job_id: jobId });
+    await refreshBuildQueueUI();
+  } catch (err) {
+    showAlert('Lỗi xóa mục hàng đợi: ' + err.message, 'Lỗi');
+  }
+};
+
+async function refreshBuildQueueUI() {
+  if (!window.autoedit?.getBuildQueueState) return;
+  try {
+    const res = await window.autoedit.getBuildQueueState();
+    if (res) renderBuildQueueTableFromState(res);
+  } catch (err) {
+    console.warn('Failed refreshing build queue:', err);
+  }
+}
+
+if (DOM.btnBuildAllProjects) {
+  DOM.btnBuildAllProjects.addEventListener('click', async () => {
+    try {
+      const res = await window.autoedit.buildAllProjects();
+      if (!res?.ok) {
+        showToast('Không có dự án nào đang chờ trong hàng đợi.', 'info', 2500);
+      } else {
+        showToast('Đã bắt đầu tạo tất cả dự án tuần tự!', 'success', 2500);
+      }
+      await refreshBuildQueueUI();
+    } catch (err) {
+      showAlert('Lỗi chạy hàng đợi tạo dự án: ' + err.message, 'Lỗi');
+    }
+  });
+}
+
+if (DOM.btnClearBuildQueue) {
+  DOM.btnClearBuildQueue.addEventListener('click', async () => {
+    try {
+      const res = await window.autoedit.clearCompletedBuildJobs();
+      const count = res?.cleared_count || 0;
+      showToast(`Đã xóa ${count} dự án đã xong/hủy!`, 'success', 2500);
+      await refreshBuildQueueUI();
+    } catch (err) {
+      showAlert('Lỗi dọn dẹp: ' + err.message, 'Lỗi');
+    }
+  });
+}
 
 // -----------------------------------------------------------------------------
 // Authoritative Render Queue Controller (GAP-02 & GAP-03)
 // Connected 1:1 to Python RenderQueueManager FSM
 // -----------------------------------------------------------------------------
-
-function updateQueueBadge() {
-  if (!state.renderQueue || !state.renderQueue.jobs) {
-    if (DOM.queueBadge) DOM.queueBadge.style.display = 'none';
-    return;
-  }
-  const pendingCount = state.renderQueue.jobs.filter((j) =>
-    ['QUEUED', 'PRECHECK', 'STARTING_CAPCUT', 'OPENING_PROJECT', 'TRIGGERING_EXPORT', 'CONFIRMING_EXPORT', 'RENDERING', 'VERIFYING_OUTPUT'].includes(j.status)
-  ).length;
-  if (DOM.queueBadge) {
-    DOM.queueBadge.textContent = String(pendingCount);
-    DOM.queueBadge.style.display = pendingCount > 0 ? 'inline-block' : 'none';
-  }
-}
 
 function renderQueueTableFromState(queueData) {
   if (!queueData) return;
@@ -2062,7 +2304,14 @@ window.addEventListener('DOMContentLoaded', async () => {
     refreshWalletBalance(),
   ]);
 
-  // Connect Authoritative Render Queue (GAP-02 & GAP-03)
+  // Connect Authoritative Build Queue (Queue A)
+  if (window.autoedit && window.autoedit.onBuildQueueUpdate) {
+    window.autoedit.onBuildQueueUpdate((data) => {
+      renderBuildQueueTableFromState(data);
+    });
+  }
+
+  // Connect Authoritative Render Queue (Queue B)
   if (window.autoedit && window.autoedit.onRenderQueueUpdate) {
     window.autoedit.onRenderQueueUpdate((data) => {
       renderQueueTableFromState(data);
@@ -2070,12 +2319,16 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Initial fetch of real render queue
-  await refreshRenderQueueUI();
+  // Initial fetch of real queues
+  await Promise.allSettled([
+    refreshBuildQueueUI(),
+    refreshRenderQueueUI(),
+  ]);
 
-  // Heartbeat polling for queue when queue view is active or worker is running
+  // Heartbeat polling for queue when queue view is active or workers are running
   setInterval(() => {
-    if (state.currentTab === 'queue' || state.renderQueue.status === 'RUNNING') {
+    if (state.currentTab === 'queue' || state.renderQueue.status === 'RUNNING' || state.buildQueue.status === 'RUNNING') {
+      refreshBuildQueueUI();
       refreshRenderQueueUI();
     }
   }, 2000);
