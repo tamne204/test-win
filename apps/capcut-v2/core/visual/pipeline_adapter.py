@@ -33,7 +33,13 @@ from core.visual.motion_policy import DurationAwareMotionPolicy
 from core.visual.validator import (
     VisualAccuracyValidator,
     ValidationSeverity,
+    ValidationIssue,
     ValidationReport,
+)
+from core.visual.quantization import (
+    FrameQuantizer,
+    FrameAccuracyValidator,
+    FrameValidationReport,
 )
 
 
@@ -50,7 +56,7 @@ def _compute_percentile(sorted_vals: List[float], pct: float) -> float:
 
 class VisualPipelineAdapter:
     """
-    Unified coordinator executing the full Phase A1 visual planning sequence.
+    Unified coordinator executing the full Phase A1/A2 visual planning sequence.
     """
 
     def __init__(self, options: Optional[VisualPlannerOptions] = None):
@@ -69,6 +75,9 @@ class VisualPipelineAdapter:
         )
         self.motion_policy = DurationAwareMotionPolicy()
         self.validator = VisualAccuracyValidator()
+        self.quantizer = FrameQuantizer(policy=self.options.quantization_policy)
+        self.frame_validator = FrameAccuracyValidator(policy=self.options.quantization_policy)
+
 
     def plan_visual_shots(
         self,
@@ -133,7 +142,14 @@ class VisualPipelineAdapter:
         for s_idx, s in enumerate(all_shots):
             s.shot_id = s_idx + 1
 
-        # 6. Velocity-First Duration-Aware Motion Integration
+        # 5b. Phase A2: Frame-Accurate Timeline Quantization
+        quantizer = FrameQuantizer(policy=opts.quantization_policy)
+        all_shots, q_diag = quantizer.quantize_shots(
+            shots=all_shots,
+            master_audio_duration_us=master_audio_dur_us,
+        )
+
+        # 6. Velocity-First Duration-Aware Motion Integration (computed on frame-quantized durations)
         all_shots = self.motion_policy.apply_motion_to_shots(all_shots)
 
         # 7. Comprehensive Visual Accuracy Validation
@@ -143,7 +159,33 @@ class VisualPipelineAdapter:
             speech_end_us=speech_end_us,
         )
 
+        # 7b. Phase A2: Frame Accuracy Validation
+        frame_validator = FrameAccuracyValidator(policy=opts.quantization_policy)
+        frame_report = frame_validator.validate(
+            shots=all_shots,
+            master_audio_duration_us=master_audio_dur_us,
+        )
+        if frame_report.has_fatal:
+            for f_issue in frame_report.issues:
+                if f_issue.severity == "FATAL":
+                    report.issues.append(
+                        ValidationIssue(
+                            check_id=f_issue.check_id,
+                            severity=ValidationSeverity.FATAL,
+                            shot_id=f_issue.shot_id,
+                            timestamp_us=f_issue.timestamp_us or 0,
+                            metric_name="frame_accuracy",
+                            metric_value="fatal",
+                            threshold="pass",
+                            message=f_issue.message,
+                        )
+                    )
+            report.is_valid = False
+            report.has_fatal = True
+            report.fatal_count = sum(1 for i in report.issues if i.severity == ValidationSeverity.FATAL)
+
         return all_shots, report
+
 
     def shots_to_editplan_clips(self, shots: List[VisualShot]) -> List[EditPlanClip]:
         """Convert planned VisualShots into EditPlanClips for CapCut adapter."""

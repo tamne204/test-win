@@ -11,12 +11,23 @@ from .models import (
     ImageSupplyState,
     VisualPlannerEngine,
     VisualPlannerOptions,
+    FrameQuantizationPolicy,
+    rational_fps_from_float,
 )
 from .boundary_builder import VisualBoundaryCandidateBuilder
 from .dp_planner import VisualShotPlanner, PlannedShotInterval, VisualShotBoundaryPath
 from .image_allocator import ImageAllocationPolicy, AllocationResult, ProjectValidationError
 from .tail_allocator import SilentTailAllocator
 from .motion_policy import DurationAwareMotionPolicy
+from .quantization import (
+    FrameTimebase,
+    FrameQuantizer,
+    FrameAccuracyValidator,
+    FrameValidationReport,
+    FrameValidationIssue,
+    BoundaryQuantizationRecord,
+    QuantizationDiagnostics,
+)
 from .validator import (
     VisualAccuracyValidator,
     ValidationSeverity,
@@ -34,6 +45,8 @@ __all__ = [
     "ImageSupplyState",
     "VisualPlannerEngine",
     "VisualPlannerOptions",
+    "FrameQuantizationPolicy",
+    "rational_fps_from_float",
     "VisualBoundaryCandidateBuilder",
     "VisualShotPlanner",
     "PlannedShotInterval",
@@ -43,9 +56,17 @@ __all__ = [
     "ProjectValidationError",
     "SilentTailAllocator",
     "DurationAwareMotionPolicy",
+    "FrameTimebase",
+    "FrameQuantizer",
+    "FrameAccuracyValidator",
+    "FrameValidationReport",
+    "FrameValidationIssue",
+    "BoundaryQuantizationRecord",
+    "QuantizationDiagnostics",
     "VisualAccuracyValidator",
     "ValidationSeverity",
     "ValidationIssue",
     "ValidationReport",
     "VisualPipelineAdapter",
 ]
+

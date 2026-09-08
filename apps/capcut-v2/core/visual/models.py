@@ -120,6 +120,10 @@ class VisualShot:
     motion_profile: Dict[str, Any] = field(default_factory=dict)
     planner_cost: float = 0.0
     diagnostics: Dict[str, Any] = field(default_factory=dict)
+    start_frame: Optional[int] = None
+    end_frame: Optional[int] = None
+    duration_frames: Optional[int] = None
+    quantization_error_us: int = 0
 
     @property
     def start_s(self) -> float:
@@ -155,7 +159,53 @@ class VisualShot:
             "motion_profile": self.motion_profile,
             "planner_cost": round(self.planner_cost, 3),
             "diagnostics": self.diagnostics,
+            "start_frame": self.start_frame,
+            "end_frame": self.end_frame,
+            "duration_frames": self.duration_frames,
+            "quantization_error_us": self.quantization_error_us,
         }
+
+
+def rational_fps_from_float(fps: float) -> Tuple[int, int]:
+    """
+    Converts floating FPS to canonical rational (numerator, denominator).
+    Handles NTSC drop-frame approximations (23.976, 29.97, 59.94) and standard integers.
+    """
+    from fractions import Fraction
+    if abs(fps - 23.976) < 0.01:
+        return 24000, 1001
+    elif abs(fps - 29.97) < 0.01:
+        return 30000, 1001
+    elif abs(fps - 59.94) < 0.01:
+        return 60000, 1001
+    r = round(fps)
+    if abs(fps - r) < 0.001:
+        return r, 1
+    frac = Fraction(fps).limit_denominator(1001)
+    return frac.numerator, frac.denominator
+
+
+@dataclass
+class FrameQuantizationPolicy:
+    """Configuration for Phase A2 frame-accurate timeline quantization."""
+    fps_numerator: int = 60
+    fps_denominator: int = 1
+    min_visual_frame_count: int = 1  # Every shot must contain >= 1 frame
+    preserve_terminal_audio_end: bool = True  # Invariant: VISUAL_END == MASTER_AUDIO_END
+    max_drift_tolerance_frames: float = 0.5
+
+    @property
+    def fps(self) -> float:
+        return (self.fps_numerator / float(self.fps_denominator)) if self.fps_denominator else 60.0
+
+    @classmethod
+    def from_fps(cls, fps: float, preserve_terminal_audio_end: bool = True) -> "FrameQuantizationPolicy":
+        num, den = rational_fps_from_float(fps)
+        return cls(
+            fps_numerator=num,
+            fps_denominator=den,
+            preserve_terminal_audio_end=preserve_terminal_audio_end,
+        )
 
 
 @dataclass
@@ -165,6 +215,7 @@ class VisualPlannerOptions:
     shadow_mode: bool = False
     duration_policy: ShotDurationPolicy = field(default_factory=ShotDurationPolicy)
     tail_policy: TailDurationPolicy = field(default_factory=TailDurationPolicy)
+    quantization_policy: FrameQuantizationPolicy = field(default_factory=FrameQuantizationPolicy)
     min_reuse_distance_s: float = 60.0
 
     def to_dict(self) -> Dict[str, Any]:
@@ -173,6 +224,8 @@ class VisualPlannerOptions:
             "shadow_mode": self.shadow_mode,
             "duration_policy": asdict(self.duration_policy),
             "tail_policy": asdict(self.tail_policy),
+            "quantization_policy": asdict(self.quantization_policy),
             "min_reuse_distance_s": self.min_reuse_distance_s,
         }
+
 

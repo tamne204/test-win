@@ -30,7 +30,9 @@ from .visual import (
     VisualPlannerEngine,
     VisualPlannerOptions,
     VisualPipelineAdapter,
+    FrameQuantizationPolicy,
 )
+
 
 TIMING_MODE_FIXED = "FIXED"
 TIMING_MODE_SRT_DRIVEN = "SRT_DRIVEN"
@@ -87,7 +89,16 @@ class TimelineBuilder:
         caption_list: List[EditPlanCaption] = []
         total_timeline_duration_us = 0
         shadow_metadata: Dict[str, Any] = {}
-        v_opts = visual_options or VisualPlannerOptions()
+        if visual_options is None:
+
+            v_opts = VisualPlannerOptions(
+                quantization_policy=FrameQuantizationPolicy.from_fps(self.preset.fps)
+            )
+        else:
+            v_opts = visual_options
+            if v_opts.quantization_policy.fps == 60.0 and self.preset.fps != 60.0:
+                v_opts.quantization_policy = FrameQuantizationPolicy.from_fps(self.preset.fps)
+
 
         # Branch 1: SRT-Driven Timing Mode
         if timing_mode == TIMING_MODE_SRT_DRIVEN and (srt_source or subtitle_cues):
