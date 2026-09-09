@@ -2266,7 +2266,7 @@ ipcMain.handle('upscale:process-images', async (event, { filePaths, resolution =
     fs.mkdirSync(defaultOutDir, { recursive: true });
   }
 
-  // Check for NCNN Vulkan binary via bin_resolver
+  // Check for NCNN Vulkan binary (realesrgan-ncnn-vulkan) via bin_resolver
   const binResolver = require('./bin_resolver');
   const realEsrganResolved = binResolver.resolveRealEsrgan();
   let ncnnBin = realEsrganResolved.path;

@@ -179,8 +179,8 @@ def test_long_01_audited_production_project_rebenchmark():
     script_path = "/Users/2tamne/Downloads/drive-download-20260906T185234Z-1-001/Tập 1 Tuổi Già.txt"
     draft_path = "/Users/2tamne/Movies/CapCut/User Data/Projects/com.lveditor.draft/2toolne_1788804879_test_1/draft_info.json"
 
-    assert os.path.isfile(script_path), f"Master script missing: {script_path}"
-    assert os.path.isfile(draft_path), f"Master draft missing: {draft_path}"
+    if not os.path.isfile(script_path) or not os.path.isfile(draft_path):
+        pytest.skip("Master script or draft file not present on this machine")
 
     with open(script_path, "r", encoding="utf-8") as f:
         master_script = f.read()

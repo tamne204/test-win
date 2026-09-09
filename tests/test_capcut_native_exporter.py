@@ -87,7 +87,7 @@ def test_native_exporter_successful_lifecycle():
         )
 
         # Check driver actions were invoked in sequence
-        assert "activate:CapCutMainWindow" in driver.actions_log
+        assert f"activate:{WINDOWS_CAPCUT_9_3_0_3970.main_window_class}" in driver.actions_log
         assert "shortcut:Ctrl+E" in driver.actions_log
         assert "key:Enter" in driver.actions_log
         assert "key:Escape" in driver.actions_log
