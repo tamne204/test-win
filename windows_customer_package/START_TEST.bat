@@ -20,6 +20,11 @@ if "%CI%"=="" pause
 exit /b 1
 
 :ArchOk
+if "%1"=="--capcut-probe" (
+    call "%~dp0RUN_CAPCUT_PROBE.bat" %*
+    exit /b %ERRORLEVEL%
+)
+
 :: 2. Check PowerShell availability
 where powershell.exe > nul 2>&1
 if %ERRORLEVEL% NEQ 0 (

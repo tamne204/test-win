@@ -189,7 +189,7 @@ int main(int argc, char* argv[]) {
             IUIAutomationElement* pRoot = NULL;
             pAutomation->ElementFromHandle(g_capcutWindows[i].hwnd, &pRoot);
             if (pRoot) {
-                InspectElementRecursive(pAutomation, pRoot, reportJson, 4, 3);
+                InspectElementRecursive(pAutomation, pRoot, reportJson, 0, 4);
                 pRoot->Release();
             }
         }

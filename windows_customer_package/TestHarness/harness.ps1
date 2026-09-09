@@ -356,8 +356,9 @@ Write-Host ""
 Write-Host "Ban co the bat dau kiem thu ung dung hoac mo giao dien chinh (2TOOLNE.exe)." -ForegroundColor Cyan
 Write-Host "Nhan [1] de khoi chay 2TOOLNE.exe"
 Write-Host "Nhan [2] de chay kiem thu nghiem thu vat ly toan dien (25 gates)"
+Write-Host "Nhan [3] de chay kiem thu chuyen sau CapCut Desktop UI Probe (9.3.0.3970)"
 Write-Host "Nhan [Q] de thoat"
-$userChoice = Read-Host "Nhap lua chon (1/2/Q)"
+$userChoice = Read-Host "Nhap lua chon (1/2/3/Q)"
 
 switch ($userChoice.Trim().ToUpper()) {
     "1" {
@@ -369,6 +370,14 @@ switch ($userChoice.Trim().ToUpper()) {
     "2" {
         Write-Host "Bat dau phien kiem thu nghiem thu vat ly..." -ForegroundColor Yellow
         # Full gates can proceed here if needed
+    }
+    "3" {
+        Write-Host "Bat dau kiem thu chuyen sau CapCut UI Probe..." -ForegroundColor Cyan
+        $probeScript = Join-Path $PSScriptRoot "Deepen-CapCutUiProbe.ps1"
+        if (-not (Test-Path $probeScript)) {
+            $probeScript = Join-Path (Join-Path $PSScriptRoot "modules") "Deepen-CapCutUiProbe.ps1"
+        }
+        & $probeScript -OutputDir (Join-Path $ResultsDir "capcut_probe")
     }
     default {
         Write-Host "Ket thuc phien kiem thu."
