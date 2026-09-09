@@ -7,7 +7,10 @@ from __future__ import annotations
 
 import os
 import sys
-import plistlib
+try:
+    import plistlib
+except ImportError:
+    plistlib = None
 import configparser
 from typing import Dict, Any, Optional, List
 

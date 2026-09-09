@@ -20,7 +20,7 @@ for pkg in ('faster_whisper', 'ctranslate2'):
 hiddenimports = [
     'PIL', 'PIL.Image', 'PIL.ImageDraw', 'PIL.ImageFont',
     'cryptography', 'requests', 'psutil', 'numpy', 'soundfile',
-    'capcut_version',
+    'capcut_version', 'plistlib',
 ]
 for pkg in ('core', 'adapters', 'desktop_bridge', 'faster_whisper', 'ctranslate2'):
     try:
@@ -31,8 +31,8 @@ for pkg in ('core', 'adapters', 'desktop_bridge', 'faster_whisper', 'ctranslate2
         pass
 
 if not sys.platform.startswith('win'):
-    hiddenimports += ['fcntl', 'plistlib']
-excludes = ['fcntl', 'plistlib'] if sys.platform.startswith('win') else []
+    hiddenimports += ['fcntl']
+excludes = ['fcntl'] if sys.platform.startswith('win') else []
 
 a = Analysis(
     [ENTRY_POINT],
