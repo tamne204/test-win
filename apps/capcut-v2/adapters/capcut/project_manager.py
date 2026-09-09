@@ -393,33 +393,31 @@ class CapCutProjectManager:
         """
         Remap all staging paths to installed target paths in draft_info.json and draft_meta_info.json.
         Ensures CapCut can resolve all media assets without unlinked/missing file errors.
+        Handles JSON-escaped backslashes, raw backslashes, and forward slashes on Windows & Unix.
         """
         staging_norm = os.path.normpath(staging_dir)
         installed_norm = os.path.normpath(installed_dir)
 
-        # 1. Remap in draft_info.json
-        info_path = os.path.join(installed_dir, "draft_info.json")
-        if os.path.isfile(info_path):
-            try:
-                with open(info_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-                content = content.replace(staging_norm, installed_norm)
-                content = content.replace(staging_dir.replace("\\", "/"), installed_dir.replace("\\", "/"))
-                with open(info_path, "w", encoding="utf-8") as f:
-                    f.write(content)
-            except Exception as e:
-                print(f"Warning remapping draft_info.json: {e}")
+        # Variations to replace:
+        # 1. JSON-escaped backslashes (e.g. "C:\\Users\\...")
+        # 2. Raw backslashes (e.g. "C:\Users\...")
+        # 3. Forward slashes (e.g. "C:/Users/...")
+        pairs = [
+            (staging_norm.replace("\\", "\\\\"), installed_norm.replace("\\", "\\\\")),
+            (staging_norm, installed_norm),
+            (staging_dir.replace("\\", "/"), installed_dir.replace("\\", "/")),
+        ]
 
-        # 2. Remap in draft_meta_info.json
-        meta_path = os.path.join(installed_dir, "draft_meta_info.json")
-        if os.path.isfile(meta_path):
-            try:
-                with open(meta_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-                content = content.replace(staging_norm, installed_norm)
-                content = content.replace(staging_dir.replace("\\", "/"), installed_dir.replace("\\", "/"))
-                with open(meta_path, "w", encoding="utf-8") as f:
-                    f.write(content)
-            except Exception as e:
-                print(f"Warning remapping draft_meta_info.json: {e}")
+        for file_name in ("draft_info.json", "draft_meta_info.json"):
+            target_path = os.path.join(installed_dir, file_name)
+            if os.path.isfile(target_path):
+                try:
+                    with open(target_path, "r", encoding="utf-8") as f:
+                        content = f.read()
+                    for src, dst in pairs:
+                        content = content.replace(src, dst)
+                    with open(target_path, "w", encoding="utf-8") as f:
+                        f.write(content)
+                except Exception as e:
+                    print(f"Warning remapping {file_name}: {e}")
 
