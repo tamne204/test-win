@@ -24,6 +24,10 @@ if "%1"=="--capcut-probe" (
     call "%~dp0RUN_CAPCUT_PROBE.bat" %*
     exit /b %ERRORLEVEL%
 )
+if "%1"=="--capcut-export" (
+    call "%~dp0RUN_CAPCUT_EXPORT_GATE.bat" %*
+    exit /b %ERRORLEVEL%
+)
 
 :: 2. Check PowerShell availability
 where powershell.exe > nul 2>&1

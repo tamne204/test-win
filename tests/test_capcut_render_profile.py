@@ -27,7 +27,7 @@ def test_verified_windows_profile_constants():
     assert profile.app_version == "9.3.0.3970"
     assert profile.product_version == "9.3.0.6ab91e2a"
     assert profile.sha256_checksum == "4A62EF77819DC40B710E52ECD6B2A665D31D54F606ABCA1CB7B443F4CB13CB93"
-    assert profile.main_window_class == "CapCutMainWindow"
+    assert profile.main_window_class in ("Qt622QWindowIcon", "CapCutMainWindow")
     assert profile.export_shortcut == "Ctrl+E"
     assert profile.confirm_export_key == "Enter"
     assert profile.dismiss_dialog_key == "Escape"

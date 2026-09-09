@@ -50,12 +50,36 @@ class Win32AutomationDriver(AutomationDriver):
 
             deadline = time.time() + timeout_sec
             while time.time() < deadline:
+                candidates = []
+
+                def _enum_win(hwnd, _):
+                    if win32gui.IsWindowVisible(hwnd):
+                        cls = win32gui.GetClassName(hwnd)
+                        if cls == window_class or ("QWindow" in cls and "ToolTip" not in cls):
+                            rect = win32gui.GetWindowRect(hwnd)
+                            w = rect[2] - rect[0]
+                            h = rect[3] - rect[1]
+                            if w > 200 and h > 200:
+                                candidates.append((hwnd, w * h))
+                    return True
+
+                win32gui.EnumWindows(_enum_win, None)
+                if candidates:
+                    candidates.sort(key=lambda x: x[1], reverse=True)
+                    best_hwnd = candidates[0][0]
+                    win32gui.ShowWindow(best_hwnd, win32con.SW_RESTORE)
+                    win32gui.SetForegroundWindow(best_hwnd)
+                    time.sleep(0.3)
+                    return True
+
+                # Fallback to direct FindWindow
                 hwnd = win32gui.FindWindow(window_class, None)
                 if hwnd and win32gui.IsWindowVisible(hwnd):
                     win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
                     win32gui.SetForegroundWindow(hwnd)
                     time.sleep(0.3)
                     return True
+
                 time.sleep(0.5)
             return False
         except Exception:

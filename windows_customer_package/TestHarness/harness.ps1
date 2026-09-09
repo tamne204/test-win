@@ -357,8 +357,9 @@ Write-Host "Ban co the bat dau kiem thu ung dung hoac mo giao dien chinh (2TOOLN
 Write-Host "Nhan [1] de khoi chay 2TOOLNE.exe"
 Write-Host "Nhan [2] de chay kiem thu nghiem thu vat ly toan dien (25 gates)"
 Write-Host "Nhan [3] de chay kiem thu chuyen sau CapCut Desktop UI Probe (9.3.0.3970)"
+Write-Host "Nhan [4] de chay kiem thu nghiem thu vat ly CapCut Native Export Gate"
 Write-Host "Nhan [Q] de thoat"
-$userChoice = Read-Host "Nhap lua chon (1/2/3/Q)"
+$userChoice = Read-Host "Nhap lua chon (1/2/3/4/Q)"
 
 switch ($userChoice.Trim().ToUpper()) {
     "1" {
@@ -378,6 +379,14 @@ switch ($userChoice.Trim().ToUpper()) {
             $probeScript = Join-Path (Join-Path $PSScriptRoot "modules") "Deepen-CapCutUiProbe.ps1"
         }
         & $probeScript -OutputDir (Join-Path $ResultsDir "capcut_probe")
+    }
+    "4" {
+        Write-Host "Bat dau kiem thu nghiem thu vat ly CapCut Native Export Gate..." -ForegroundColor Cyan
+        $exportScript = Join-Path $PSScriptRoot "Execute-CapCutNativeExport.ps1"
+        if (-not (Test-Path $exportScript)) {
+            $exportScript = Join-Path (Join-Path $PSScriptRoot "modules") "Execute-CapCutNativeExport.ps1"
+        }
+        & $exportScript -OutputDir (Join-Path $ResultsDir "capcut_export")
     }
     default {
         Write-Host "Ket thuc phien kiem thu."

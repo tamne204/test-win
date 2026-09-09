@@ -67,6 +67,7 @@ jobs:
           Write-Host "Copying Customer Launcher, TestHarness, and TestBundle..."
           Copy-Item "windows_customer_package\\START_TEST.bat" $staging -Force
           Copy-Item "windows_customer_package\\RUN_CAPCUT_PROBE.bat" $staging -Force
+          Copy-Item "windows_customer_package\\RUN_CAPCUT_EXPORT_GATE.bat" $staging -Force
           Copy-Item "windows_customer_package\\README.txt" $staging -Force
           Copy-Item "windows_customer_package\\RELEASE_INFO.txt" $staging -Force
           Copy-Item "windows_customer_package\\TestHarness" $staging -Recurse -Force
@@ -94,6 +95,8 @@ jobs:
           call START_TEST.bat --ci-smoke
           echo Running RUN_CAPCUT_PROBE.bat --ci-smoke...
           call RUN_CAPCUT_PROBE.bat --ci-smoke
+          echo Running RUN_CAPCUT_EXPORT_GATE.bat --ci-smoke...
+          call RUN_CAPCUT_EXPORT_GATE.bat --ci-smoke
 
       - name: 6. Verify Customer Diagnostics & Run Secret Scan
         shell: powershell
