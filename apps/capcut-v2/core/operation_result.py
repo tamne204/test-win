@@ -160,7 +160,7 @@ def reconcile_project_creation(
         primary = "Không tìm thấy tệp âm thanh đã chọn."
         err_code = "MISSING_AUDIO"
         user_action = "CHOOSE_AUDIO"
-    elif "ảnh" in err_str.lower() or "image" in err_str.lower():
+    elif "ảnh" in err_str.lower() or "image" in err_str.lower() or "tệp tin" in err_str.lower() or ".png" in err_str.lower() or ".jpg" in err_str.lower():
         primary = "Không tìm thấy tệp hình ảnh nguồn."
         err_code = "MISSING_IMAGES"
         user_action = "CHOOSE_IMAGES"

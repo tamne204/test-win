@@ -569,7 +569,19 @@ class CapCutLicenseController {
         $seed = self::getSigningSeed();
         $signatureB64 = '';
 
-        if (function_exists('sodium_crypto_sign_seed_keypair')) {
+        if (!function_exists('sodium_crypto_sign_seed_keypair')) {
+            $compatAutoload = dirname(__DIR__, 3) . '/vendor/paragonie/sodium_compat/autoload.php';
+            if (file_exists($compatAutoload)) {
+                require_once $compatAutoload;
+            }
+        }
+
+        if (class_exists('ParagonIE_Sodium_Compat')) {
+            $keypair = ParagonIE_Sodium_Compat::crypto_sign_seed_keypair($seed);
+            $secretKey = ParagonIE_Sodium_Compat::crypto_sign_secretkey($keypair);
+            $sig = ParagonIE_Sodium_Compat::crypto_sign_detached($canonicalJson, $secretKey);
+            $signatureB64 = base64_encode($sig);
+        } elseif (function_exists('sodium_crypto_sign_seed_keypair')) {
             $keypair = sodium_crypto_sign_seed_keypair($seed);
             $secretKey = sodium_crypto_sign_secretkey($keypair);
             $sig = sodium_crypto_sign_detached($canonicalJson, $secretKey);

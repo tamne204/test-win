@@ -2777,6 +2777,9 @@ DOM.btnSubmitModalLicense.addEventListener('click', async () => {
     const res = await window.autoedit.activateLicense(key);
     if (res && res.ok) {
       hideModal(DOM.modalLicense);
+      if (res.license) {
+        updateLicenseUI(res.license);
+      }
       showAlert(res.message || 'Kích hoạt bản quyền thành công!', 'Thành Công');
       await checkLicenseStatus();
     } else {
@@ -6725,6 +6728,13 @@ window.addEventListener('DOMContentLoaded', async () => {
     refreshUserSession(),
     refreshWalletBalance(),
   ]);
+
+  // Connect Authoritative License State
+  if (window.autoedit && window.autoedit.onLicenseChanged) {
+    window.autoedit.onLicenseChanged((data) => {
+      updateLicenseUI(data);
+    });
+  }
 
   // Connect Authoritative Build Queue (Queue A)
   if (window.autoedit && window.autoedit.onBuildQueueUpdate) {

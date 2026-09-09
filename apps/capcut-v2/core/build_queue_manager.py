@@ -519,7 +519,7 @@ class ProjectBuildQueueManager:
 
             job.state = STATE_FAILED
             job.completed_at = time.time()
-            job.error = op_result.primary_message
+            job.error = f"{op_result.primary_message} ({op_result.secondary_message})" if op_result.secondary_message else op_result.primary_message
             job.current_step = f"Lỗi: {op_result.primary_message}"
             self.save_snapshot()
             self._notify()

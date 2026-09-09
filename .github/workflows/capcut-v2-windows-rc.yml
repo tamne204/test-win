@@ -372,3 +372,125 @@ jobs:
           name: 2toolne-autoedit-windows-rc2-2.0.0
           path: 2toolne-autoedit-windows-rc2-2.0.0/
           retention-days: 14
+
+      - name: 16. Assemble Hardened Customer Package (2TOOLNE_Windows_Customer_Test_2.0.0-hardened.zip)
+        shell: pwsh
+        run: |
+          Write-Host "================================================================"
+          Write-Host "ASSEMBLING HARDENED CUSTOMER PACKAGE (2.0.0-hardened)"
+          Write-Host "================================================================"
+          $staging = "D:\CustomerStaging"
+          if (Test-Path $staging) { Remove-Item -Recurse -Force $staging }
+          $appDir = Join-Path $staging "2TOOLNE"
+          New-Item -ItemType Directory -Force -Path $appDir | Out-Null
+          
+          # Copy freshly built Windows unpacked distribution
+          Write-Host "Copying fresh win-unpacked into 2TOOLNE directory..."
+          Copy-Item "apps/capcut-v2/desktop/dist/win-unpacked/*" -Destination $appDir -Recurse -Force
+          
+          # Mirror win-x64 subfolders to top-level bin and engine for universal compatibility
+          if (Test-Path "$appDir\resources\bin\win-x64") {
+              Copy-Item "$appDir\resources\bin\win-x64\*" "$appDir\resources\bin\" -Recurse -Force
+          }
+          if (Test-Path "$appDir\resources\engine\win-x64") {
+              Copy-Item "$appDir\resources\engine\win-x64\*" "$appDir\resources\engine\" -Recurse -Force
+          }
+          
+          $exe1 = Join-Path $appDir "2TOOLNE AutoEdit.exe"
+          $exe2 = Join-Path $appDir "2TOOLNE.exe"
+          if ((Test-Path $exe1) -and -not (Test-Path $exe2)) { Copy-Item $exe1 $exe2 -Force }
+          
+          # Update RELEASE_INFO.txt with exact build ID and Git commit
+          $shortSha = $env:GITHUB_SHA.Substring(0, 7)
+          $buildId = "CUSTOMER-TEST-READY-2.0.0-hardened-WIN-X64-$shortSha"
+          $releaseInfo = @"
+PRODUCT_NAME=2TOOLNE AutoEdit for CapCut
+PRODUCT_VERSION=2.0.0-hardened
+BUILD_ID=$buildId
+GIT_SHA=$env:GITHUB_SHA
+PACKAGE_FILENAME=2TOOLNE_Windows_Customer_Test_2.0.0-hardened.zip
+BUILD_DATE=$(Get-Date -Format "yyyy-MM-ddTHH:mm:ss.fffZ")
+TARGET_OS=Windows 10/11 x64
+AUTHORITATIVE_CAPCUT_VERSION=9.3.0.3970
+STATUS=CUSTOMER_TEST_READY
+"@
+          $releaseInfo | Out-File -FilePath (Join-Path $staging "RELEASE_INFO.txt") -Encoding utf8
+          
+          Write-Host "Copying Customer Launcher, TestHarness, and TestBundle..."
+          Copy-Item "windows_customer_package\START_TEST.bat" $staging -Force
+          Copy-Item "windows_customer_package\RUN_CAPCUT_PROBE.bat" $staging -Force
+          Copy-Item "windows_customer_package\RUN_CAPCUT_EXPORT_GATE.bat" $staging -Force
+          Copy-Item "windows_customer_package\README.txt" $staging -Force
+          Copy-Item "windows_customer_package\TestHarness" $staging -Recurse -Force
+          Copy-Item "windows_customer_package\TestBundle" $staging -Recurse -Force
+          
+          $distDir = "D:\CustomerDist"
+          New-Item -ItemType Directory -Force -Path $distDir | Out-Null
+          $zipPath = Join-Path $distDir "2TOOLNE_Windows_Customer_Test_2.0.0-hardened.zip"
+          Write-Host "Compressing hardened unified customer package..."
+          Compress-Archive -Path (Join-Path $staging "*") -DestinationPath $zipPath -Force
+          
+          $pkgHash = (Get-FileHash -Path $zipPath -Algorithm SHA256).Hash.ToLower()
+          $pkgSize = (Get-Item $zipPath).Length
+          Write-Host "NEW_CUSTOMER_PACKAGE = 2TOOLNE_Windows_Customer_Test_2.0.0-hardened.zip" -ForegroundColor Green
+          Write-Host "NEW_CUSTOMER_BUILD_ID = $buildId" -ForegroundColor Green
+          Write-Host "NEW_CUSTOMER_GIT_SHA = $env:GITHUB_SHA" -ForegroundColor Green
+          Write-Host "NEW_CUSTOMER_SHA256 = $pkgHash" -ForegroundColor Green
+          Write-Host "NEW_CUSTOMER_SIZE = $pkgSize" -ForegroundColor Green
+
+      - name: 17. Execute Exact Hardened Customer ZIP in Completely Isolated Directory
+        shell: cmd
+        env:
+          CI: "true"
+        run: |
+          echo ================================================================
+          echo EXTRACTING AND EXECUTING EXACT HARDENED CUSTOMER ARTIFACT
+          echo ================================================================
+          powershell.exe -NoProfile -Command "Expand-Archive -Path \"D:\CustomerDist\2TOOLNE_Windows_Customer_Test_2.0.0-hardened.zip\" -DestinationPath \"C:\IsolatedCustomerTest\" -Force"
+          cd /d C:\IsolatedCustomerTest
+          echo Running START_TEST.bat --ci-smoke...
+          call START_TEST.bat --ci-smoke
+          echo Running RUN_CAPCUT_PROBE.bat --ci-smoke...
+          call RUN_CAPCUT_PROBE.bat --ci-smoke
+          echo Running RUN_CAPCUT_EXPORT_GATE.bat --ci-smoke...
+          call RUN_CAPCUT_EXPORT_GATE.bat --ci-smoke
+
+      - name: 18. Verify Packaged License Fix Contract
+        shell: pwsh
+        run: |
+          Write-Host "================================================================"
+          Write-Host "VERIFYING PACKAGED LICENSE FIX CONTRACT"
+          Write-Host "================================================================"
+          $targetApp = "C:\IsolatedCustomerTest\2TOOLNE"
+          node apps/capcut-v2/desktop/scripts/verify_hardened_license_package.js $targetApp
+
+      - name: 19. Verify Customer Diagnostics & Run Secret Scan
+        shell: powershell
+        run: |
+          $diagZip = "C:\IsolatedCustomerTest\diagnostics.zip"
+          if (-not (Test-Path $diagZip)) { throw "diagnostics.zip was not created!" }
+          Write-Host "CUSTOMER_DIAGNOSTICS = PASS" -ForegroundColor Green
+          $diagExtract = "C:\DiagCheck"
+          Expand-Archive -Path $diagZip -DestinationPath $diagExtract -Force
+          $leaks = @()
+          $files = Get-ChildItem -Path $diagExtract -Recurse -File
+          foreach ($f in $files) {
+              $content = Get-Content $f.FullName -Raw
+              if ($content -match "AIza[A-Za-z0-9_\-]{35}") { $leaks += "Google API Key in $($f.Name)" }
+              if ($content -match "sk-[A-Za-z0-9]{32,}") { $leaks += "OpenAI Key in $($f.Name)" }
+              if ($content -match "password\s*=\s*[^\s\[]+") { $leaks += "Plain Password in $($f.Name)" }
+          }
+          if ($leaks.Count -gt 0) {
+              Write-Host "CUSTOMER_SECRET_SCAN = FAIL" -ForegroundColor Red
+              foreach ($l in $leaks) { Write-Host "  [-] $l" -ForegroundColor Red }
+              throw "Secret scan detected leaked credentials!"
+          }
+          Write-Host "CUSTOMER_SECRET_SCAN = PASS" -ForegroundColor Green
+          Write-Host "CUSTOMER_TEST_READY_GATE = PASS" -ForegroundColor Green
+
+      - name: 20. Upload Customer Hardened Test Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: 2TOOLNE_Windows_Customer_Test_2.0.0-hardened
+          path: D:\CustomerDist\2TOOLNE_Windows_Customer_Test_2.0.0-hardened.zip
+          retention-days: 14

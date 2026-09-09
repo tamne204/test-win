@@ -240,6 +240,11 @@ contextBridge.exposeInMainWorld('autoedit', {
   getLicenseStatus: () => ipcRenderer.invoke('license:get-status'),
   activateLicense: (licenseKey) => ipcRenderer.invoke('license:activate', { licenseKey }),
   deactivateDevice: () => ipcRenderer.invoke('license:deactivate'),
+  onLicenseChanged: (callback) => {
+    const listener = (_, data) => callback(data);
+    ipcRenderer.on('license:status-changed', listener);
+    return () => ipcRenderer.removeListener('license:status-changed', listener);
+  },
 
   // Event Listeners
   onProgress: (callback) => {

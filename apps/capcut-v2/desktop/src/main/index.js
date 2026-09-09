@@ -1152,6 +1152,15 @@ ipcMain.handle('license:activate', async (_, { licenseKey }) => {
         license_key_last4: last4,
       });
 
+      if (!sidecarRes || !sidecarRes.authorized) {
+        console.error('[License] Sidecar rejected signed entitlement:', sidecarRes);
+        return {
+          ok: false,
+          error: sidecarRes?.message || 'Xác thực chữ ký bản quyền thất bại trong ứng dụng.',
+          code: sidecarRes?.state || 'SIGNATURE_VERIFICATION_FAILED',
+        };
+      }
+
       // 4. Persist encrypted credentials in OS Keychain / DPAPI (NO RAW KEY SAVED)
       secureStorage.setItem('entitlement_envelope', serverRes.signed_entitlement);
       secureStorage.setItem('masked_key', maskedKey);
@@ -1160,9 +1169,25 @@ ipcMain.handle('license:activate', async (_, { licenseKey }) => {
       secureStorage.setItem('last_activated_at', Date.now());
       secureStorage.removeItem('active_key'); // Purge legacy key if any
 
+      const activeState = {
+        valid: true,
+        active: true,
+        authorized: true,
+        tier: sidecarRes.plan || 'PRO',
+        maskedKey: maskedKey,
+        deviceId: deviceId,
+        expiresAt: sidecarRes.expires_at,
+        offlineGraceRemaining: sidecarRes.offline_grace_remaining,
+      };
+
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('license:status-changed', activeState);
+      }
+
       return {
         ok: true,
         status: sidecarRes,
+        license: activeState,
         message: serverRes.message || 'Kích hoạt bản quyền thành công!',
       };
     } else {
@@ -1199,6 +1224,19 @@ ipcMain.handle('license:deactivate', async () => {
 
     await sidecar.send('CLEAR_LICENSE');
     secureStorage.clear();
+
+    const deactiveState = {
+      valid: false,
+      active: false,
+      authorized: false,
+      tier: 'CHƯA ĐĂNG KÝ',
+      maskedKey: null,
+      deviceId: deviceId,
+      expiresAt: null,
+    };
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('license:status-changed', deactiveState);
+    }
 
     return { ok: true, message: 'Đã hủy kích hoạt thiết bị thành công.' };
   } catch (err) {

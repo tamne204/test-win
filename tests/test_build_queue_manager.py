@@ -108,7 +108,7 @@ def test_build_queue_single_project_success():
         qm.build_job(job.job_id)
         # Wait for completion
         for _ in range(50):
-            if qm.get_job(job.job_id).state == STATE_PROJECT_READY:
+            if qm.get_job(job.job_id).state == STATE_PROJECT_READY and qm.get_state()["queue_status"] == QUEUE_STATUS_IDLE:
                 break
             time.sleep(0.05)
 
