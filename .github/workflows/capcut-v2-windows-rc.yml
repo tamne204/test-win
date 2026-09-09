@@ -171,6 +171,7 @@ jobs:
         shell: pwsh
         run: |
           Write-Host "Running comprehensive Windows CI validation suite..."
+          $env:PYTHONIOENCODING = "utf-8"
           $env:PYTHONPATH = "apps/capcut-v2;.;$env:PYTHONPATH"
           $env:SIDECAR_EXE_PATH = "apps/capcut-v2/desktop/resources/autoedit-core/win-x64/autoedit-core.exe"
           $env:WIN_BIN_DIR = "apps/capcut-v2/desktop/resources/bin/win-x64"

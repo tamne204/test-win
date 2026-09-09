@@ -27,6 +27,18 @@ import subprocess
 from unittest.mock import patch
 from typing import Dict, Any, List
 
+# Reconfigure stdout/stderr to UTF-8 to prevent Windows code page cp1252 charmap crashes
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+if hasattr(sys.stderr, "reconfigure"):
+    try:
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 V2_ROOT = os.path.join(REPO_ROOT, "apps", "capcut-v2")
 if V2_ROOT not in sys.path:
@@ -128,7 +140,7 @@ def test_sidecar_smoke(exe_path: str) -> bool:
         if not res.get("ok") or not res.get("result", {}).get("pong"):
             print(f"FAIL: Unexpected PING response: {res}")
             return False
-        print("   ✓ PING returned pong: true")
+        print("   [PASS] PING returned pong: true")
 
         # B. Test GET_APP_INFO
         print("-> Testing GET_APP_INFO...")
@@ -137,7 +149,7 @@ def test_sidecar_smoke(exe_path: str) -> bool:
         if not res.get("ok") or prod_id not in ("2toolne.capcut.v2", "autoedit-capcut-v2"):
             print(f"FAIL: Unexpected GET_APP_INFO response: {res}")
             return False
-        print(f"   ✓ GET_APP_INFO returned product_id: {prod_id}, version: {res['result']['version']}")
+        print(f"   [PASS] GET_APP_INFO returned product_id: {prod_id}, version: {res['result']['version']}")
 
         # C. Test GET_LICENSE_STATUS
         print("-> Testing GET_LICENSE_STATUS...")
@@ -147,7 +159,7 @@ def test_sidecar_smoke(exe_path: str) -> bool:
         if not res.get("ok") or is_authorized or state != "LICENSE_NOT_ACTIVATED":
             print(f"FAIL: Unexpected GET_LICENSE_STATUS response: {res}")
             return False
-        print("   ✓ GET_LICENSE_STATUS confirmed unactivated initial state (state: LICENSE_NOT_ACTIVATED)")
+        print("   [PASS] GET_LICENSE_STATUS confirmed unactivated initial state (state: LICENSE_NOT_ACTIVATED)")
 
         # D. Test Commercial Method License Gate (GENERATE_CAPCUT_PROJECT)
         print("-> Testing GENERATE_CAPCUT_PROJECT without license (should fail with LICENSE_NOT_ACTIVATED)...")
@@ -159,7 +171,7 @@ def test_sidecar_smoke(exe_path: str) -> bool:
         if err.get("code") != "LICENSE_NOT_ACTIVATED":
             print(f"FAIL: Expected error code LICENSE_NOT_ACTIVATED, got: {err}")
             return False
-        print("   ✓ License Gate verified: Commercial method rejected with LICENSE_NOT_ACTIVATED")
+        print("   [PASS] License Gate verified: Commercial method rejected with LICENSE_NOT_ACTIVATED")
 
         return True
     finally:
@@ -245,7 +257,7 @@ def test_unicode_paths(exe_path: str, tmp_dir: str) -> bool:
                 "method": "INSTALL_SIGNED_ENTITLEMENT",
                 "params": {"envelope": test_envelope}
             })
-            print("   ✓ Temporary test entitlement activated for filesystem inspection.")
+            print("   [PASS] Temporary test entitlement activated for filesystem inspection.")
         except Exception as lic_err:
             print(f"Notice: Entitlement generator skipped: {lic_err}")
 
@@ -262,7 +274,7 @@ def test_unicode_paths(exe_path: str, tmp_dir: str) -> bool:
         if not res.get("ok"):
             err = res.get("error", {})
             if err.get("code") == "LICENSE_NOT_ACTIVATED":
-                print("   ✓ Verified license gate protection even on Unicode requests.")
+                print("   [PASS] Verified license gate protection even on Unicode requests.")
                 return True
             print(f"FAIL: VALIDATE_INPUTS failed: {res}")
             return False
@@ -272,7 +284,7 @@ def test_unicode_paths(exe_path: str, tmp_dir: str) -> bool:
             print(f"FAIL: Unicode validation returned errors: {result.get('errors')}")
             return False
 
-        print("   ✓ Sidecar successfully resolved all UTF-8 Unicode paths without character corruption.")
+        print("   [PASS] Sidecar successfully resolved all UTF-8 Unicode paths without character corruption.")
         return True
     finally:
         try:
@@ -303,7 +315,7 @@ def test_process_lifecycle(exe_path: str) -> bool:
 
     res = send_ipc(proc, {"jsonrpc": "2.0", "id": "life-ping", "method": "PING"})
     assert res.get("ok"), "Sidecar failed initial ping"
-    print("   ✓ Sidecar process active and responding.")
+    print("   [PASS] Sidecar process active and responding.")
 
     if sys.platform.startswith("win"):
         print(f"-> Terminating process via taskkill /pid {pid} /f /t...")
@@ -320,7 +332,7 @@ def test_process_lifecycle(exe_path: str) -> bool:
         proc.kill()
         return False
 
-    print("   ✓ Process exited cleanly. Zero zombie process detected.")
+    print("   [PASS] Process exited cleanly. Zero zombie process detected.")
     return True
 
 
@@ -355,7 +367,7 @@ def test_capcut_detector_logic(tmp_dir: str) -> bool:
         # Verify candidate roots on Windows fixture
         roots = detector._get_candidate_draft_roots_windows()
         assert any("com.lveditor.draft" in r for r in roots)
-        print("   ✓ CapCutDetector candidate roots for Windows verified.")
+        print("   [PASS] CapCutDetector candidate roots for Windows verified.")
         return True
 
 
@@ -434,7 +446,7 @@ def test_draft_generation(tmp_dir: str) -> bool:
                 print(f"FAIL: Draft validation failed: {errors}")
                 return False
 
-    print("   ✓ Generated Windows draft passed 100% CapCutDraftValidator criteria.")
+    print("   [PASS] Generated Windows draft passed 100% CapCutDraftValidator criteria.")
     return True
 
 
@@ -476,7 +488,7 @@ def test_packaged_security(app_dir: str) -> bool:
                 except Exception:
                     pass
 
-    print("   ✓ Packaged structure verified: Zero Flask dev server, zero hardcoded private keys or peppers.")
+    print("   [PASS] Packaged structure verified: Zero Flask dev server, zero hardcoded private keys or peppers.")
     return True
 
 
@@ -505,7 +517,7 @@ def test_dll_audit(exe_path: str) -> bool:
     for r in expected_runtimes:
         print(f"   • {r}")
 
-    print("   ✓ DLL dependency audit documented.")
+    print("   [PASS] DLL dependency audit documented.")
     return True
 
 
@@ -538,7 +550,7 @@ def test_script_to_srt_engine(tmp_dir: str) -> bool:
     tokens = tokenize_script(script_vi, language=lang)
     for tok in tokens:
         assert script_vi[tok.char_start:tok.char_end] == tok.raw_text, "Character offset mismatch!"
-    print(f"   ✓ Script Normalizer: 100% token offset and verbatim text verified ({len(tokens)} tokens, lang={lang}).")
+    print(f"   [PASS] Script Normalizer: 100% token offset and verbatim text verified ({len(tokens)} tokens, lang={lang}).")
 
     # 2. Mock Speech Timestamp Provider + Alignment
     mock_words = [
@@ -561,7 +573,7 @@ def test_script_to_srt_engine(tmp_dir: str) -> bool:
     aligner = ScriptAligner()
     aligned_tokens = aligner.align(tokens, mock_words)
     assert len(aligned_tokens) == len(tokens)
-    print("   ✓ Script Aligner: Monotonic alignment verified.")
+    print("   [PASS] Script Aligner: Monotonic alignment verified.")
 
     # 3. Subtitle Segmentation
     segmenter = SubtitleSegmenter(options=AlignmentOptions(max_words_per_cue=8))
@@ -569,14 +581,14 @@ def test_script_to_srt_engine(tmp_dir: str) -> bool:
     assert len(cues) >= 2, f"Expected at least 2 cues, got {len(cues)}"
     for cue in cues:
         assert cue.end_s > cue.start_s
-    print(f"   ✓ Subtitle Segmenter: Generated {len(cues)} cues conforming to 2TOOLNE_STANDARD_SUBTITLE.")
+    print(f"   [PASS] Subtitle Segmenter: Generated {len(cues)} cues conforming to 2TOOLNE_STANDARD_SUBTITLE.")
 
     # 4. SRT Generation & Validation
     srt_text = generate_srt(cues)
     assert "2TOOLNE AutoEdit V2!" in srt_text, "Verbatim brand casing and punctuation lost in SRT output!"
     val_ok, val_err = validate_srt_content(srt_text)
     assert val_ok, f"SRT validation error: {val_err}"
-    print("   ✓ SRT Generator: UTF-8 standard output & source of truth preserved.")
+    print("   [PASS] SRT Generator: UTF-8 standard output & source of truth preserved.")
 
     # 5. Full Pipeline Test with Mock Provider and Real Wave Fixture
     import wave
@@ -593,7 +605,7 @@ def test_script_to_srt_engine(tmp_dir: str) -> bool:
     assert res is not None
     assert res.cue_count == len(cues)
     assert res.srt_content is not None
-    print(f"   ✓ ScriptToSrtPipeline: End-to-end execution verified ({res.cue_count} cues generated).")
+    print(f"   [PASS] ScriptToSrtPipeline: End-to-end execution verified ({res.cue_count} cues generated).")
 
     # 6. Physical VAD Asset Packaging Check
     sidecar_internal = os.path.join(V2_ROOT, "packaging", "dist", "autoedit-core", "_internal")
@@ -601,7 +613,7 @@ def test_script_to_srt_engine(tmp_dir: str) -> bool:
         vad_asset = os.path.join(sidecar_internal, "faster_whisper", "assets", "silero_vad_v6.onnx")
         assert os.path.isfile(vad_asset), f"Bundled VAD asset missing at {vad_asset}"
         assert os.path.getsize(vad_asset) > 0, f"Bundled VAD asset is empty: {vad_asset}"
-        print(f"   ✓ Packaging Check: Bundled silero_vad_v6.onnx verified ({os.path.getsize(vad_asset):,} bytes).")
+        print(f"   [PASS] Packaging Check: Bundled silero_vad_v6.onnx verified ({os.path.getsize(vad_asset):,} bytes).")
 
     return True
 
@@ -621,7 +633,7 @@ def test_a0_collapse_healing() -> bool:
         ]
         res = detector.inspect(cues, language="vi", allow_degraded=False)
         assert res.has_collapse is False
-        print("   ✓ WIN_CI_A0: Subtitle collapse detector & healing passed.")
+        print("   [PASS] WIN_CI_A0: Subtitle collapse detector & healing passed.")
         return True
     except Exception as e:
         print(f"FAIL WIN_CI_A0: {e}")
@@ -634,7 +646,7 @@ def test_a1_visual_planner() -> bool:
         from core.visual.dp_planner import VisualShotPlanner
         planner = VisualShotPlanner()
         assert planner is not None
-        print("   ✓ WIN_CI_A1: Visual DP planner & motion policy passed.")
+        print("   [PASS] WIN_CI_A1: Visual DP planner & motion policy passed.")
         return True
     except Exception as e:
         print(f"FAIL WIN_CI_A1: {e}")
@@ -652,7 +664,7 @@ def test_a2_presets_and_rules() -> bool:
         engine = RuleEngine(PRESET_BASIC)
         m0 = engine.assign_motion(0)
         assert m0 is not None
-        print(f"   ✓ WIN_CI_A2: Presets ({len(presets)} presets) and RuleEngine passed.")
+        print(f"   [PASS] WIN_CI_A2: Presets ({len(presets)} presets) and RuleEngine passed.")
         return True
     except Exception as e:
         print(f"FAIL WIN_CI_A2: {e}")
@@ -665,7 +677,7 @@ def test_timeline_builder_gate() -> bool:
         from core.timeline_builder import TimelineBuilder
         tb = TimelineBuilder()
         assert tb is not None
-        print("   ✓ WIN_CI_TIMELINE: TimelineBuilder passed.")
+        print("   [PASS] WIN_CI_TIMELINE: TimelineBuilder passed.")
         return True
     except Exception as e:
         print(f"FAIL WIN_CI_TIMELINE: {e}")
@@ -722,18 +734,18 @@ def test_clean_machine_sidecar(sidecar_exe: str) -> Dict[str, Any]:
         res_ping = send_ipc(proc, {"jsonrpc": "2.0", "id": "clean-ping", "method": "PING"}, timeout_sec=10.0)
         if res_ping.get("ok") and res_ping.get("result", {}).get("pong"):
             out["SIDECAR_PROCESS_START"] = True
-            print("   ✓ Bundled sidecar process started successfully without system Python.")
+            print("   [PASS] Bundled sidecar process started successfully without system Python.")
 
         print("-> Testing GET_APP_INFO protocol method...")
         res_info = send_ipc(proc, {"jsonrpc": "2.0", "id": "clean-info", "method": "GET_APP_INFO"})
         if res_info.get("ok"):
-            print(f"   ✓ App info verified: {res_info.get('result', {}).get('product_id')}")
+            print(f"   [PASS] App info verified: {res_info.get('result', {}).get('product_id')}")
 
         print("-> Testing GET_LICENSE_STATUS protocol method...")
         res_lic = send_ipc(proc, {"jsonrpc": "2.0", "id": "clean-lic", "method": "GET_LICENSE_STATUS"})
         if res_lic.get("ok"):
             out["SIDECAR_PROTOCOL"] = True
-            print("   ✓ License status protocol verified.")
+            print("   [PASS] License status protocol verified.")
 
     except Exception as e:
         print(f"Error during clean sidecar execution: {e}")
@@ -864,7 +876,7 @@ def main():
             vad_ok = os.path.isfile(vad_file) and os.path.getsize(vad_file) > 0
             results["WINDOWS_CI_ASR_ASSET_PACKAGING"] = vad_ok
             if vad_ok:
-                print(f"   ✓ Verified bundled VAD asset: {vad_file} ({os.path.getsize(vad_file):,} bytes)")
+                print(f"   [PASS] Verified bundled VAD asset: {vad_file} ({os.path.getsize(vad_file):,} bytes)")
             else:
                 print(f"Notice: Bundled VAD asset check at: {vad_file} (vad_ok={vad_ok})")
 
