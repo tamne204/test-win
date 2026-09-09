@@ -11,6 +11,21 @@
 const fs = require('fs');
 const path = require('path');
 
+function readAsarFile(header, baseOffset, fd, relativePath) {
+  const parts = relativePath.split('/');
+  let curr = header;
+  for (const part of parts) {
+    if (!curr.files || !curr.files[part]) {
+      throw new Error(`File ${relativePath} not found in asar (missing ${part})`);
+    }
+    curr = curr.files[part];
+  }
+  const offset = baseOffset + parseInt(curr.offset);
+  const buf = Buffer.alloc(curr.size);
+  fs.readSync(fd, buf, 0, curr.size, offset);
+  return buf.toString('utf8');
+}
+
 function verifyLicenseContract(appDir) {
   let mainContent = '';
   let preloadContent = '';
@@ -18,24 +33,33 @@ function verifyLicenseContract(appDir) {
 
   const asarPath = path.join(appDir, 'resources', 'app.asar');
   if (fs.existsSync(asarPath)) {
-    const { execSync } = require('child_process');
-    const os = require('os');
-    const tmpExtract = fs.mkdtempSync(path.join(os.tmpdir(), 'asar_extract_'));
+    const fd = fs.openSync(asarPath, 'r');
     try {
-      execSync(`npx asar extract-file "${asarPath}" src/main/index.js`, { cwd: tmpExtract, stdio: 'pipe' });
-      execSync(`npx asar extract-file "${asarPath}" src/preload/preload.js`, { cwd: tmpExtract, stdio: 'pipe' });
-      execSync(`npx asar extract-file "${asarPath}" src/renderer/app.js`, { cwd: tmpExtract, stdio: 'pipe' });
-      mainContent = fs.readFileSync(path.join(tmpExtract, 'index.js'), 'utf8');
-      preloadContent = fs.readFileSync(path.join(tmpExtract, 'preload.js'), 'utf8');
-      rendererContent = fs.readFileSync(path.join(tmpExtract, 'app.js'), 'utf8');
+      const headerBuf = Buffer.alloc(16);
+      fs.readSync(fd, headerBuf, 0, 16, 0);
+      const jsonLen = headerBuf.readUInt32LE(12);
+      const jsonBuf = Buffer.alloc(jsonLen);
+      fs.readSync(fd, jsonBuf, 0, jsonLen, 16);
+      const header = JSON.parse(jsonBuf.toString('utf8'));
+      const baseOffset = 16 + jsonLen;
+
+      mainContent = readAsarFile(header, baseOffset, fd, 'src/main/index.js');
+      preloadContent = readAsarFile(header, baseOffset, fd, 'src/preload/preload.js');
+      rendererContent = readAsarFile(header, baseOffset, fd, 'src/renderer/app.js');
     } finally {
-      try { fs.rmSync(tmpExtract, { recursive: true, force: true }); } catch (_) {}
+      fs.closeSync(fd);
     }
   } else {
     // Unpacked or source tree
-    const mainPath = path.join(appDir, 'src', 'main', 'index.js');
-    const preloadPath = path.join(appDir, 'src', 'preload', 'preload.js');
-    const rendererPath = path.join(appDir, 'src', 'renderer', 'app.js');
+    let mainPath = path.join(appDir, 'resources', 'app', 'src', 'main', 'index.js');
+    let preloadPath = path.join(appDir, 'resources', 'app', 'src', 'preload', 'preload.js');
+    let rendererPath = path.join(appDir, 'resources', 'app', 'src', 'renderer', 'app.js');
+
+    if (!fs.existsSync(mainPath)) {
+      mainPath = path.join(appDir, 'src', 'main', 'index.js');
+      preloadPath = path.join(appDir, 'src', 'preload', 'preload.js');
+      rendererPath = path.join(appDir, 'src', 'renderer', 'app.js');
+    }
 
     if (!fs.existsSync(mainPath)) {
       throw new Error(`Main file not found at ${mainPath}`);
