@@ -20,7 +20,7 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $OutputDir = Join-Path $ScriptDir "windows_physical_test"
 $LogDir = Join-Path $OutputDir "logs"
 $ScreenshotDir = Join-Path $OutputDir "screenshots"
-$LibDir = Join-Path $ScriptDir "lib"
+$LibDir = Join-Path $ScriptDir "modules"
 $ToolsDir = Join-Path $ScriptDir "tools"
 $BundleDir = Join-Path $ScriptDir "physical_test_bundle"
 
@@ -338,7 +338,7 @@ $ffmpegRes | ConvertTo-Json | Out-File (Join-Path $OutputDir "ffmpeg.json") -Enc
 
 # --- WINPHYS-11: Real-ESRGAN Vulkan GPU Upscale ---
 if ($Results['WINPHYS-11'] -eq "NOT_RUN") {
-    $sampleImg = Join-Path $ToolsDir "test_64x64.png"
+    $sampleImg = Join-Path $ToolsDir "sample_upscale_input.png"
     $upscaleRes = Test-RealEsrganGpu -EngineDir $EngineDir -InputImage $sampleImg -TestDir $OutputDir
     $upscaleRes | ConvertTo-Json | Out-File (Join-Path $OutputDir "upscale.json") -Encoding utf8
     $p11Note = if ($upscaleRes.passed) { "Vulkan GPU AI Upscale 64x64 -> 256x256 hoàn thành trong $($upscaleRes.elapsed_seconds)s." } else { "Chờ kiểm thử trên phần cứng có card đồ họa hỗ trợ Vulkan." }
