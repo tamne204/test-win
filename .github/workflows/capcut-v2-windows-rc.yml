@@ -202,10 +202,10 @@ jobs:
             node apps/capcut-v2/desktop/scripts/verify_windows_package.js
             
             $binariesToAudit = @(
-              Join-Path $unpackedDir "resources\autoedit-core\autoedit-core.exe",
-              Join-Path $unpackedDir "resources\bin\win-x64\ffmpeg.exe",
-              Join-Path $unpackedDir "resources\bin\win-x64\ffprobe.exe",
-              Join-Path $unpackedDir "resources\bin\win-x64\CapCutUiProbe.exe"
+              "$unpackedDir/resources/autoedit-core/autoedit-core.exe",
+              "$unpackedDir/resources/bin/win-x64/ffmpeg.exe",
+              "$unpackedDir/resources/bin/win-x64/ffprobe.exe",
+              "$unpackedDir/resources/bin/win-x64/CapCutUiProbe.exe"
             )
             
             foreach ($bin in $binariesToAudit) {
@@ -215,7 +215,7 @@ jobs:
                   Write-Error "FAIL: Binary $bin is NOT a Windows PE executable! (Magic bytes: $($bytes[0]), $($bytes[1]))"
                   exit 1
                 }
-                Write-Host "✓ Verified PE header ('MZ'): $bin"
+                Write-Host "[PASS] Verified PE header ('MZ'): $bin"
               } else {
                 Write-Warning "Binary not at primary path: $bin (checking alternates)"
               }
@@ -252,15 +252,16 @@ jobs:
           Expand-Archive -Path $zipTarget -DestinationPath $cleanExtract -Force
           
           # Verify extracted sidecar exists and is PE32+
-          $cleanSidecar = Join-Path $cleanExtract "resources\autoedit-core\autoedit-core.exe"
+          $cleanSidecar = "$cleanExtract/resources/autoedit-core/autoedit-core.exe"
           if (-not (Test-Path $cleanSidecar)) {
             Write-Error "CLEAN MACHINE RETEST FAILED: Extracted sidecar missing at $cleanSidecar"
             exit 1
           }
           
-          $cleanBinDir = Join-Path $cleanExtract "resources\bin\win-x64"
-          $cleanEngineDir = Join-Path $cleanExtract "resources\engine\win-x64"
+          $cleanBinDir = "$cleanExtract/resources/bin/win-x64"
+          $cleanEngineDir = "$cleanExtract/resources/engine/win-x64"
           
+          $env:PYTHONIOENCODING = "utf-8"
           $env:SIDECAR_EXE_PATH = $cleanSidecar
           $env:WIN_BIN_DIR = $cleanBinDir
           $env:WIN_ENGINE_DIR = $cleanEngineDir
