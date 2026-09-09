@@ -80,14 +80,15 @@ class CloudAuthHelper {
         // 4. Check X-Device-Id (Desktop App)
         $deviceId = $_SERVER['HTTP_X_DEVICE_ID'] ?? '';
         if (!empty($deviceId)) {
+            $fpHash = hash('sha256', $deviceId);
             $stmt = $db->prepare('
                 SELECT u.id, u.username, u.email, u.fullname, u.role
                 FROM devices d
                 JOIN users u ON d.user_id = u.id
-                WHERE (d.device_fingerprint = ? OR d.id = ?) AND d.status = "ACTIVE"
+                WHERE (d.device_fingerprint_hash = ? OR d.device_fingerprint = ? OR d.id = ?) AND d.status = "ACTIVE"
                 LIMIT 1
             ');
-            $stmt->execute([$deviceId, $deviceId]);
+            $stmt->execute([$fpHash, $deviceId, $deviceId]);
             $u = $stmt->fetch(PDO::FETCH_ASSOC);
             if ($u) {
                 $u['is_admin'] = in_array($u['role'], ['admin', 'super_admin'], true);

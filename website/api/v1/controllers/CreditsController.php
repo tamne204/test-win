@@ -46,8 +46,9 @@ class CreditsController {
         if (!empty($teamId)) {
             // Identify user from device if not explicitly provided
             if (empty($userId) && !empty($deviceId)) {
-                $dStmt = $db->prepare('SELECT user_id FROM devices WHERE (device_fingerprint = ? OR id = ?) AND status = "ACTIVE" LIMIT 1');
-                $dStmt->execute([$deviceId, $deviceId]);
+                $fpHash = hash('sha256', $deviceId);
+                $dStmt = $db->prepare('SELECT user_id FROM devices WHERE (device_fingerprint_hash = ? OR device_fingerprint = ? OR id = ?) AND status = "ACTIVE" LIMIT 1');
+                $dStmt->execute([$fpHash, $deviceId, $deviceId]);
                 $dRow = $dStmt->fetch(PDO::FETCH_ASSOC);
                 if ($dRow) {
                     $userId = (string)$dRow['user_id'];
@@ -136,14 +137,15 @@ class CreditsController {
 
         // 2. Fallback: Identify User from Device Fingerprint
         if (!$client && !empty($deviceId)) {
+            $fpHash = hash('sha256', $deviceId);
             $stmt = $db->prepare('
                 SELECT d.user_id, l.credit_mode, w.balance, w.reserved_balance
                 FROM devices d
                 JOIN license_entitlements l ON d.user_id = l.user_id
                 JOIN credit_wallets w ON d.user_id = w.user_id
-                WHERE (d.device_fingerprint = ? OR d.id = ?) AND d.status = "ACTIVE"
+                WHERE (d.device_fingerprint_hash = ? OR d.device_fingerprint = ? OR d.id = ?) AND d.status = "ACTIVE"
             ');
-            $stmt->execute([$deviceId, $deviceId]);
+            $stmt->execute([$fpHash, $deviceId, $deviceId]);
             $client = $stmt->fetch();
         }
 

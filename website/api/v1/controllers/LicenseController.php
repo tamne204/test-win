@@ -21,15 +21,16 @@ class LicenseController {
         }
 
         $db = Database::getConnection();
+        $fpHash = hash('sha256', $deviceId);
         $stmt = $db->prepare('
             SELECT u.id as user_id, u.email, l.plan, l.credit_mode, l.max_devices, l.expires_at, w.balance
             FROM users u
             JOIN devices d ON u.id = d.user_id
             JOIN license_entitlements l ON u.id = l.user_id
             JOIN credit_wallets w ON u.id = w.user_id
-            WHERE u.id = ? AND (d.device_fingerprint = ? OR d.id = ?) AND d.status = "ACTIVE"
+            WHERE u.id = ? AND (d.device_fingerprint_hash = ? OR d.device_fingerprint = ? OR d.id = ?) AND d.status = "ACTIVE"
         ');
-        $stmt->execute([$userId, $deviceId, $deviceId]);
+        $stmt->execute([$userId, $fpHash, $deviceId, $deviceId]);
         $data = $stmt->fetch();
 
         if (!$data) {

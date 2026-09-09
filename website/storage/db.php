@@ -4,10 +4,10 @@
 function get_db() {
     static $pdo = null;
     if ($pdo === null) {
-        $host   = 'localhost';
-        $dbname = 'ecxaebka_bot';
-        $user   = 'ecxaebka_bot';
-        $pass   = 'JTV3SQ6bPqkwZ5UAVa7e';
+        $host   = getenv('DB_HOST') ?: 'localhost';
+        $dbname = getenv('DB_NAME') ?: '2tamne_site';
+        $user   = getenv('DB_USER') ?: '2tamne_site';
+        $pass   = getenv('DB_PASS') ?: 'CyRzJKKmWf';
         $dsn    = "mysql:host={$host};dbname={$dbname};charset=utf8mb4";
         
         $pdo = new PDO($dsn, $user, $pass, [
@@ -281,6 +281,34 @@ function db_ensure_capcut_license_columns() {
                 INDEX `idx_aud_created` (`created_at`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         ");
+        db_ensure_devices_fingerprint_schema();
+    } catch (Exception $e) {}
+}
+
+function db_ensure_devices_fingerprint_schema() {
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+    try {
+        $db = get_db();
+        // 1. Check current column type of device_fingerprint in devices
+        $q = $db->query("SELECT DATA_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'devices' AND COLUMN_NAME = 'device_fingerprint'");
+        $col = $q ? $q->fetch(PDO::FETCH_ASSOC) : null;
+        if ($col && strtolower($col['DATA_TYPE']) !== 'text') {
+            try { $db->exec("ALTER TABLE `devices` DROP INDEX `idx_device_fp`"); } catch (Exception $e) {}
+            try { $db->exec("ALTER TABLE `devices` MODIFY COLUMN `device_fingerprint` TEXT NOT NULL"); } catch (Exception $e) {}
+            try { $db->exec("ALTER TABLE `devices` ADD INDEX `idx_device_fp` (`device_fingerprint`(191))"); } catch (Exception $e) {}
+        }
+        // 2. Check device_fingerprint_hash column
+        $qHash = $db->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'devices' AND COLUMN_NAME = 'device_fingerprint_hash'");
+        if ($qHash && !$qHash->fetch()) {
+            try { $db->exec("ALTER TABLE `devices` ADD COLUMN `device_fingerprint_hash` CHAR(64) NULL AFTER `device_fingerprint`"); } catch (Exception $e) {}
+            try { $db->exec("ALTER TABLE `devices` ADD INDEX `idx_device_fp_hash` (`device_fingerprint_hash`)"); } catch (Exception $e) {}
+        }
+        // 3. Backfill any missing hashes
+        try {
+            $db->exec("UPDATE `devices` SET `device_fingerprint_hash` = SHA2(`device_fingerprint`, 256) WHERE `device_fingerprint_hash` IS NULL OR `device_fingerprint_hash` = ''");
+        } catch (Exception $e) {}
     } catch (Exception $e) {}
 }
 

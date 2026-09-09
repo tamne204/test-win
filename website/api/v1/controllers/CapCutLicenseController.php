@@ -288,8 +288,9 @@ class CapCutLicenseController {
         // 7. Check Device Limits in `devices` table
         $userId = !empty($lic['owner_username']) ? $lic['owner_username'] : ('usr_' . substr($lic['license_id'] ?: hash('sha256', $cleanKey), 0, 16));
 
-        $devStmt = $db->prepare('SELECT * FROM `devices` WHERE `user_id` = ? AND `device_fingerprint` = ? LIMIT 1');
-        $devStmt->execute([$userId, $deviceId]);
+        $fpHash = hash('sha256', $deviceId);
+        $devStmt = $db->prepare('SELECT * FROM `devices` WHERE `user_id` = ? AND (`device_fingerprint_hash` = ? OR `device_fingerprint` = ?) LIMIT 1');
+        $devStmt->execute([$userId, $fpHash, $deviceId]);
         $existingDevice = $devStmt->fetch();
 
         if (!$existingDevice) {
@@ -308,13 +309,13 @@ class CapCutLicenseController {
 
             $devId = 'dev_' . bin2hex(random_bytes(12));
             $insDev = $db->prepare('
-                INSERT INTO `devices` (`id`, `user_id`, `device_fingerprint`, `device_alias`, `platform`, `status`, `activated_at`, `last_seen_at`)
-                VALUES (?, ?, ?, ?, ?, "ACTIVE", CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                INSERT INTO `devices` (`id`, `user_id`, `device_fingerprint`, `device_fingerprint_hash`, `device_alias`, `platform`, `status`, `activated_at`, `last_seen_at`)
+                VALUES (?, ?, ?, ?, ?, ?, "ACTIVE", CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             ');
-            $insDev->execute([$devId, $userId, $deviceId, $platform, $platform]);
+            $insDev->execute([$devId, $userId, $deviceId, $fpHash, $platform, $platform]);
         } else {
-            $touch = $db->prepare('UPDATE `devices` SET `status` = "ACTIVE", `last_seen_at` = CURRENT_TIMESTAMP WHERE `id` = ?');
-            $touch->execute([$existingDevice['id']]);
+            $touch = $db->prepare('UPDATE `devices` SET `status` = "ACTIVE", `device_fingerprint_hash` = COALESCE(`device_fingerprint_hash`, ?), `last_seen_at` = CURRENT_TIMESTAMP WHERE `id` = ?');
+            $touch->execute([$fpHash, $existingDevice['id']]);
         }
 
         // Clear failed attempts upon successful activation
@@ -460,8 +461,9 @@ class CapCutLicenseController {
 
         // Check device status
         $userId = !empty($lic['owner_username']) ? $lic['owner_username'] : ('usr_' . substr($lic['license_id'] ?: 'default', 0, 16));
-        $devStmt = $db->prepare('SELECT status FROM `devices` WHERE `user_id` = ? AND (`device_fingerprint` = ? OR `device_fingerprint` = LEFT(?, 64)) LIMIT 1');
-        $devStmt->execute([$userId, $deviceId, $deviceId]);
+        $fpHash = hash('sha256', $deviceId);
+        $devStmt = $db->prepare('SELECT status FROM `devices` WHERE `user_id` = ? AND (`device_fingerprint_hash` = ? OR `device_fingerprint` = ? OR `device_fingerprint` = LEFT(?, 64)) LIMIT 1');
+        $devStmt->execute([$userId, $fpHash, $deviceId, $deviceId]);
         $dev = $devStmt->fetch();
 
         if (!$dev || $dev['status'] !== 'ACTIVE') {
@@ -531,14 +533,15 @@ class CapCutLicenseController {
             }
         }
 
+        $fpHash = !empty($deviceId) ? hash('sha256', $deviceId) : '';
         if ($userId && !empty($deviceId)) {
-            $up = $db->prepare('UPDATE `devices` SET `status` = "REVOKED" WHERE `user_id` = ? AND `device_fingerprint` = ?');
-            $up->execute([$userId, $deviceId]);
+            $up = $db->prepare('UPDATE `devices` SET `status` = "REVOKED" WHERE `user_id` = ? AND (`device_fingerprint_hash` = ? OR `device_fingerprint` = ?)');
+            $up->execute([$userId, $fpHash, $deviceId]);
             $upLic = $db->prepare('UPDATE `licenses` SET `hwid` = NULL, `device_name` = NULL WHERE `owner_username` = ? AND `hwid` = ?');
             $upLic->execute([$userId, $deviceId]);
         } elseif (!empty($deviceId)) {
-            $up = $db->prepare('UPDATE `devices` SET `status` = "REVOKED" WHERE `device_fingerprint` = ?');
-            $up->execute([$deviceId]);
+            $up = $db->prepare('UPDATE `devices` SET `status` = "REVOKED" WHERE `device_fingerprint_hash` = ? OR `device_fingerprint` = ?');
+            $up->execute([$fpHash, $deviceId]);
             $upLic = $db->prepare('UPDATE `licenses` SET `hwid` = NULL, `device_name` = NULL WHERE `hwid` = ?');
             $upLic->execute([$deviceId]);
         }

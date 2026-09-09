@@ -31,18 +31,19 @@ class DeviceController {
         }
 
         // Check if device already active
-        $stmt = $db->prepare('SELECT id, status FROM devices WHERE user_id = ? AND device_fingerprint = ?');
-        $stmt->execute([$userId, $deviceFingerprint]);
+        $fpHash = hash('sha256', $deviceFingerprint);
+        $stmt = $db->prepare('SELECT id, status FROM devices WHERE user_id = ? AND (device_fingerprint_hash = ? OR device_fingerprint = ?)');
+        $stmt->execute([$userId, $fpHash, $deviceFingerprint]);
         $existingDevice = $stmt->fetch();
 
         if ($existingDevice) {
             // Update alias and last seen
             $stmt = $db->prepare('
                 UPDATE devices
-                SET status = "ACTIVE", device_alias = ?, last_seen_at = CURRENT_TIMESTAMP
+                SET status = "ACTIVE", device_fingerprint_hash = COALESCE(device_fingerprint_hash, ?), device_alias = ?, last_seen_at = CURRENT_TIMESTAMP
                 WHERE id = ?
             ');
-            $stmt->execute([$deviceAlias, $existingDevice['id']]);
+            $stmt->execute([$fpHash, $deviceAlias, $existingDevice['id']]);
 
             Router::json([
                 'success' => true,
@@ -66,10 +67,10 @@ class DeviceController {
         // Register new device
         $deviceId = 'dev_' . bin2hex(random_bytes(12));
         $stmt = $db->prepare('
-            INSERT INTO devices (id, user_id, device_fingerprint, device_alias, platform, status, activated_at)
-            VALUES (?, ?, ?, ?, ?, "ACTIVE", CURRENT_TIMESTAMP)
+            INSERT INTO devices (id, user_id, device_fingerprint, device_fingerprint_hash, device_alias, platform, status, activated_at)
+            VALUES (?, ?, ?, ?, ?, ?, "ACTIVE", CURRENT_TIMESTAMP)
         ');
-        $stmt->execute([$deviceId, $userId, $deviceFingerprint, $deviceAlias, $platform]);
+        $stmt->execute([$deviceId, $userId, $deviceFingerprint, $fpHash, $deviceAlias, $platform]);
 
         Router::json([
             'success' => true,
@@ -105,15 +106,16 @@ class DeviceController {
         }
 
         $db = Database::getConnection();
+        $fpHash = hash('sha256', $deviceId);
         $stmt = $db->prepare('
             SELECT d.*, u.email, l.plan, l.credit_mode, l.expires_at, w.balance as token_balance
             FROM devices d
             JOIN users u ON d.user_id = u.id
             LEFT JOIN license_entitlements l ON u.id = l.user_id
             LEFT JOIN credit_wallets w ON u.id = w.user_id
-            WHERE (d.device_fingerprint = ? OR d.id = ?) AND d.status = "ACTIVE"
+            WHERE (d.device_fingerprint_hash = ? OR d.device_fingerprint = ? OR d.id = ?) AND d.status = "ACTIVE"
         ');
-        $stmt->execute([$deviceId, $deviceId]);
+        $stmt->execute([$fpHash, $deviceId, $deviceId]);
         $row = $stmt->fetch();
 
         if (!$row) {

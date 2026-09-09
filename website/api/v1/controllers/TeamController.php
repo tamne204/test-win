@@ -654,15 +654,16 @@ class TeamController {
             }
 
             // Ensure device is registered in devices table
-            $dStmt = $db->prepare('SELECT id FROM devices WHERE user_id = ? AND device_fingerprint = ? LIMIT 1');
-            $dStmt->execute([$userId, $deviceId]);
+            $fpHash = hash('sha256', $deviceId);
+            $dStmt = $db->prepare('SELECT id FROM devices WHERE user_id = ? AND (device_fingerprint_hash = ? OR device_fingerprint = ?) LIMIT 1');
+            $dStmt->execute([$userId, $fpHash, $deviceId]);
             $dev = $dStmt->fetch();
             if (!$dev) {
                 $devId = 'dev_' . bin2hex(random_bytes(12));
-                $db->prepare('INSERT INTO devices (id, user_id, device_fingerprint, device_alias, platform, status, activated_at, last_seen_at) VALUES (?, ?, ?, ?, ?, "ACTIVE", NOW(), NOW())')
-                   ->execute([$devId, $userId, $deviceId, $deviceAlias, $platform]);
+                $db->prepare('INSERT INTO devices (id, user_id, device_fingerprint, device_fingerprint_hash, device_alias, platform, status, activated_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?, "ACTIVE", NOW(), NOW())')
+                   ->execute([$devId, $userId, $deviceId, $fpHash, $deviceAlias, $platform]);
             } else {
-                $db->prepare('UPDATE devices SET status = "ACTIVE", last_seen_at = NOW() WHERE id = ?')->execute([$dev['id']]);
+                $db->prepare('UPDATE devices SET status = "ACTIVE", device_fingerprint_hash = COALESCE(device_fingerprint_hash, ?), last_seen_at = NOW() WHERE id = ?')->execute([$fpHash, $dev['id']]);
             }
 
             $db->commit();
