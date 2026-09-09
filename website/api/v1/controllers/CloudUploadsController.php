@@ -14,6 +14,7 @@ require_once __DIR__ . '/../storage/CloudQuotaManager.php';
 require_once __DIR__ . '/../storage/StorageAllocator.php';
 require_once __DIR__ . '/../storage/CryptoService.php';
 require_once __DIR__ . '/../storage/GoogleDriveStorageAdapter.php';
+require_once __DIR__ . '/../storage/CurlHelper.php';
 
 class CloudUploadsController {
 
@@ -32,6 +33,11 @@ class CloudUploadsController {
         $auth = CloudAuthHelper::authorizeSpaceAccess($spaceId, $userId);
         if (!$auth['allowed']) {
             Router::error('Access denied to this cloud space', 403, 'FORBIDDEN');
+        }
+
+        require_once __DIR__ . '/../services/WorkspacePermissionService.php';
+        if (!WorkspacePermissionService::canUpload($auth['role'] ?? 'MEMBER')) {
+            Router::error('Bạn không có quyền tải lên tệp trong không gian làm việc này (Role VIEWER)', 403, 'FORBIDDEN');
         }
 
         $fileName   = trim($body['file_name'] ?? ($body['filename'] ?? ''));
@@ -311,6 +317,7 @@ class CloudUploadsController {
             ],
         ]);
 
+        CurlHelper::applySslOptions($ch);
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curlErr  = curl_error($ch);

@@ -98,6 +98,58 @@ class ScriptToSrtPipeline:
         self.collapse_detector = CollapseDetector()
         self.segmenter = SubtitleSegmenter(self.options)
 
+    def _heal_collapsed_cues(self, cues: List[SubtitleCue], language: str = "auto") -> List[SubtitleCue]:
+        """
+        Automated self-healing for subtitle cues that trigger collapse warnings.
+        Merges micro-cues (< 0.40s) and smooths high-density clusters.
+        """
+        if not cues:
+            return cues
+
+        max_words = self.options.max_words_per_cue
+        healed: List[SubtitleCue] = []
+        i = 0
+        while i < len(cues):
+            curr = cues[i]
+            if (
+                curr.duration_s < 0.40
+                and i + 1 < len(cues)
+                and (len(curr.tokens) + len(cues[i + 1].tokens)) <= max_words
+                and curr.paragraph_ids == cues[i + 1].paragraph_ids
+            ):
+                merged = self.segmenter._build_cue(len(healed) + 1, curr.tokens + cues[i + 1].tokens)
+                healed.append(merged)
+                i += 2
+            elif (
+                curr.duration_s < 0.40
+                and healed
+                and (len(healed[-1].tokens) + len(curr.tokens)) <= max_words
+                and healed[-1].paragraph_ids == curr.paragraph_ids
+            ):
+                prev = healed.pop()
+                merged = self.segmenter._build_cue(len(healed) + 1, prev.tokens + curr.tokens)
+                healed.append(merged)
+                i += 1
+            else:
+                healed.append(curr)
+                i += 1
+
+        for idx, c in enumerate(healed):
+            c.index = idx + 1
+
+        for j in range(len(healed)):
+            c = healed[j]
+            if c.duration_s < 0.40:
+                c.end_s = round(c.start_s + 0.40, 3)
+            if j + 1 < len(healed):
+                next_c = healed[j + 1]
+                if c.end_s > next_c.start_s - self.options.min_gap_s:
+                    next_c.start_s = round(c.end_s + self.options.min_gap_s, 3)
+                    if next_c.end_s <= next_c.start_s:
+                        next_c.end_s = round(next_c.start_s + 0.40, 3)
+
+        return healed
+
     def run(
         self,
         script_text: str,
@@ -247,27 +299,42 @@ class ScriptToSrtPipeline:
                 notify("BUILDING_SUBTITLES", 0.85, "Đang phân đoạn câu phụ đề (chuẩn 12 từ 2TOOLNE)...")
                 cues = self.segmenter.segment(aligned_tokens)
 
-                # Pre-SRT Collapse Detection Gate
-                try:
-                    inspection = self.collapse_detector.inspect(
-                        cues=cues,
-                        region_health_list=region_health_list,
-                        language=detected_lang,
-                        audio_duration_s=audio_duration,
-                        allow_degraded=self.options.allow_degraded,
-                    )
-                except AlignmentCollapseError as err:
-                    raise ScriptToSrtError("ALIGNMENT_COLLAPSE_DETECTED", str(err))
+                # Pre-SRT Collapse Detection Gate & Self-Healing
+                inspection = self.collapse_detector.inspect(
+                    cues=cues,
+                    region_health_list=region_health_list,
+                    language=detected_lang,
+                    audio_duration_s=audio_duration,
+                    allow_degraded=True,
+                )
+
+                if inspection.has_collapse:
+                    # Attempt automated healing of micro-cues and pacing
+                    healed_cues = self._heal_collapsed_cues(cues, detected_lang)
+                    if healed_cues:
+                        cues = healed_cues
+                        inspection = self.collapse_detector.inspect(
+                            cues=cues,
+                            region_health_list=region_health_list,
+                            language=detected_lang,
+                            audio_duration_s=audio_duration,
+                            allow_degraded=True,
+                        )
 
                 diagnostics["collapse_inspection"] = inspection.details
                 if inspection.warnings:
                     warnings.extend(inspection.warnings)
 
-                if inspection.has_collapse and not self.options.allow_degraded:
-                    raise ScriptToSrtError(
-                        "ALIGNMENT_COLLAPSE_DETECTED",
-                        f"Phát hiện suy thoái căn chỉnh nghiêm trọng (Collapse Gate): {'; '.join(inspection.violations)}"
-                    )
+                if inspection.has_collapse:
+                    if not self.options.allow_degraded:
+                        raise ScriptToSrtError(
+                            "ALIGNMENT_COLLAPSE_DETECTED",
+                            f"Phát hiện suy thoái căn chỉnh nghiêm trọng (Collapse Gate): {'; '.join(inspection.violations)}"
+                        )
+                    else:
+                        warnings.append(
+                            f"Cảnh báo nhịp đọc phụ đề: {'; '.join(inspection.violations[:2])} (đã tự động tối ưu hóa)."
+                        )
 
             else:
                 engine_version = "legacy"

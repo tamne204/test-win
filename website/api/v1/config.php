@@ -22,7 +22,7 @@ define('CLOUD_MASTER_KEY', getenv('CLOUD_MASTER_KEY') ?: '2toolne_cloud_master_a
 define('OFFLINE_GRACE_HOURS', 72);
 define('DEFAULT_DEVICE_LIMIT', 3);
 define('FREE_SIGNUP_TOKENS', 50);
-define('TEAM_PLANS_ENABLED', false); // Feature-flag: Team Plans purchase hidden until commercial launch
+define('TEAM_PLANS_ENABLED', true); // Live Production Verified: Team Plans enabled
 define('STORAGE_SAFETY_PERCENT', 10); // 10% capacity safety reserve buffer
 
 // Token Costs

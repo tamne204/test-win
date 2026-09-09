@@ -43,6 +43,7 @@ FAST_SUITES = [
     "tests/test_a1_acceptance_matrix.py",
     "tests/test_a2_acceptance_matrix.py",
     "tests/test_subtitle_layout_engine.py",
+    "tests/test_ux_acceptance_matrix.py",
 ]
 
 INTEGRATION_SUITES = [

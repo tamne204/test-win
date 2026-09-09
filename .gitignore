@@ -99,3 +99,10 @@ service_account.json
 
 # Development acceleration cache
 .dev_cache/
+deployment_migration/
+
+# Large Windows binaries (>100MB, downloaded dynamically during CI / packaging)
+apps/capcut-v2/desktop/resources/bin/win-x64/ffmpeg.exe
+apps/capcut-v2/desktop/resources/bin/win-x64/ffprobe.exe
+apps/capcut-v2/desktop/resources/autoedit-core/
+apps/capcut-v2/packaging/dist/

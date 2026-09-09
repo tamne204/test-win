@@ -28,6 +28,14 @@ extraResources:
       - "!**/.pytest_cache/**"
       - "!**/__pycache__/**"
       - "!**/*.pyc"
+  - from: "resources/bin"
+    to: "bin"
+    filter:
+      - "**/*"
+  - from: "resources/engine"
+    to: "engine"
+    filter:
+      - "**/*"
 
 mac:
   category: public.app-category.video

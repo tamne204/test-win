@@ -13,6 +13,7 @@ require_once __DIR__ . '/../Router.php';
 require_once __DIR__ . '/../storage/CloudAuthHelper.php';
 require_once __DIR__ . '/../storage/CryptoService.php';
 require_once __DIR__ . '/../storage/GoogleDriveStorageAdapter.php';
+require_once __DIR__ . '/../storage/CurlHelper.php';
 
 class CloudDownloadController {
 
@@ -76,6 +77,7 @@ class CloudDownloadController {
                     CURLOPT_TIMEOUT        => 30,
                     CURLOPT_SSL_VERIFYPEER => true,
                 ]);
+                CurlHelper::applySslOptions($ch);
                 curl_exec($ch);
                 curl_close($ch);
                 exit;
@@ -142,6 +144,7 @@ class CloudDownloadController {
                     CURLOPT_FOLLOWLOCATION => true,
                     CURLOPT_TIMEOUT        => 15,
                 ]);
+                CurlHelper::applySslOptions($ch);
                 curl_exec($ch);
                 curl_close($ch);
                 exit;

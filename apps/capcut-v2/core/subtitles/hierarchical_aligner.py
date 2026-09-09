@@ -401,16 +401,74 @@ class HierarchicalScriptAligner:
         # Linear spacing adjustment and omission detection for any internal gaps within region
         self._smooth_region_interpolations(region, aligned_output, unmatched_spans)
 
+        actual_tokens = [
+            aligned_output[region.script_start_idx + i]
+            for i in range(p)
+            if aligned_output[region.script_start_idx + i] is not None
+        ]
+        exact_cnt = sum(1 for t in actual_tokens if t.match_type == MatchType.EXACT)
+        fuzzy_cnt = sum(
+            1 for t in actual_tokens
+            if t.match_type in (MatchType.HIGH_FUZZY, MatchType.WEAK_FUZZY, MatchType.FUZZY, MatchType.PHONETIC)
+        )
+        interp_cnt = sum(1 for t in actual_tokens if t.match_type == MatchType.INTERPOLATED)
+        omit_cnt = sum(
+            1 for t in actual_tokens
+            if t.match_type in (MatchType.OMITTED, MatchType.UNMATCHED)
+            or t.confidence in (ConfidenceLevel.OMITTED, ConfidenceLevel.UNMATCHED)
+        )
+
+        spoken_tokens = [
+            t for t in actual_tokens
+            if t.match_type not in (MatchType.OMITTED, MatchType.UNMATCHED)
+            and t.confidence not in (ConfidenceLevel.OMITTED, ConfidenceLevel.UNMATCHED)
+        ]
+        spoken_p = len(spoken_tokens)
         t_dur_clean = max(0.1, round(t_dur, 3))
-        token_speed = round(p / t_dur_clean, 2)
-        char_count = sum(len(t.raw_text) for t in s_tokens)
-        cps = round(char_count / t_dur_clean, 2)
+        token_speed = round(spoken_p / t_dur_clean, 2) if spoken_p > 0 else 0.0
+        spoken_chars = sum(len(t.script_token.raw_text) for t in spoken_tokens)
+        cps = round(spoken_chars / t_dur_clean, 2) if spoken_chars > 0 else 0.0
 
         # Health status determination
         hard_cps = self.hard_cps_ko if language.lower() == "ko" else self.hard_cps_default
-        if token_speed > self.hard_token_rate or cps > hard_cps:
-            status = "COLLAPSED"
-        elif interp_cnt / max(1, p) > 0.35:
+        is_speed_collapsed = (
+            cps > hard_cps
+            or token_speed > 8.0
+            or (token_speed > self.hard_token_rate and cps > 24.0)
+        )
+        if is_speed_collapsed:
+            # Self-healing: if region is crammed due to unvoiced/omitted script tokens,
+            # mark remaining unaligned/interpolated tokens as OMITTED rather than collapsing.
+            if q < p and interp_cnt > 0:
+                excess_tokens = [t for t in actual_tokens if t.match_type == MatchType.INTERPOLATED]
+
+                if excess_tokens:
+                    first_ex = excess_tokens[0].script_token
+                    last_ex = excess_tokens[-1].script_token
+                    unmatched_spans.append(
+                        UnmatchedScriptSpan(
+                            span_id=len(unmatched_spans) + 1,
+                            char_start=first_ex.char_start,
+                            char_end=last_ex.char_end,
+                            token_start=first_ex.token_index,
+                            token_end=last_ex.token_index,
+                            text=" ".join(t.script_token.raw_text for t in excess_tokens),
+                            reason="SCRIPT_OMITTED_IN_FAST_REGION",
+                        )
+                    )
+                    for tok in excess_tokens:
+                        tok.confidence = ConfidenceLevel.OMITTED
+                        tok.match_type = MatchType.OMITTED
+                        tok.token_confidence = 0.0
+                        tok.alignment_operation = "region_omitted_healing"
+                    omit_cnt += len(excess_tokens)
+                    interp_cnt = max(0, interp_cnt - len(excess_tokens))
+                    status = "DEGRADED"
+                else:
+                    status = "COLLAPSED"
+            else:
+                status = "COLLAPSED"
+        elif omit_cnt > 0 or interp_cnt / max(1, p) > 0.35:
             status = "DEGRADED"
         elif was_full_dp and (omit_cnt > 0):
             status = "SUSPICIOUS"

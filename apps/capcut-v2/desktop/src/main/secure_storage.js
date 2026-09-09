@@ -11,8 +11,17 @@ const fs = require('fs');
 const path = require('path');
 
 class SecureStorage {
-  constructor() {
-    this.storageFile = path.join(app.getPath('userData'), 'secure_store.bin');
+  constructor(options = {}) {
+    let userDataPath = options.userDataPath;
+    if (!userDataPath) {
+      try {
+        userDataPath = (app && typeof app.getPath === 'function') ? app.getPath('userData') : null;
+      } catch (_) {}
+    }
+    if (!userDataPath) {
+      userDataPath = path.join(process.env.HOME, 'Library/Application Support/2toolne-autoedit');
+    }
+    this.storageFile = path.join(userDataPath, 'secure_store.bin');
   }
 
   isEncryptionAvailable() {

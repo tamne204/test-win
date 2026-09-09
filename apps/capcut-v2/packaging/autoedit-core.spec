@@ -1,20 +1,43 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_data_files
+import os
+import sys
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+
+SPEC_DIR = os.path.dirname(os.path.abspath(SPEC))
+V2_ROOT = os.path.abspath(os.path.join(SPEC_DIR, '..'))
+ENTRY_POINT = os.path.join(V2_ROOT, 'desktop_bridge', 'sidecar_main.py')
 
 datas = []
-datas += collect_data_files('faster_whisper')
+try:
+    datas += collect_data_files('faster_whisper')
+except Exception:
+    pass
 
+hiddenimports = [
+    'PIL', 'PIL.Image', 'PIL.ImageDraw', 'PIL.ImageFont',
+    'cryptography', 'requests', 'psutil', 'numpy',
+]
+try:
+    hiddenimports += collect_submodules('core')
+    hiddenimports += collect_submodules('adapters')
+    hiddenimports += collect_submodules('desktop_bridge')
+except Exception:
+    pass
+
+if not sys.platform.startswith('win'):
+    hiddenimports += ['fcntl', 'plistlib']
+excludes = ['fcntl', 'plistlib'] if sys.platform.startswith('win') else []
 
 a = Analysis(
-    ['/Users/2tamne/tool ffmpeg/apps/capcut-v2/desktop_bridge/sidecar_main.py'],
-    pathex=['/Users/2tamne/tool ffmpeg/apps/capcut-v2'],
+    [ENTRY_POINT],
+    pathex=[V2_ROOT],
     binaries=[],
     datas=datas,
-    hiddenimports=['core', 'core.edit_plan', 'core.rule_engine', 'core.preset_manager', 'core.srt_timeline', 'core.timeline_builder', 'core.subtitles', 'core.subtitles.models', 'core.subtitles.script_normalizer', 'core.subtitles.speech_timestamp_provider', 'core.subtitles.script_aligner', 'core.subtitles.subtitle_segmenter', 'core.subtitles.srt_generator', 'core.subtitles.pipeline', 'adapters', 'adapters.capcut', 'adapters.capcut.detector', 'adapters.capcut.adapter', 'adapters.capcut.registry', 'adapters.capcut.version_9_3', 'adapters.capcut.validator', 'adapters.capcut.project_manager', 'adapters.capcut.launcher', 'desktop_bridge', 'desktop_bridge.protocol', 'desktop_bridge.bridge', 'desktop_bridge.sidecar_main', 'PIL', 'PIL.Image', 'PIL.ImageDraw', 'PIL.ImageFont', 'fcntl', 'plistlib'],
+    hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=excludes,
     noarchive=False,
     optimize=0,
 )
@@ -29,7 +52,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,
     console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
@@ -42,7 +65,7 @@ coll = COLLECT(
     a.binaries,
     a.datas,
     strip=False,
-    upx=True,
+    upx=False,
     upx_exclude=[],
     name='autoedit-core',
 )

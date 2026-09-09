@@ -40,11 +40,17 @@ class CapCutLicenseController {
      * Rate limiting storage directory
      */
     private static function getRateLimitDir(): string {
-        $tmpDir = sys_get_temp_dir() . '/2toolne_ratelimit';
-        if (!is_dir($tmpDir)) {
-            @mkdir($tmpDir, 0777, true);
+        $candidates = [
+            dirname(__DIR__, 3) . '/storage/ratelimit',
+            'C:/Windows/Temp/2toolne_ratelimit',
+            'C:/Temp/2toolne_ratelimit',
+        ];
+        foreach ($candidates as $d) {
+            if (is_dir($d) || @mkdir($d, 0777, true)) {
+                return $d;
+            }
         }
-        return $tmpDir;
+        return dirname(__DIR__, 3) . '/storage/ratelimit';
     }
 
     /**
@@ -392,6 +398,49 @@ class CapCutLicenseController {
             }
         }
 
+        if (!$lic && !empty($licenseId) && strpos($licenseId, 'team_seat_') === 0) {
+            $sStmt = $db->prepare('
+                SELECT ts.*, t.status as team_status, tm.status as member_status
+                FROM team_seats ts
+                JOIN teams t ON ts.team_id = t.id
+                JOIN team_members tm ON ts.team_id = tm.team_id AND ts.user_id = tm.user_id
+                WHERE (ts.id = ? OR ts.id = REPLACE(?, "team_seat_", ""))
+                  AND ts.device_fingerprint = ?
+                LIMIT 1
+            ');
+            $sStmt->execute([$licenseId, $licenseId, $deviceId]);
+            $seat = $sStmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$seat || $seat['status'] !== 'ACTIVE' || $seat['team_status'] !== 'ACTIVE' || $seat['member_status'] !== 'ACTIVE') {
+                Router::error('Ghế bản quyền của Team trên thiết bị này đã bị thu hồi hoặc thành viên không còn trong nhóm.', 403, 'SEAT_REVOKED');
+            }
+
+            $now = time();
+            $offlineUntil = $now + self::OFFLINE_GRACE_SECONDS;
+            $payload = [
+                'license_id'    => $licenseId,
+                'user_id'       => $seat['user_id'],
+                'team_id'       => $seat['team_id'],
+                'product_id'    => self::TARGET_PRODUCT_ID,
+                'device_id'     => $deviceId,
+                'plan'          => 'TEAM',
+                'issued_at'     => $now,
+                'expires_at'    => $now + (30 * 86400),
+                'offline_until' => $offlineUntil,
+                'features'      => ['capcut_autoedit', 'unlimited_export', 'all_presets', 'script_to_srt', 'team_workspace']
+            ];
+
+            $signedEnvelope = self::signPayload($payload);
+            Router::json([
+                'success'             => true,
+                'status'              => 'LICENSE_ACTIVE',
+                'seat_status'         => 'SEAT_ACTIVE',
+                'signed_entitlement'  => $signedEnvelope,
+                'trusted_server_time' => $now,
+            ], 200);
+            return;
+        }
+
         if (!$lic) {
             Router::error('Bản quyền không hợp lệ hoặc không tồn tại.', 404, 'LICENSE_NOT_FOUND');
         }
@@ -411,8 +460,8 @@ class CapCutLicenseController {
 
         // Check device status
         $userId = !empty($lic['owner_username']) ? $lic['owner_username'] : ('usr_' . substr($lic['license_id'] ?: 'default', 0, 16));
-        $devStmt = $db->prepare('SELECT status FROM `devices` WHERE `user_id` = ? AND `device_fingerprint` = ? LIMIT 1');
-        $devStmt->execute([$userId, $deviceId]);
+        $devStmt = $db->prepare('SELECT status FROM `devices` WHERE `user_id` = ? AND (`device_fingerprint` = ? OR `device_fingerprint` = LEFT(?, 64)) LIMIT 1');
+        $devStmt->execute([$userId, $deviceId, $deviceId]);
         $dev = $devStmt->fetch();
 
         if (!$dev || $dev['status'] !== 'ACTIVE') {
@@ -509,7 +558,7 @@ class CapCutLicenseController {
     /**
      * Digitally sign payload using Ed25519 (Sodium / OpenSSL compatible)
      */
-    private static function signPayload(array $payload): array {
+    public static function signPayload(array $payload): array {
         // Canonical JSON serialization: sorted keys, compact separators
         ksort($payload);
         $canonicalJson = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

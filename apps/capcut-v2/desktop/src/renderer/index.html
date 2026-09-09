@@ -28,6 +28,11 @@
           <span class="nav-label" data-i18n="nav.queue">Hàng Đợi (Queue)</span>
           <span class="nav-badge" id="queueBadge" style="display:none">0</span>
         </button>
+        <button type="button" class="nav-btn" data-tab="flow" id="navBtnFlow">
+          <span class="nav-icon">🌊</span>
+          <span class="nav-label">Google Flow</span>
+          <span class="nav-badge" id="flowStatusBadge" style="display:none">LIVE</span>
+        </button>
         <button type="button" class="nav-btn" data-tab="projects">
           <span class="nav-icon">📁</span>
           <span class="nav-label" data-i18n="nav.projects">Dự Án Đã Tạo</span>
@@ -35,6 +40,10 @@
         <button type="button" class="nav-btn" data-tab="upscale">
           <span class="nav-icon">🔍</span>
           <span class="nav-label" data-i18n="nav.upscale">AI Upscale 4K</span>
+        </button>
+        <button type="button" class="nav-btn" data-tab="cloud">
+          <span class="nav-icon">☁️</span>
+          <span class="nav-label" data-i18n="nav.cloud">Cloud Lưu Trữ</span>
         </button>
       </nav>
 
@@ -60,10 +69,33 @@
         </div>
 
         <div class="header-right">
+          <!-- Workspace Switcher (Priority 6) -->
+          <div class="workspace-switcher-wrapper" id="workspaceSwitcherWrapper">
+            <button type="button" class="btn-workspace-switcher" id="btnWorkspaceDropdown" title="Chuyển đổi Không Gian Làm Việc (Cá Nhân / Team)">
+              <span class="ws-icon" id="wsIcon">👤</span>
+              <span class="ws-name" id="wsActiveName">Không gian cá nhân</span>
+              <span class="ws-badge-role ws-role-owner" id="wsRoleBadge">OWNER</span>
+              <span class="ws-chevron">▼</span>
+            </button>
+            <div class="workspace-dropdown-menu" id="workspaceDropdownMenu" style="display:none">
+              <div class="ws-dropdown-header">Không gian làm việc</div>
+              <div class="ws-dropdown-list" id="workspaceList">
+                <!-- Populated dynamically -->
+              </div>
+              <div class="ws-dropdown-divider"></div>
+              <button type="button" class="ws-dropdown-action" id="btnOpenCreateTeamModal">
+                <span>➕ Tạo Nhóm Mới</span>
+              </button>
+              <button type="button" class="ws-dropdown-action" id="btnOpenManageTeamModal" style="display:none">
+                <span>👥 Quản Lý Thành Viên Nhóm</span>
+              </button>
+            </div>
+          </div>
+
           <!-- Token Balance Badge -->
           <div class="status-badge badge-token" id="badgeTokenWallet" title="Số dư Token ví (Dùng cho AI Upscale &amp; Cloud)">
             <span class="badge-icon">🪙</span>
-            <span class="badge-text">Ví: <strong id="tokenBalance">--</strong> Token</span>
+            <span class="badge-text"><span id="lblWalletContext">Số dư cá nhân</span>: <strong id="tokenBalance">--</strong> Token</span>
           </div>
 
           <!-- License Badge -->
@@ -137,8 +169,31 @@
                       <div class="dz-buttons">
                         <button type="button" class="btn-subtle" id="btnBrowseFiles">📁 Chọn tệp</button>
                         <button type="button" class="btn-subtle" id="btnBrowseFolder">📂 Chọn thư mục</button>
+                        <button type="button" class="btn-subtle" id="btnBrowseBundle" title="Nạp thư mục Input Bundle chuẩn (2toolne.json, prompts.json)">📦 Nạp Input Bundle</button>
+                        <button type="button" class="btn-subtle" id="btnBrowseCloudImages">☁️ Chọn từ Cloud</button>
                       </div>
                     </div>
+                  </div>
+                </div>
+
+                <!-- AI Input Bundle Banner & Scene Preview -->
+                <div id="bundleStatusBanner" style="display:none; background:rgba(15,23,42,0.85); border:1px solid var(--accent-primary,#38bdf8); border-radius:8px; padding:12px; margin-bottom:14px;">
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                      <span style="font-size:20px;">📦</span>
+                      <div>
+                        <strong id="bundleProjectTitle" style="font-size:13px; color:var(--text-main);">AI Input Bundle: Project</strong>
+                        <div id="bundleSceneStats" style="font-size:11.5px; color:var(--text-dim);">0 cảnh • 0 ảnh • 0 video</div>
+                      </div>
+                    </div>
+                    <div style="display:flex; gap:6px;">
+                      <button type="button" class="btn-action-primary" id="btnRunPipelineAll" style="font-size:11px; padding:3px 10px;">🚀 Chạy Toàn Bộ (Run All)</button>
+                      <button type="button" class="btn-subtle" id="btnInspectBundlePlan" style="font-size:11px; padding:3px 8px;">📋 Xem Kịch Bản Cảnh</button>
+                      <button type="button" class="btn-link-danger" id="btnClearBundle" style="font-size:11px; padding:3px 8px;">✕ Đóng Bundle</button>
+                    </div>
+                  </div>
+                  <div style="background:rgba(0,0,0,0.4); height:6px; border-radius:3px; overflow:hidden; margin-top:6px;">
+                    <div id="bundleProgressFill" style="background:var(--accent-primary,#38bdf8); height:100%; width:0%;"></div>
                   </div>
                 </div>
 
@@ -208,7 +263,10 @@ Quy tắc:
                     <button type="button" class="btn-link-danger" id="btnRemoveAudio" style="display:none">✕ Bỏ chọn</button>
                   </div>
                   <div class="audio-picker-box" id="audioPickerBox">
-                    <button type="button" class="btn-subtle w-full" id="btnSelectAudioFile">🎵 Chọn file âm thanh (.mp3, .wav, .m4a)</button>
+                    <div style="display:flex; gap:8px; width:100%;">
+                      <button type="button" class="btn-subtle" style="flex:1;" id="btnSelectAudioFile">🎵 Chọn file âm thanh (.mp3, .wav, .m4a)</button>
+                      <button type="button" class="btn-subtle" id="btnBrowseCloudAudio">☁️ Cloud</button>
+                    </div>
                     <span class="audio-file-name" id="audioFileName">Chưa chọn âm thanh</span>
                   </div>
                 </div>
@@ -335,28 +393,49 @@ Quy tắc:
 
         <!-- ════════ TAB 2: QUEUE VIEW (Queue A & Queue B) ════════ -->
         <div class="view-pane" id="view-queue">
-          <!-- Queue Sub-Tabs -->
-          <div style="margin-bottom: 16px;">
-            <div class="tab-pill-group" style="max-width: 520px;">
-              <button type="button" class="pill-btn active" id="tabSubQueueBuild">📋 1. Hàng Đợi Tạo Dự Án (Build Queue)</button>
-              <button type="button" class="pill-btn" id="tabSubQueueRender">🎬 2. Hàng Đợi Xuất Video (Render Queue)</button>
+          <!-- Row 1: Page Title + Subtitle -->
+          <div class="queue-header-block">
+            <h3 class="pane-title" style="font-size: 18px; margin-bottom: 4px;">Hàng Đợi Xử Lý Tự Động (Automation Queues)</h3>
+            <span class="pane-sub" style="font-size: 12.5px;">Quản lý và thực thi tuần tự các tác vụ tạo kịch bản CapCut và render video MP4</span>
+          </div>
+
+          <!-- Row 2: Queue Sub-Tabs Selector -->
+          <div class="queue-toolbar-row">
+            <div class="tab-pill-group" style="max-width: 520px; margin: 0;">
+              <button type="button" class="pill-btn active" id="tabSubQueueBuild">📋 1. Hàng Đợi Tạo Dự Án</button>
+              <button type="button" class="pill-btn" id="tabSubQueueRender">🎬 2. Hàng Đợi Xuất Video</button>
             </div>
           </div>
 
           <!-- SUB-PANE 1: BUILD QUEUE (Queue A) -->
           <div id="subpane-build-queue">
-            <div class="pane-header-actions">
-              <div>
-                <div style="display:flex;align-items:center;gap:10px;">
-                  <h3 class="pane-title">Hàng Đợi Tạo Dự Án CapCut</h3>
-                  <span class="status-badge" id="buildQueueStatusBadge" style="font-size:11.5px;padding:3px 8px;">⚪ Đang Chờ</span>
-                </div>
-                <span class="pane-sub">Tự động dựng timeline, căn chỉnh kịch bản & sinh CapCut Draft tuần tự</span>
+            <div class="queue-subpane-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <button type="button" class="btn-subtle" id="btnAddBuildJob" title="Thêm Job mới từ Studio">➕ Thêm Job</button>
+                <button type="button" class="btn-action-primary" id="btnImportBundleQueue" title="Nạp một hoặc nhiều Input Bundle từ máy tính" style="background:var(--accent-primary,#38bdf8); color:#000; font-weight:700;">📦 Import Bundle</button>
+                <button type="button" class="btn-subtle" id="btnImportCloudBundleQueue" title="Nạp Input Bundle từ 2TOOLNE Cloud / AI Inputs">☁ Import từ Cloud</button>
               </div>
-              <div class="pane-buttons">
-                <button type="button" class="btn-action-primary" id="btnBuildAllProjects">✨ Tạo Tất Cả Dự Án</button>
-                <button type="button" class="btn-subtle" id="btnStopBuildQueue">⏹️ Dừng Sau Tác Vụ Này</button>
+              <div class="pane-buttons" style="display:flex; align-items:center; gap:8px;">
+                <button type="button" class="btn-action-primary" id="btnRunAllPipelineJobs" style="background:#10b981; color:#fff; font-weight:700;">▶ Chạy tất cả</button>
+                <button type="button" class="btn-subtle" id="btnStopBuildQueue">⏹️ Dừng</button>
                 <button type="button" class="btn-subtle" id="btnClearBuildQueue">🧹 Xóa Đã Xong</button>
+              </div>
+            </div>
+
+            <!-- Pipeline Queue V2 Section (Phase 3) -->
+            <div id="pipelineV2Section" style="margin-bottom: 20px; width: 100%;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span style="font-size:16px;">⚡</span>
+                  <h4 style="margin:0; font-size:13px; font-weight:700; color:var(--text-main);">Pipeline Queue V2 (AI Input Bundle → CapCut)</h4>
+                  <span class="status-badge" id="pipelineActiveCountBadge" style="font-size:11px; padding:2px 7px; background:rgba(56,189,248,0.1); color:var(--accent-primary,#38bdf8);">0 tác vụ</span>
+                </div>
+                <button type="button" class="btn-subtle" id="btnClearCompletedPipelineJobs" style="font-size:11px; padding:3px 8px;">🧹 Xóa Đã Hoàn Tất</button>
+              </div>
+              <div id="pipelineJobsList" style="display:flex; flex-direction:column; gap:12px; width: 100%;">
+                <div style="background:rgba(15,23,42,0.4); border:1px dashed rgba(255,255,255,0.1); border-radius:8px; padding:16px; text-align:center; color:var(--text-muted); font-size:12px;">
+                  Chưa có tác vụ AI Bundle trong Pipeline V2. Hãy nạp Bundle từ tab Studio và bấm "Chạy Toàn Bộ (Run All)"!
+                </div>
               </div>
             </div>
 
@@ -382,13 +461,10 @@ Quy tắc:
 
           <!-- SUB-PANE 2: RENDER QUEUE (Queue B) -->
           <div id="subpane-render-queue" style="display: none;">
-            <div class="pane-header-actions">
-              <div>
-                <div style="display:flex;align-items:center;gap:10px;">
-                  <h3 class="pane-title">Hàng Đợi Xuất Video (Render Queue)</h3>
-                  <span class="status-badge" id="queueStatusBadge" style="font-size:11.5px;padding:3px 8px;">⚪ Đang Chờ</span>
-                </div>
-                <span class="pane-sub">Tự động xuất video tuần tự qua Python RenderQueueManager</span>
+            <div class="queue-subpane-header">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <h4 style="font-size: 15px; font-weight: 700; color: var(--text-main); margin: 0;">Hàng Đợi Xuất Video (Render Queue)</h4>
+                <span class="status-badge" id="queueStatusBadge" style="font-size:11.5px;padding:3px 8px;">⚪ Đang Chờ</span>
               </div>
               <div class="pane-buttons">
                 <button type="button" class="btn-action-primary" id="btnStartQueue">▶️ Chạy Hàng Đợi</button>
@@ -420,25 +496,78 @@ Quy tắc:
           </div>
         </div>
 
-        <!-- ════════ TAB 3: PROJECTS VIEW ════════ -->
-        <div class="view-pane" id="view-projects">
-          <div class="pane-header-actions">
-            <div>
-              <h3 class="pane-title">Dự Án CapCut Đã Cài Đặt</h3>
-              <span class="pane-sub">Các dự án đã được ghi nhận vào thư viện CapCut Desktop</span>
+        <!-- ════════ TAB: GOOGLE FLOW EMBEDDED BROWSER (Phase 4) ════════ -->
+        <div class="view-pane" id="view-flow" style="display:none; flex-direction:column; flex:1; height:100%; min-height:0; overflow:hidden; box-sizing:border-box;">
+          <div class="flow-toolbar-card" style="margin-bottom:10px; flex-shrink:0; background:var(--bg-card,#161924); border:1px solid var(--border-color,#242938); border-radius:10px; padding:10px 14px; display:flex; flex-direction:column; gap:8px;">
+            <!-- ROW 1: Title, Modes, Status Badges & Info -->
+            <div class="flow-toolbar-row1" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <h3 class="pane-title" style="margin:0; font-size:15px; font-weight:700; white-space:nowrap;">🌊 Google Flow Trực Tiếp</h3>
+                <span class="status-badge" id="flowModeBadge" style="font-size:11.5px; padding:3px 8px; background:rgba(34,197,94,0.15); color:#22c55e; border:1px solid rgba(34,197,94,0.3); white-space:nowrap;">🟢 CHẾ ĐỘ: THỦ CÔNG</span>
+                <span class="status-badge" id="flowAuthBadge" style="font-size:11.5px; padding:3px 8px; background:rgba(56,189,248,0.15); color:#38bdf8; border:1px solid rgba(56,189,248,0.3); white-space:nowrap;">Đang kiểm tra tài khoản...</span>
+                <span class="status-badge" id="flowCreditBadge" style="font-size:11.5px; padding:3px 8px; background:rgba(245,181,68,0.15); color:#f5b544; border:1px solid rgba(245,181,68,0.3); white-space:nowrap;">Token Flow: Không xác định</span>
+              </div>
+              <span class="pane-sub" style="font-size:11px; color:var(--text-dim,#64748b); white-space:nowrap;">Phân vùng cách ly • Đăng nhập Google trực tiếp</span>
             </div>
-            <div style="display:flex; gap:10px; align-items:center;">
-              <input type="text" id="inpProjectSearch" class="form-input" placeholder="🔍 Tìm kiếm dự án..." style="width:220px; font-size:12px; padding:6px 10px;" />
-              <select id="selProjectSort" class="form-select" style="width:165px; font-size:12px; padding:6px 10px;">
-                <option value="newest" selected>📅 Mới nhất trước</option>
-                <option value="oldest">📅 Cũ nhất trước</option>
-                <option value="name">🔤 Tên (A-Z)</option>
-                <option value="duration">⏱️ Thời lượng dài nhất</option>
-              </select>
-              <button type="button" class="btn-subtle" id="btnRefreshProjects">🔄 Làm Mới</button>
+
+            <!-- ROW 2: Profile Selector & Action Buttons -->
+            <div class="flow-toolbar-row2" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+              <!-- Profile Group -->
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <span style="font-size:12px; color:var(--text-muted,#94a3b8); font-weight:600; white-space:nowrap;">Hồ sơ:</span>
+                <select id="flowProfileSelect" style="background:var(--bg-input,#0e1017); color:var(--text-main,#f8fafc); border:1px solid var(--border-color,#242938); border-radius:6px; padding:6px 12px; font-size:12px; min-width:180px; max-width:280px;">
+                  <!-- Populated dynamically -->
+                </select>
+                <button type="button" class="btn-subtle" id="btnFlowAddProfile" title="Thêm tài khoản Flow mới" style="white-space:nowrap; min-width:105px; padding:6px 12px; font-size:12px;">➕ Thêm Profile</button>
+              </div>
+
+              <!-- Action Group -->
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <button type="button" class="btn-subtle" id="btnFlowReload" title="Tải lại trang Flow" style="white-space:nowrap; min-width:80px; padding:6px 12px; font-size:12px;">🔄 Tải Lại</button>
+                <button type="button" class="btn-subtle" id="btnFlowNavigate" title="Truy cập Google Flow" style="white-space:nowrap; min-width:85px; padding:6px 12px; font-size:12px;">🌐 Mở Flow</button>
+                <!-- Safe Takeover Button -->
+                <button type="button" class="btn-action-primary" id="btnFlowTakeover" style="background:#ef4444; border-color:#dc2626; font-size:12px; font-weight:700; white-space:nowrap; min-width:140px; padding:6px 12px; display:none;">
+                  🛑 Dừng tự động
+                </button>
+                <!-- Resume Auto Button -->
+                <button type="button" class="btn-action-primary" id="btnFlowResumeAuto" style="font-size:12px; font-weight:700; white-space:nowrap; min-width:140px; padding:6px 12px; display:none;">
+                  ▶️ Tiếp tục tự động
+                </button>
+              </div>
             </div>
           </div>
 
+          <!-- Embedded Browser Container (WebContentsView anchors here) -->
+          <div id="flowBrowserContainer" style="flex:1; width:100%; min-height:0; background:#0b0f19; border:1px solid rgba(255,255,255,0.1); border-radius:10px; position:relative; overflow:hidden;">
+            <div id="flowPlaceholderNotice" style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--text-dim,#94a3b8); text-align:center; padding:20px;">
+              <div style="font-size:32px; margin-bottom:12px;">🌊</div>
+              <div style="font-size:15px; font-weight:600; color:var(--text-main,#f8fafc); margin-bottom:6px;">Đang Tải Google Flow...</div>
+              <div style="font-size:12.5px; max-width:450px; line-height:1.5;">Khung trình duyệt an toàn đang được nhúng tại đây. Bạn có thể đăng nhập Google tài khoản của mình một cách hoàn toàn an toàn.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ════════ TAB 3: PROJECTS VIEW ════════ -->
+        <div class="view-pane" id="view-projects">
+          <!-- Row 1: Full-width Title & Subtitle -->
+          <div class="projects-header-block">
+            <h3 class="pane-title" style="font-size: 18px; margin-bottom: 4px;">Dự Án CapCut Đã Cài Đặt</h3>
+            <span class="pane-sub" style="font-size: 12.5px;">Các dự án đã được ghi nhận vào thư viện CapCut Desktop</span>
+          </div>
+
+          <!-- Row 2: Search, Sort & Refresh Filters Bar -->
+          <div class="projects-filters-bar">
+            <input type="text" id="inpProjectSearch" class="form-input" placeholder="🔍 Tìm kiếm dự án..." style="flex:1; min-width:240px; max-width:460px; font-size:12.5px; padding:7px 12px;" />
+            <select id="selProjectSort" class="form-select" style="width:180px; font-size:12.5px; padding:7px 12px;">
+              <option value="newest" selected>📅 Mới nhất trước</option>
+              <option value="oldest">📅 Cũ nhất trước</option>
+              <option value="name">🔤 Tên (A-Z)</option>
+              <option value="duration">⏱️ Thời lượng dài nhất</option>
+            </select>
+            <button type="button" class="btn-subtle" id="btnRefreshProjects" style="padding:7px 14px; font-size:12.5px; white-space:nowrap;">🔄 Làm Mới</button>
+          </div>
+
+          <!-- Row 3+: Responsive Projects Card Grid -->
           <div class="projects-grid" id="projectsGrid">
             <div class="empty-projects-hint">Chưa có dự án nào được tạo.</div>
           </div>
@@ -446,123 +575,375 @@ Quy tắc:
 
         <!-- ════════ TAB 4: UPSCALE VIEW ════════ -->
         <div class="view-pane" id="view-upscale">
-          <div class="upscale-hero-box">
-            <h3>🔍 Phân Hệ 2TOOLNE AI Upscale 4K</h3>
-            <p>Xử lý nâng cấp độ phân giải ảnh 2K / 4K trực tiếp bằng GPU Vulkan NCNN nội bộ.</p>
-            <div class="token-cost-badge">
-              <span>💎 <strong>2K</strong>: 1 Token / ảnh</span>
-              <span>💎 <strong>4K</strong>: 2 Token / ảnh</span>
+          <div class="upscale-unified-card">
+            <!-- Unified Card Header: Title, Token Cost & Description -->
+            <div class="upscale-card-header">
+              <div class="upscale-header-title-row">
+                <div class="upscale-title-group">
+                  <span class="upscale-header-icon">🔍</span>
+                  <h3 class="upscale-module-title">Phân Hệ 2TOOLNE AI Upscale 4K</h3>
+                </div>
+                <div class="token-cost-badge">
+                  <span>💎 <strong>2K</strong>: 1 Token / ảnh</span>
+                  <span>💎 <strong>4K</strong>: 2 Token / ảnh</span>
+                </div>
+              </div>
+              <p class="upscale-header-desc">
+                Xử lý nâng cấp độ phân giải ảnh siêu nét 2K / 4K trực tiếp bằng GPU Vulkan NCNN nội bộ.
+              </p>
             </div>
-          </div>
 
-          <div class="studio-card" style="margin-top: 14px;">
-            <div class="card-head">
-              <span class="card-icon">⚡</span>
-              <span class="card-title">Khu Vực Phóng To Ảnh</span>
-            </div>
-            <div class="card-body">
-              <div class="drop-zone" id="upscaleDropZone">
-                <div class="dz-inner">
-                  <span class="dz-icon">🚀</span>
-                  <span class="dz-title">Chọn ảnh cần Upscale 2K / 4K</span>
-                  <div class="dz-buttons">
-                    <button type="button" class="btn-subtle" id="btnBrowseUpscale">📁 Chọn ảnh</button>
+            <!-- Unified Card Body: Internal Two-Column Grid -->
+            <div class="upscale-body-grid">
+              <!-- Left Column: Dropzone, Selected Files, Progress & Results -->
+              <div class="upscale-left-col">
+                <div class="drop-zone upscale-drop-zone" id="upscaleDropZone">
+                  <div class="dz-inner">
+                    <span class="dz-icon" style="font-size: 40px; margin-bottom: 6px;">🚀</span>
+                    <span class="dz-title" style="font-size: 14px; font-weight: 700;">Kéo thả ảnh vào đây hoặc bấm nút chọn</span>
+                    <p class="dz-hint" style="color: var(--text-dim); margin-top: 4px; font-size: 11.5px;">Hỗ trợ định dạng PNG, JPG, JPEG, WEBP. Ảnh được phóng to giữ trọn chi tiết.</p>
+                    <div class="dz-buttons" style="margin-top: 14px;">
+                      <button type="button" class="btn-action-primary" id="btnBrowseUpscale" style="padding: 8px 20px; font-size: 12.5px;">📁 Chọn tệp ảnh từ máy tính</button>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <!-- Selected files summary -->
-              <div id="upscaleFilesContainer" style="display: none; margin-top: 12px; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 12px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                  <span style="font-weight: 600; font-size: 13px;">Danh sách ảnh đã chọn (<span id="upscaleCount">0</span> ảnh):</span>
-                  <button type="button" class="btn-link-danger" id="btnClearUpscale">✕ Xóa tất cả</button>
+                <!-- Selected files summary -->
+                <div id="upscaleFilesContainer" style="display: none; margin-top: 14px; background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 14px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span style="font-weight: 600; font-size: 13px;">Danh sách ảnh đã chọn (<span id="upscaleCount">0</span> ảnh):</span>
+                    <button type="button" class="btn-link-danger" id="btnClearUpscale">✕ Xóa tất cả</button>
+                  </div>
+                  <div id="upscaleFileList" style="max-height: 160px; overflow-y: auto; font-size: 12px; color: var(--color-text-muted);"></div>
                 </div>
-                <div id="upscaleFileList" style="max-height: 140px; overflow-y: auto; font-size: 12px; color: var(--color-text-muted);"></div>
-              </div>
 
-              <div class="form-row-2" style="margin-top: 12px;">
-                <div class="input-field">
-                  <label>Mức phóng to:</label>
-                  <select id="selUpscaleModel" class="form-select">
-                    <option value="2x_2k" selected>2K (Tối đa 2560px - 1 Token)</option>
-                    <option value="4x_4k">4K (Tối đa 3840px - 2 Token)</option>
-                  </select>
+                <!-- Real Upscale Progress Bar -->
+                <div id="upscaleProgressWrap" style="display: none; margin-top: 14px; background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 14px;">
+                  <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px;">
+                    <span id="upscaleProgressMsg">Đang chuẩn bị phân hệ Upscale...</span>
+                    <span id="upscaleProgressPct" style="font-weight: bold; color: var(--color-accent, #3b82f6);">0%</span>
+                  </div>
+                  <div style="background: rgba(255,255,255,0.1); border-radius: 4px; height: 8px; overflow: hidden;">
+                    <div id="upscaleProgressFill" style="background: var(--color-accent, #3b82f6); height: 100%; width: 0%; transition: width 0.2s ease;"></div>
+                  </div>
                 </div>
-                <div class="input-field" style="display:flex;align-items:flex-end;">
-                  <button type="button" class="btn-hero-primary w-full" id="btnRunUpscale">
-                    ✨ BẮT ĐẦU UPSCALE
-                  </button>
-                </div>
-              </div>
 
-              <!-- Real Upscale Progress Bar -->
-              <div id="upscaleProgressWrap" style="display: none; margin-top: 14px; background: rgba(0,0,0,0.25); border-radius: 8px; padding: 12px;">
-                <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px;">
-                  <span id="upscaleProgressMsg">Đang chuẩn bị phân hệ Upscale...</span>
-                  <span id="upscaleProgressPct" style="font-weight: bold; color: var(--color-accent, #3b82f6);">0%</span>
-                </div>
-                <div style="background: rgba(255,255,255,0.1); border-radius: 4px; height: 8px; overflow: hidden;">
-                  <div id="upscaleProgressFill" style="background: var(--color-accent, #3b82f6); height: 100%; width: 0%; transition: width 0.2s ease;"></div>
+                <!-- Upscale Result Card -->
+                <div id="upscaleResultBox" style="display: none; margin-top: 14px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 12px 14px; align-items: center; justify-content: space-between;">
+                  <div>
+                    <div style="color: #10b981; font-weight: 600; font-size: 13px;">✅ Hoàn tất phóng to ảnh!</div>
+                    <div id="upscaleResultPath" style="font-size: 11px; color: var(--color-text-muted); margin-top: 2px;"></div>
+                  </div>
+                  <button type="button" class="btn-subtle" id="btnOpenUpscaleDir">📂 Mở Thư Mục</button>
                 </div>
               </div>
 
-              <!-- Upscale Result Card -->
-              <div id="upscaleResultBox" style="display: none; margin-top: 14px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 12px; align-items: center; justify-content: space-between;">
-                <div>
-                  <div style="color: #10b981; font-weight: 600; font-size: 13px;">✅ Hoàn tất phóng to ảnh!</div>
-                  <div id="upscaleResultPath" style="font-size: 11px; color: var(--color-text-muted); margin-top: 2px;"></div>
+              <!-- Right Column: Model Selection, Run Button & Guidelines -->
+              <div class="upscale-right-col">
+                <div class="upscale-control-panel">
+                  <h4 class="upscale-panel-title">⚡ Tùy Chọn Phóng To</h4>
+                  
+                  <div class="input-field" style="margin-top: 10px;">
+                    <label for="selUpscaleModel">Mức độ phân giải mục tiêu:</label>
+                    <select id="selUpscaleModel" class="form-select" style="padding: 8px 12px; font-size: 12.5px;">
+                      <option value="2x_2k" selected>💎 2K (Tối đa 2560px - 1 Token)</option>
+                      <option value="4x_4k">💎💎 4K (Tối đa 3840px - 2 Token)</option>
+                    </select>
+                  </div>
+
+                  <div style="margin-top: 16px;">
+                    <button type="button" class="btn-hero-primary w-full" id="btnRunUpscale" style="padding: 12px; font-size: 13px; font-weight: 700; width: 100%;">
+                      ✨ BẮT ĐẦU UPSCALE
+                    </button>
+                  </div>
+
+                  <div class="upscale-guide-box" style="margin-top: 16px; padding: 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px; font-size: 11.5px; color: var(--text-dim); line-height: 1.55;">
+                    <strong style="color: var(--text-muted); display: block; margin-bottom: 4px;">💡 Hướng dẫn &amp; Lưu ý:</strong>
+                    • Sử dụng mô hình Real-ESRGAN Vulkan NCNN tăng độ chi tiết không vỡ hạt.<br/>
+                    • Ảnh sau upscale tự động lưu vào thư mục dự án hoặc thư mục xuất.<br/>
+                    • Phí Token được trừ tự động từ ví Cloud sau khi xử lý thành công.
+                  </div>
                 </div>
-                <button type="button" class="btn-subtle" id="btnOpenUpscaleDir">📂 Mở Thư Mục</button>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- ════════ TAB 5: ACCOUNT & LICENSE ════════ -->
-        <div class="view-pane" id="view-account">
-          <div class="studio-card" style="max-width: 680px; margin: 0 auto;">
-            <div class="card-head">
-              <span class="card-icon">👤</span>
-              <span class="card-title">Quản Lý Bản Quyền &amp; Tài Khoản</span>
+        <!-- ════════ TAB CLOUD: 2TOOLNE CLOUD EXPLORER (PRIORITY 4) ════════ -->
+        <div class="view-pane" id="view-cloud">
+          <!-- Row 1: Cloud Page Header -->
+          <div class="cloud-page-header">
+            <h3 class="pane-title" style="font-size: 18px; margin-bottom: 4px;">2TOOLNE Cloud Explorer</h3>
+            <span class="pane-sub" style="font-size: 12.5px;">Không gian lưu trữ đám mây cá nhân, đồng bộ tài nguyên và quản lý tệp tin trực tiếp</span>
+          </div>
+
+          <!-- State A: Locked State (When Web Account is Not Logged In) -->
+          <div id="cloudLockedState" class="cloud-locked-container" style="display: none;">
+            <div class="cloud-locked-card">
+              <div class="cloud-locked-icon">☁️🔒</div>
+              <h3 class="cloud-locked-title">Yêu Cầu Đăng Nhập Tài Khoản 2TOOLNE</h3>
+              <p class="cloud-locked-desc">
+                Không gian lưu trữ đám mây được liên kết trực tiếp với tài khoản cá nhân của bạn trên <strong>https://www.2tamne.site</strong>.<br/>
+                Vui lòng đăng nhập nhanh bằng trình duyệt web để bắt đầu quản lý tệp tin và nạp tài nguyên vào Studio.
+              </p>
+              <button type="button" class="btn-action-primary" id="btnCloudLoginPrompt" style="padding: 12px 24px; font-size: 14px;">
+                🌐 Đăng Nhập Bằng Trình Duyệt
+              </button>
             </div>
-            <div class="card-body">
-              <div class="info-row">
-                <span class="info-lbl">Tài Khoản Portal:</span>
-                <span class="info-val font-semibold" id="accUserEmail">Chưa đăng nhập</span>
+          </div>
+
+          <!-- State B: Cloud Main Explorer (When Logged In) -->
+          <div id="cloudMainState" class="cloud-main-container" style="display: flex;">
+            <!-- Top Controls Bar: Space Selector & Storage Quota -->
+            <div class="cloud-topbar">
+              <div class="cloud-topbar-left">
+                <div class="cloud-space-picker">
+                  <label for="selCloudSpace" class="cloud-label-sm">Không gian:</label>
+                  <select id="selCloudSpace" class="form-select cloud-select-space">
+                    <option value="" disabled selected>Đang tải không gian...</option>
+                  </select>
+                </div>
+                <button type="button" class="btn-subtle" id="btnRefreshCloud" title="Làm mới danh sách">🔄 Làm Mới</button>
               </div>
-              <div class="info-row">
-                <span class="info-lbl">Khóa Bản Quyền:</span>
-                <span class="info-val" id="accMaskedKey">Chưa kích hoạt</span>
+
+              <div class="cloud-topbar-right">
+                <!-- Quota Widget -->
+                <div class="cloud-quota-box" id="cloudQuotaBox" title="Dung lượng bộ nhớ đã dùng">
+                  <div class="cloud-quota-text">
+                    <span>Đã dùng: <strong id="cloudQuotaUsed">0 MB</strong> / <span id="cloudQuotaTotal">--</span> (<span id="cloudQuotaPct">0%</span>)</span>
+                  </div>
+                  <div class="cloud-quota-track">
+                    <div class="cloud-quota-bar" id="cloudQuotaFill" style="width: 0%;"></div>
+                  </div>
+                </div>
+                <!-- Trash Toggle Button -->
+                <button type="button" class="btn-subtle" id="btnCloudToggleTrash" title="Xem thùng rác">
+                  🗑️ Thùng Rác (<span id="cloudTrashCount">0</span>)
+                </button>
               </div>
-              <div class="info-row">
-                <span class="info-lbl">Trạng Thái:</span>
-                <span class="info-val status-badge" id="accStatus">Unknown</span>
-              </div>
-              <div class="info-row">
-                <span class="info-lbl">Mã Thiết Bị (HWID):</span>
-                <span class="info-val font-mono" id="accDeviceId">--</span>
-              </div>
-              <div class="info-row">
-                <span class="info-lbl">Số Dư Ví Token:</span>
-                <div style="display:flex; align-items:center; gap:8px;">
-                  <span class="info-val"><strong id="accTokenCount">0</strong> Token</span>
-                  <button type="button" class="btn-subtle" id="btnRefreshWallet" style="padding:2px 8px; font-size:11px;" title="Cập nhật số dư ví">🔄</button>
+            </div>
+
+            <!-- Normal Files View -->
+            <div id="cloudNormalView" class="cloud-view-section">
+              <!-- Toolbar: Breadcrumbs & Primary Actions -->
+              <div class="cloud-toolbar">
+                <div class="cloud-breadcrumbs-wrap" id="cloudBreadcrumbs">
+                  <button type="button" class="crumb-btn active" data-folder-id="">☁️ Cloud Cá Nhân</button>
+                </div>
+
+                <div class="cloud-actions-group">
+                  <div class="cloud-search-box">
+                    <input type="text" id="inpCloudSearch" class="form-input" placeholder="🔍 Tìm kiếm file/thư mục..." />
+                    <button type="button" class="btn-clear-search" id="btnClearCloudSearch" style="display:none;">✕</button>
+                  </div>
+
+                  <select id="selCloudSort" class="form-select cloud-sort-select">
+                    <option value="name_asc">Tên (A → Z)</option>
+                    <option value="name_desc">Tên (Z → A)</option>
+                    <option value="date_desc" selected>Mới nhất</option>
+                    <option value="date_asc">Cũ nhất</option>
+                    <option value="size_desc">Dung lượng lớn nhất</option>
+                    <option value="size_asc">Dung lượng nhỏ nhất</option>
+                  </select>
+
+                  <button type="button" class="btn-subtle" id="btnCloudNewFolder">📁 Thư Mục Mới</button>
+                  <button type="button" class="btn-action-primary" id="btnCloudUploadAction">⬆️ Tải Lên Tệp</button>
                 </div>
               </div>
 
-              <div class="account-actions-box" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:16px;">
-                <button type="button" class="btn-action-primary" id="btnOpenLoginModal">👤 Đăng Nhập Tài Khoản</button>
-                <button type="button" class="btn-subtle" id="btnLogoutAccount" style="display:none;">🚪 Đăng Xuất</button>
-                <button type="button" class="btn-action-primary" id="btnOpenActivateModal">🔑 Kích Hoạt Khóa Mới</button>
-                <button type="button" class="btn-subtle btn-danger" id="btnDeactivateLicense">✕ Hủy Kích Hoạt Thiết Bị</button>
+              <!-- File Explorer Table -->
+              <div class="cloud-table-container" id="cloudDropZone">
+                <table class="cloud-table">
+                  <thead>
+                    <tr>
+                      <th style="min-width: 260px;">Tên Tệp / Thư Mục</th>
+                      <th style="width: 140px;">Kích Thước</th>
+                      <th style="width: 130px;">Loại Tệp</th>
+                      <th style="width: 170px;">Ngày Cập Nhật</th>
+                      <th style="width: 160px; text-align: right;">Thao Tác</th>
+                    </tr>
+                  </thead>
+                  <tbody id="cloudTableBody">
+                    <!-- Dynamic File / Folder Rows -->
+                  </tbody>
+                </table>
+
+                <!-- Empty Folder State -->
+                <div id="cloudEmptyFolderHint" class="cloud-empty-hint" style="display: none;">
+                  <div class="cloud-empty-icon">📂</div>
+                  <div class="cloud-empty-title">Thư mục hiện tại chưa có tệp tin</div>
+                  <div class="cloud-empty-sub">Kéo thả tệp tin trực tiếp vào đây hoặc bấm nút "Tải Lên Tệp" ở trên.</div>
+                </div>
+
+                <!-- Loading Spinner State -->
+                <div id="cloudLoadingSpinner" class="cloud-loading-overlay" style="display: none;">
+                  <div class="spinner"></div>
+                  <span>Đang tải tệp tin từ Cloud...</span>
+                </div>
               </div>
             </div>
+
+            <!-- Trash View -->
+            <div id="cloudTrashView" class="cloud-view-section" style="display: none;">
+              <div class="cloud-trash-header">
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <button type="button" class="btn-subtle" id="btnCloudBackFromTrash">⬅️ Quay lại tệp của tôi</button>
+                  <h4 style="color:#f87171; font-size:14px; font-weight:700; margin:0;">🗑️ Thùng Rác Đám Mây</h4>
+                </div>
+                <span class="hint-text">💡 Các tệp trong thùng rác có thể khôi phục về vị trí cũ hoặc xóa vĩnh viễn để giải phóng dung lượng.</span>
+              </div>
+
+              <div class="cloud-table-container">
+                <table class="cloud-table">
+                  <thead>
+                    <tr>
+                      <th style="min-width: 260px;">Tên Tệp Đã Xóa</th>
+                      <th style="width: 140px;">Kích Thước</th>
+                      <th style="width: 180px;">Thời Gian Xóa</th>
+                      <th style="width: 160px; text-align: right;">Thao Tác</th>
+                    </tr>
+                  </thead>
+                  <tbody id="cloudTrashTableBody">
+                    <!-- Dynamic Trash Rows -->
+                  </tbody>
+                </table>
+
+                <div id="cloudTrashEmptyHint" class="cloud-empty-hint" style="display: none;">
+                  <div class="cloud-empty-icon">✨</div>
+                  <div class="cloud-empty-title">Thùng rác trống</div>
+                  <div class="cloud-empty-sub">Không có tệp tin nào đang bị xóa tạm thời.</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Upload Drawer (Floating Status Widget) -->
+            <div id="cloudUploadDrawer" class="cloud-upload-drawer" style="display: none;">
+              <div class="cloud-drawer-header">
+                <div class="cloud-drawer-title">
+                  <span>⬆️ Tiến trình tải lên</span>
+                  <span class="cloud-drawer-count" id="cloudUploadDrawerCount">(0)</span>
+                </div>
+                <div class="cloud-drawer-actions">
+                  <button type="button" class="btn-drawer-toggle" id="btnToggleUploadDrawer" title="Thu gọn / Mở rộng">_</button>
+                  <button type="button" class="btn-drawer-close" id="btnCloseUploadDrawer" title="Đóng danh sách">✕</button>
+                </div>
+              </div>
+              <div class="cloud-drawer-body" id="cloudUploadDrawerBody">
+                <!-- Dynamic Upload Tasks List -->
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ════════ TAB 5: ACCOUNT & LICENSE (PRIORITY 1: TÁCH RIÊNG) ════════ -->
+        <div class="view-pane" id="view-account">
+          <div style="max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px;">
+            <div style="margin-bottom: 4px;">
+              <h3 class="pane-title" style="font-size: 18px; margin-bottom: 4px;">Tài Khoản &amp; Bản Quyền (Account &amp; License)</h3>
+              <span class="pane-sub" style="font-size: 12.5px;">Quản lý phiên đăng nhập portal 2TOOLNE, ví Token Cloud và khóa bản quyền máy tính</span>
+            </div>
+            
+            <!-- Card 1: Web Account & Token Wallet -->
+            <div class="studio-card">
+              <div class="card-head">
+                <span class="card-icon">👤</span>
+                <span class="card-title">Tài Khoản Web &amp; Ví Token Cloud</span>
+              </div>
+              <div class="card-body">
+                <div class="info-row">
+                  <span class="info-lbl">Tài Khoản Web:</span>
+                  <span class="info-val font-semibold" id="accUserEmail">Chưa đăng nhập</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-lbl">Trạng Thái Đăng Nhập:</span>
+                  <span class="info-val status-badge" id="accLoginStatus" style="color:var(--text-muted);">Chưa đăng nhập</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-lbl" id="accWalletLabel">Số Dư Ví Token:</span>
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <span class="info-val"><strong id="accTokenCount" style="color:var(--accent-primary,#38bdf8); font-size:15px;">--</strong> Token</span>
+                    <button type="button" class="btn-subtle" id="btnRefreshWallet" style="padding:2px 8px; font-size:11px;" title="Cập nhật số dư ví">🔄 Làm mới</button>
+                    <button type="button" class="btn-subtle" id="btnTopupToken" style="padding:2px 8px; font-size:11px;" title="Nạp thêm token trên portal">💳 Nạp Token</button>
+                  </div>
+                </div>
+
+                <div class="account-actions-box" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:16px;">
+                  <button type="button" class="btn-action-primary" id="btnOpenLoginModal">🌐 Đăng Nhập Trình Duyệt</button>
+                  <button type="button" class="btn-subtle btn-danger" id="btnLogoutAccount" style="display:none;">🚪 Đăng Xuất Tài Khoản</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 2: Desktop Machine License -->
+            <div class="studio-card">
+              <div class="card-head">
+                <span class="card-icon">🔑</span>
+                <span class="card-title">Bản Quyền Phần Mềm Desktop</span>
+              </div>
+              <div class="card-body">
+                <div class="info-row">
+                  <span class="info-lbl">Khóa Bản Quyền:</span>
+                  <span class="info-val font-mono" id="accMaskedKey">Chưa kích hoạt</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-lbl">Trạng Thái Bản Quyền:</span>
+                  <span class="info-val status-badge" id="accLicenseStatus">CHƯA KÍCH HOẠT</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-lbl">Gói Bản Quyền:</span>
+                  <span class="info-val font-semibold" id="accLicenseTier">PRO</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-lbl">Mã Thiết Bị (HWID):</span>
+                  <span class="info-val font-mono" id="accDeviceId">--</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-lbl">Thời Hạn / Grace:</span>
+                  <span class="info-val" id="accLicenseExpiry">Vĩnh viễn</span>
+                </div>
+
+                <div class="account-actions-box" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:16px;">
+                  <button type="button" class="btn-action-primary" id="btnOpenActivateModal">🔑 Kích Hoạt Khóa Mới</button>
+                  <button type="button" class="btn-subtle btn-danger" id="btnDeactivateLicense">✕ Hủy Kích Hoạt Thiết Bị</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 3: Scoped AI Access Keys (Phase 1) -->
+            <div class="studio-card" id="cardAiKeys">
+              <div class="card-head" style="display:flex; justify-content:space-between; align-items:center;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span class="card-icon">🤖</span>
+                  <span class="card-title">Kết Nối AI / Scoped AI Access Keys</span>
+                </div>
+                <button type="button" class="btn-subtle" id="btnRefreshAiKeys" title="Làm mới danh sách khóa AI" style="padding:4px 10px; font-size:12px;">🔄 Làm mới</button>
+              </div>
+              <div class="card-body">
+                <p class="modal-desc" style="margin-bottom:14px; font-size:12.5px; color:var(--text-dim);">
+                  Khóa API bảo mật cho AI Agent (Codex, Claude, Antigravity) và <code>2toolne</code> CLI. Tất cả truy cập bị giam nghiêm ngặt (jailed) trong thư mục <code>AI Inputs/</code> của không gian làm việc đang chọn.
+                </p>
+                <div id="aiKeysListContainer" style="display:flex; flex-direction:column; gap:8px; margin-bottom:14px;">
+                  <div class="text-dim" style="font-size:12px; font-style:italic;">Đang tải danh sách khóa AI...</div>
+                </div>
+                <div class="account-actions-box" style="display:flex; gap:8px; flex-wrap:wrap;">
+                  <button type="button" class="btn-action-primary" id="btnOpenCreateAiKeyModal">➕ Tạo Khóa AI Mới</button>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
 
         <!-- ════════ TAB 6: SETTINGS ════════ -->
         <div class="view-pane" id="view-settings">
-          <div class="studio-card" style="max-width: 680px; margin: 0 auto;">
+          <div style="max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px;">
+            <div style="margin-bottom: 4px;">
+              <h3 class="pane-title" style="font-size: 18px; margin-bottom: 4px;">Cấu Hình Ứng Dụng (Settings)</h3>
+              <span class="pane-sub" style="font-size: 12.5px;">Tùy chỉnh đường dẫn CapCut Desktop, thư mục xuất video và ngôn ngữ giao diện</span>
+            </div>
+
+            <div class="studio-card" style="width: 100%;">
             <div class="card-head">
               <span class="card-icon">⚙️</span>
               <span class="card-title">Cấu Hình Ứng Dụng</span>
@@ -632,15 +1013,36 @@ Quy tắc:
               <!-- Auto Update Check (GAP-05) -->
               <div style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 16px;">
                 <h4 style="font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 10px;">🔄 Cập Nhật Phiên Bản Ứng Dụng</h4>
-                <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
                   <div>
                     <span style="font-size:12.5px; color:#e2e8f0;">Phiên bản hiện tại: <strong id="txtAppCurrentVersion">v2.0.0</strong></span>
                     <div style="font-size:11.5px; color:#94a3b8; margin-top:2px;" id="txtUpdateStatus">Đang sử dụng phiên bản ổn định mới nhất.</div>
                   </div>
-                  <button type="button" class="btn-subtle" id="btnCheckUpdate">🔄 Kiểm Tra Cập Nhật</button>
+                  <div style="display:flex; gap:8px; align-items:center;">
+                    <button type="button" class="btn-subtle" id="btnCheckUpdate">🔄 Kiểm Tra Cập Nhật</button>
+                  </div>
+                </div>
+
+                <!-- Update Progress Bar (Hidden by default) -->
+                <div id="boxUpdateProgress" style="display:none; margin-top:12px; background: rgba(15, 23, 42, 0.6); padding:10px 14px; border-radius:8px; border:1px solid var(--border-color);">
+                  <div style="display:flex; justify-content:space-between; font-size:11.5px; color:#cbd5e1; margin-bottom:6px;">
+                    <span id="txtUpdateProgressState">Đang tải bản cập nhật...</span>
+                    <span id="txtUpdateSpeed">0% — 0 KB/s</span>
+                  </div>
+                  <div style="width:100%; height:8px; background:#1e293b; border-radius:4px; overflow:hidden;">
+                    <div id="barUpdateProgress" style="width:0%; height:100%; background:linear-gradient(90deg, #38bdf8, #6366f1); transition: width 0.2s ease;"></div>
+                  </div>
+                </div>
+
+                <!-- Update Action Buttons (Hidden by default) -->
+                <div id="boxUpdateActions" style="display:none; margin-top:12px; display:none; gap:10px; align-items:center;">
+                  <button type="button" class="btn-primary" id="btnDownloadUpdate" style="display:none;">📥 Tải Bản Cập Nhật</button>
+                  <button type="button" class="btn-primary" id="btnInstallUpdate" style="display:none; background:linear-gradient(135deg, #10b981, #059669);">🚀 Khởi Động Lại &amp; Cập Nhật</button>
+                  <button type="button" class="btn-subtle" id="btnDismissUpdate">Để sau</button>
                 </div>
               </div>
             </div>
+          </div>
           </div>
         </div>
 
@@ -793,6 +1195,7 @@ Quy tắc:
         <div id="renderResultSuccessActions" style="display:flex;gap:8px;">
           <button type="button" class="btn-action-primary" id="btnOpenRenderedFile">🎬 Mở File MP4</button>
           <button type="button" class="btn-subtle" id="btnOpenRenderedFolder">📁 Mở Thư Mục</button>
+          <button type="button" class="btn-subtle" id="btnUploadRenderToCloud">☁️ Tải Lên Cloud</button>
         </div>
         <div id="renderResultErrorActions" style="display:none;gap:8px;">
           <button type="button" class="btn-action-primary" id="btnRetryRenderJobModal">🔄 Thử Lại</button>
@@ -810,47 +1213,648 @@ Quy tắc:
         <button type="button" class="btn-close-modal" id="btnCloseModalDeleteProject" title="Đóng (Esc)">✕</button>
       </div>
       <div class="modal-body">
-        <p style="font-size:13.5px;color:#e2e8f0;margin-bottom:12px;">Bạn có chắc chắn muốn xóa dự án <strong id="deleteProjectTargetName" style="color:#f87171;">--</strong> khỏi danh sách quản lý?</p>
+        <p style="font-size:13.5px;color:#e2e8f0;margin-bottom:12px;">Bạn có chắc chắn muốn xóa dự án <strong id="deleteProjectTargetName" style="color:#f87171;">--</strong>?</p>
         <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.18);border-radius:6px;padding:12px;margin-bottom:14px;">
-          <label class="checkbox-container" style="font-size:12.5px;color:#cbd5e1;cursor:pointer;">
-            <input type="checkbox" id="chkDeleteDraftFolder" checked />
-            <span class="checkmark"></span>
-            <span class="chk-label">Đồng thời xóa thư mục draft CapCut đã tạo trên ổ đĩa</span>
-          </label>
-          <div style="font-size:11px;color:#94a3b8;margin-top:6px;margin-left:24px;">
-            ⚠️ Lưu ý an toàn: Tệp video và âm thanh gốc của bạn sẽ <strong>KHÔNG</strong> bị ảnh hưởng.
+          <div style="font-size:13px;color:#e2e8f0;line-height:1.5;">
+            Chỉ xóa dự án CapCut đã tạo.<br/>
+            Ảnh, audio và script gốc sẽ <strong>không</strong> bị xóa.
           </div>
+          <input type="checkbox" id="chkDeleteDraftFolder" checked style="display:none;" />
         </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn-subtle" id="btnCancelDeleteProject">Hủy</button>
-        <button type="button" class="btn-action-primary" style="background:#ef4444;border-color:#dc2626;" id="btnConfirmDeleteProject">🗑️ Xác Nhận Xóa</button>
+        <button type="button" class="btn-action-primary" style="background:#ef4444;border-color:#dc2626;" id="btnConfirmDeleteProject">Xóa Dự Án</button>
       </div>
     </div>
   </div>
 
-  <!-- Modal 7: Đăng Nhập Tài Khoản Portal -->
+  <!-- Modal 7: Đăng Nhập Tài Khoản Web (Browser Quick Login PKCE) -->
   <div class="modal-backdrop" id="modalLogin" style="display:none">
-    <div class="modal-box">
+    <div class="modal-box" style="max-width: 480px;">
       <div class="modal-header">
-        <h3 class="modal-title">👤 Đăng Nhập Tài Khoản 2TOOLNE</h3>
+        <h3 class="modal-title">🌐 Đăng Nhập Tài Khoản 2TOOLNE</h3>
         <button type="button" class="btn-close-modal" id="btnCloseModalLogin" title="Đóng (Esc)">✕</button>
       </div>
       <div class="modal-body">
-        <p class="modal-desc">Đăng nhập bằng tài khoản đăng ký trên portal <strong>https://www.2tamne.site</strong> để đồng bộ bản quyền và ví token.</p>
-        <div class="input-field" style="margin-bottom:12px;">
-          <label for="inpLoginEmail">Email / Tên đăng nhập:</label>
-          <input type="text" id="inpLoginEmail" class="form-input" placeholder="user@example.com" />
+        <div id="quickLoginPrompt">
+          <p class="modal-desc" style="margin-bottom:16px; line-height:1.5;">
+            Đăng nhập an toàn qua trình duyệt web bằng tài khoản <strong>https://www.2tamne.site</strong> (hỗ trợ Google &amp; Email).
+            Ứng dụng Desktop kết nối trực tiếp qua chuẩn PKCE một lần, tuyệt đối an toàn.
+          </p>
+          <div style="display:flex; flex-direction:column; gap:10px; align-items:stretch;">
+            <button type="button" class="btn-action-primary" id="btnStartQuickLogin" style="padding:12px 18px; font-size:14px; font-weight:600; justify-content:center;">
+              🚀 Mở Trình Duyệt Để Đăng Nhập
+            </button>
+          </div>
+          
+          <div style="margin-top:16px; border-top: 1px solid var(--border-color); padding-top: 12px;">
+            <a href="#" id="toggleManualLogin" style="font-size:12px; color:var(--accent-primary,#38bdf8); text-decoration:none;">Hoặc đăng nhập trực tiếp bằng mật khẩu &rsaquo;</a>
+          </div>
+
+          <div id="manualLoginForm" style="display:none; margin-top:12px;">
+            <div class="input-field" style="margin-bottom:10px;">
+              <label for="inpLoginEmail">Email:</label>
+              <input type="text" id="inpLoginEmail" class="form-input" placeholder="user@example.com" />
+            </div>
+            <div class="input-field" style="margin-bottom:10px;">
+              <label for="inpLoginPassword">Mật khẩu:</label>
+              <input type="password" id="inpLoginPassword" class="form-input" placeholder="••••••••" />
+            </div>
+            <button type="button" class="btn-subtle" id="btnSubmitModalLogin" style="width:100%; justify-content:center;">Đăng Nhập Trực Tiếp</button>
+          </div>
         </div>
-        <div class="input-field">
-          <label for="inpLoginPassword">Mật khẩu:</label>
-          <input type="password" id="inpLoginPassword" class="form-input" placeholder="••••••••" />
+
+        <div id="quickLoginWaiting" style="display:none; text-align:center; padding:20px 10px;">
+          <div class="spinner" style="width:36px; height:36px; border-width:3px; margin: 0 auto 16px auto;"></div>
+          <h4 style="font-size:14px; font-weight:600; color:#f8fafc; margin-bottom:8px;">Đang chờ xác thực từ trình duyệt web...</h4>
+          <p style="font-size:12px; color:#94a3b8; line-height:1.4; margin-bottom:16px;">
+            Vui lòng hoàn tất đăng nhập trên tab trình duyệt vừa mở. Ứng dụng sẽ tự động đồng bộ tài khoản ngay khi bạn xác nhận.
+          </p>
+          <button type="button" class="btn-subtle" id="btnCancelQuickLoginAction">Hủy Bỏ</button>
         </div>
-        <div class="modal-error-msg" id="loginModalError" style="display:none"></div>
+
+        <div class="modal-error-msg" id="loginModalError" style="display:none; margin-top:12px;"></div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn-subtle" id="btnCancelModalLogin">Hủy</button>
-        <button type="button" class="btn-action-primary" id="btnSubmitModalLogin">Đăng Nhập</button>
+        <button type="button" class="btn-subtle" id="btnCancelModalLogin">Đóng</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 8: Tạo Thư Mục Mới Cloud -->
+  <div class="modal-backdrop" id="modalCloudNewFolder" style="display:none">
+    <div class="modal-box modal-box-sm">
+      <div class="modal-header">
+        <h3 class="modal-title">📁 Tạo Thư Mục Mới</h3>
+        <button type="button" class="btn-close-modal" id="btnCloseModalCloudNewFolder" title="Đóng (Esc)">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">Nhập tên thư mục mới trong thư mục hiện tại:</p>
+        <div class="input-field">
+          <label for="inpCloudNewFolderName">Tên Thư Mục:</label>
+          <input type="text" id="inpCloudNewFolderName" class="form-input" placeholder="Ví dụ: Anh_Tu_Lieu_2026" />
+        </div>
+        <div class="modal-error-msg" id="cloudNewFolderError" style="display:none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-subtle" id="btnCancelModalCloudNewFolder">Hủy</button>
+        <button type="button" class="btn-action-primary" id="btnSubmitModalCloudNewFolder">Tạo Thư Mục</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 9: Đổi Tên Tệp / Thư Mục Cloud -->
+  <div class="modal-backdrop" id="modalCloudRename" style="display:none">
+    <div class="modal-box modal-box-sm">
+      <div class="modal-header">
+        <h3 class="modal-title">✏️ Đổi Tên</h3>
+        <button type="button" class="btn-close-modal" id="btnCloseModalCloudRename" title="Đóng (Esc)">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">Nhập tên mới:</p>
+        <div class="input-field">
+          <label for="inpCloudRenameName">Tên Mới:</label>
+          <input type="text" id="inpCloudRenameName" class="form-input" placeholder="Tên mới..." />
+        </div>
+        <div class="modal-error-msg" id="cloudRenameError" style="display:none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-subtle" id="btnCancelModalCloudRename">Hủy</button>
+        <button type="button" class="btn-action-primary" id="btnSubmitModalCloudRename">Lưu Tên Mới</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 10: Di Chuyển Tệp / Thư Mục Cloud -->
+  <div class="modal-backdrop" id="modalCloudMove" style="display:none">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">📦 Di Chuyển Đến Thư Mục Khác</h3>
+        <button type="button" class="btn-close-modal" id="btnCloseModalCloudMove" title="Đóng (Esc)">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">Chọn thư mục đích để di chuyển <strong id="cloudMoveItemTitle">--</strong>:</p>
+        <div class="input-field">
+          <label for="selCloudMoveDestination">Thư Mục Đích:</label>
+          <select id="selCloudMoveDestination" class="form-select">
+            <option value="">☁️ Thư mục gốc (Gốc không gian)</option>
+          </select>
+        </div>
+        <div class="modal-error-msg" id="cloudMoveError" style="display:none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-subtle" id="btnCancelModalCloudMove">Hủy</button>
+        <button type="button" class="btn-action-primary" id="btnSubmitModalCloudMove">Di Chuyển</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 11: Xác Nhận Xóa Tệp / Thư Mục Cloud -->
+  <div class="modal-backdrop" id="modalCloudConfirmDelete" style="display:none">
+    <div class="modal-box modal-box-sm">
+      <div class="modal-header">
+        <h3 class="modal-title" id="cloudDeleteModalTitle">🗑️ Xác Nhận Xóa</h3>
+        <button type="button" class="btn-close-modal" id="btnCloseModalCloudConfirmDelete" title="Đóng (Esc)">✕</button>
+      </div>
+      <div class="modal-body">
+        <p id="cloudDeleteModalMessage" style="font-size:13px; color:#e2e8f0; line-height:1.5;">
+          Bạn có chắc chắn muốn chuyển mục này vào thùng rác?
+        </p>
+        <div class="modal-error-msg" id="cloudDeleteError" style="display:none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-subtle" id="btnCancelModalCloudConfirmDelete">Hủy</button>
+        <button type="button" class="btn-action-primary" id="btnSubmitModalCloudConfirmDelete" style="background:#ef4444;border-color:#dc2626;">Xác Nhận Xóa</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 12: Chọn Tệp Từ Cloud Cho Studio (Cloud Asset Picker) -->
+  <div class="modal-backdrop" id="modalCloudPicker" style="display:none">
+    <div class="modal-box" style="max-width: 840px; width: 92%; height: 80vh; display: flex; flex-direction: column;">
+      <div class="modal-header">
+        <h3 class="modal-title" id="cloudPickerTitle">☁️ Chọn Tệp Từ 2TOOLNE Cloud</h3>
+        <button type="button" class="btn-close-modal" id="btnCloseModalCloudPicker" title="Đóng (Esc)">✕</button>
+      </div>
+      <div class="modal-body" style="flex: 1; overflow: hidden; display: flex; flex-direction: column; gap: 10px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+          <div class="cloud-breadcrumbs-wrap" id="cloudPickerBreadcrumbs" style="flex:1;">
+            <button type="button" class="crumb-btn active" data-folder-id="">☁️ Cloud Cá Nhân</button>
+          </div>
+          <input type="text" id="inpCloudPickerSearch" class="form-input" placeholder="🔍 Tìm kiếm..." style="max-width:220px;" />
+        </div>
+        <div class="cloud-picker-meta-bar" style="display:flex; justify-content:space-between; font-size:12px; color:var(--text-muted);">
+          <span id="cloudPickerTypeHint">Hỗ trợ: Hình ảnh (PNG, JPG, WEBP, BMP)</span>
+          <span>Đã chọn: <strong id="cloudPickerSelectedCount" style="color:var(--accent-cyan);">0</strong> mục</span>
+        </div>
+        <!-- Table of picker items -->
+        <div class="cloud-table-container" style="flex: 1; overflow-y: auto;">
+          <table class="cloud-table">
+            <thead>
+              <tr>
+                <th style="width: 45px;"><input type="checkbox" id="chkCloudPickerSelectAll" /></th>
+                <th style="width: 48%;">Tên Tệp</th>
+                <th style="width: 22%;">Kích Thước</th>
+                <th style="width: 25%;">Cập Nhật</th>
+              </tr>
+            </thead>
+            <tbody id="cloudPickerTableBody">
+              <!-- Dynamic picker items -->
+            </tbody>
+          </table>
+          <div id="cloudPickerEmptyHint" class="cloud-empty-hint" style="display:none;">
+            <div class="cloud-empty-icon">📂</div>
+            <div class="cloud-empty-title">Không tìm thấy tệp phù hợp</div>
+          </div>
+          <div id="cloudPickerLoading" class="cloud-loading-overlay" style="display:none;">
+            <div class="spinner"></div>
+            <span>Đang tải danh sách...</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center;">
+        <div style="font-size:12px; color:var(--text-dim);" id="cloudPickerStatusText">
+          Tệp chọn sẽ được tải và lưu tạm an toàn để nạp vào Studio.
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="btn-subtle" id="btnCancelModalCloudPicker">Hủy</button>
+          <button type="button" class="btn-action-primary" id="btnSubmitModalCloudPicker" disabled>
+            Nạp Vào Studio (<span id="cloudPickerConfirmCount">0</span>)
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 13: Chia Sẻ Liên Kết Cloud (Public Share Link) -->
+  <div class="modal-backdrop" id="modalCloudShare" style="display:none">
+    <div class="modal-box modal-box-md" style="max-width: 520px;">
+      <div class="modal-header">
+        <h3 class="modal-title" id="cloudShareModalTitle">🔗 Chia Sẻ Liên Kết Công Khai</h3>
+        <button type="button" class="btn-close-modal" id="btnCloseModalCloudShare" title="Đóng (Esc)">✕</button>
+      </div>
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:16px;">
+        <!-- Target item info -->
+        <div style="display:flex; align-items:center; gap:10px; background:rgba(15,23,42,0.6); padding:10px 14px; border-radius:8px; border:1px solid var(--border);">
+          <span id="cloudShareItemIcon" style="font-size:22px;">📄</span>
+          <div style="overflow:hidden;">
+            <div id="cloudShareItemName" style="font-size:13.5px; font-weight:600; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">Tên tệp tin</div>
+            <div id="cloudShareItemMeta" style="font-size:11.5px; color:var(--text-muted);">Kích thước: --</div>
+          </div>
+        </div>
+
+        <!-- Section: Active Share Found -->
+        <div id="cloudShareActiveWrap" style="display:none; flex-direction:column; gap:12px; background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.25); border-radius:10px; padding:14px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span class="badge" style="background:#064e3b; color:#34d399; font-size:11px; padding:3px 8px; border-radius:4px; font-weight:600;">● Đang hoạt động</span>
+            <span id="cloudShareActiveExpires" style="font-size:11.5px; color:var(--text-muted);">Hết hạn: --</span>
+          </div>
+          <div style="font-size:12px; color:#e2e8f0;">
+            Quyền truy cập: <strong id="cloudShareActiveAccess" style="color:var(--accent-cyan);">Cho phép tải xuống</strong>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="inpCloudActiveShareUrl" class="form-input" readonly style="flex:1; font-family:monospace; font-size:12px; background:#0b1120; border-color:#334155; color:#38bdf8;" />
+            <button type="button" class="btn-action-primary" id="btnCopyActiveShareLink" style="padding:0 14px; white-space:nowrap;">Sao chép</button>
+          </div>
+          <div style="display:flex; justify-content:flex-end; margin-top:4px;">
+            <button type="button" class="btn-subtle" id="btnRevokeActiveShareLink" style="color:#f87171; font-size:12px; padding:4px 8px;">
+              🗑️ Thu hồi liên kết
+            </button>
+          </div>
+        </div>
+
+        <!-- Section: Create New Share Form -->
+        <div id="cloudShareCreateWrap" style="display:flex; flex-direction:column; gap:14px;">
+          <div>
+            <label style="display:block; font-size:12px; font-weight:600; color:var(--text-muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;">
+              Quyền truy cập
+            </label>
+            <div style="display:flex; gap:16px;">
+              <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer;">
+                <input type="radio" name="cloudShareAccessLevel" value="VIEW_ONLY" />
+                <span>👁️ Chỉ xem (Không tải)</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer;">
+                <input type="radio" name="cloudShareAccessLevel" value="ALLOW_DOWNLOAD" checked />
+                <span>⬇️ Cho phép tải xuống</span>
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <label style="display:block; font-size:12px; font-weight:600; color:var(--text-muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;">
+              Thời hạn hiệu lực
+            </label>
+            <select id="selCloudShareExpires" class="form-input" style="width:100%;">
+              <option value="7d" selected>7 ngày</option>
+              <option value="30d">30 ngày</option>
+              <option value="never">Không hết hạn (Vô thời hạn)</option>
+            </select>
+          </div>
+
+          <div class="modal-error-msg" id="cloudShareError" style="display:none;"></div>
+        </div>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:8px;">
+        <button type="button" class="btn-subtle" id="btnCancelModalCloudShare">Đóng</button>
+        <button type="button" class="btn-action-primary" id="btnSubmitModalCloudShare">Tạo Liên Kết</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 14: Quản Lý Thành Viên Nhóm (Team Workspace Management) -->
+  <div class="modal-backdrop" id="modalTeamMembers" style="display:none">
+    <div class="modal-box modal-box-lg" style="max-width: 680px;">
+      <div class="modal-header">
+        <h3 class="modal-title" id="teamModalTitle">👥 Quản Lý Thành Viên Nhóm</h3>
+        <button type="button" class="btn-close-modal" id="btnCloseModalTeamMembers" title="Đóng (Esc)">✕</button>
+      </div>
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:16px;">
+        <!-- Team summary strip -->
+        <div class="team-stats-strip">
+          <div class="team-stat-box">
+            <div class="team-stat-label">Số thành viên</div>
+            <div class="team-stat-val"><span id="teamMemberCount">0</span> / <span id="teamMemberSlots">2</span></div>
+          </div>
+          <div class="team-stat-box">
+            <div class="team-stat-label">Ghế App Desktop</div>
+            <div class="team-stat-val"><span id="teamSeatCount">0</span> / <span id="teamAppKeyCount">2</span></div>
+          </div>
+          <div class="team-stat-box">
+            <div class="team-stat-label">Vai trò của bạn</div>
+            <div class="team-stat-val"><span id="teamUserRoleBadge" class="ws-badge-role ws-role-owner">OWNER</span></div>
+          </div>
+        </div>
+
+        <!-- Section Tabs: Thành viên / Ghế Desktop / Mời thành viên -->
+        <div class="team-section-tabs">
+          <button type="button" class="team-tab-btn active" data-team-tab="members" id="tabBtnTeamMembers">Thành Viên</button>
+          <button type="button" class="team-tab-btn" data-team-tab="seats" id="tabBtnTeamSeats">Ghế Desktop</button>
+          <button type="button" class="team-tab-btn" data-team-tab="invite" id="tabBtnTeamInvite">+ Mời Thành Viên</button>
+        </div>
+
+        <!-- Tab Pane 1: Members Table -->
+        <div id="teamPaneMembers" class="team-pane">
+          <table class="team-members-table">
+            <thead>
+              <tr>
+                <th>Thành viên</th>
+                <th>Vai trò</th>
+                <th>Ngày tham gia</th>
+                <th style="text-align:right;">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody id="teamMembersTableBody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Tab Pane 2: Desktop Seats -->
+        <div id="teamPaneSeats" class="team-pane" style="display:none;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <span style="font-size:12px; color:var(--text-muted);">Danh sách thiết bị máy tính đang kích hoạt ghế bản quyền Team</span>
+            <button type="button" class="btn-subtle" id="btnActivateCurrentDeviceSeat" style="font-size:11.5px; padding:4px 8px;">
+              💻 Kích hoạt máy này
+            </button>
+          </div>
+          <table class="team-members-table">
+            <thead>
+              <tr>
+                <th>Thành viên</th>
+                <th>Thiết bị / HWID</th>
+                <th>Trạng thái</th>
+                <th style="text-align:right;">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody id="teamSeatsTableBody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Tab Pane 3: Invite Member Form -->
+        <div id="teamPaneInvite" class="team-pane" style="display:none; flex-direction:column; gap:12px;">
+          <div>
+            <label style="display:block; font-size:12px; font-weight:600; color:var(--text-muted); margin-bottom:4px;">
+              Vai trò đề xuất
+            </label>
+            <select id="selTeamInviteRole" class="form-input" style="width:100%;">
+              <option value="EDITOR" selected>Editor (Tải lên, biên tập, tạo share link, dùng token)</option>
+              <option value="VIEWER">Viewer (Chỉ xem và tải xuống, không dùng token)</option>
+              <option value="ADMIN">Admin (Quản trị tệp, mời thành viên, quản lý ghế)</option>
+            </select>
+          </div>
+          <div>
+            <label style="display:block; font-size:12px; font-weight:600; color:var(--text-muted); margin-bottom:4px;">
+              Email người nhận (Tùy chọn)
+            </label>
+            <input type="email" id="inpTeamInviteEmail" class="form-input" placeholder="dongnghiep@congty.com" style="width:100%;" />
+          </div>
+          <button type="button" class="btn-action-primary" id="btnGenerateTeamInvite">Tạo Mã Lời Mời</button>
+          <div id="teamInviteResultWrap" style="display:none; flex-direction:column; gap:8px; margin-top:8px; background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.25); border-radius:8px; padding:12px;">
+            <span style="font-size:12px; color:#34d399; font-weight:600;">Liên kết mời tham gia (Hết hạn sau 7 ngày, dùng 1 lần):</span>
+            <div style="display:flex; gap:8px;">
+              <input type="text" id="inpTeamInviteUrl" class="form-input" readonly style="flex:1; font-family:monospace; font-size:11px; background:#0b1120;" />
+              <button type="button" class="btn-action-primary" id="btnCopyTeamInviteUrl">Sao chép</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-error-msg" id="teamModalError" style="display:none;"></div>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center;">
+        <button type="button" class="btn-subtle" id="btnDangerDeleteTeam" style="color:#f87171; display:none;">
+          🗑️ Giải tán Team
+        </button>
+        <button type="button" class="btn-subtle" id="btnCloseModalTeam">Đóng</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 15: Tạo Nhóm Mới (Create Team Workspace) -->
+  <div class="modal-backdrop" id="modalCreateTeam" style="display:none">
+    <div class="modal-box modal-box-md" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3 class="modal-title">➕ Tạo Không Gian Làm Việc Đội Nhóm</h3>
+        <button type="button" class="btn-close-modal" id="btnCloseModalCreateTeam" title="Đóng (Esc)">✕</button>
+      </div>
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:14px;">
+        <div style="font-size:13px; color:var(--text-muted);">
+          Tạo Không Gian Làm Việc chung cho đội nhóm của bạn. Cho phép chia sẻ dung lượng Cloud, dùng chung Ví Token và cấp bản quyền Desktop cho các máy trạm.
+        </div>
+        <div>
+          <label style="display:block; font-size:12px; font-weight:600; color:var(--text-muted); margin-bottom:6px;">
+            Tên Đội Nhóm (Team Name) *
+          </label>
+          <input type="text" id="inpCreateTeamName" class="form-input" placeholder="Ví dụ: Media Team Sài Gòn" style="width:100%;" />
+        </div>
+        <div style="background:rgba(15,23,42,0.6); padding:10px 14px; border-radius:8px; border:1px solid var(--border); font-size:12px; color:var(--text-dim);">
+          <div>✨ <strong>Gói Khởi Điểm: Team Starter</strong></div>
+          <div style="margin-top:4px;">• 2 chỗ thành viên (Member Slots)</div>
+          <div>• 2 ghế bản quyền ứng dụng Desktop (App Key Count)</div>
+          <div>• Hồ lưu trữ đám mây &amp; Ví Token dùng chung độc lập</div>
+        </div>
+        <div class="modal-error-msg" id="createTeamError" style="display:none;"></div>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:8px;">
+        <button type="button" class="btn-subtle" id="btnCancelModalCreateTeam">Hủy</button>
+        <button type="button" class="btn-action-primary" id="btnSubmitCreateTeam">Tạo Không Gian Team</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 16: Tạo Khóa AI / AI Access Key (Phase 1) -->
+  <div class="modal-backdrop" id="modalCreateAiKey" style="display:none">
+    <div class="modal-box modal-box-md" style="max-width: 500px;">
+      <div class="modal-header">
+        <h3 class="modal-title">🤖 Tạo Khóa AI Access Key Mới</h3>
+        <button type="button" class="btn-close-modal" id="btnCloseModalCreateAiKey" title="Đóng (Esc)">✕</button>
+      </div>
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:14px;">
+        <div id="aiKeyFormSection">
+          <div style="font-size:12.5px; color:var(--text-muted); margin-bottom:10px;">
+            Khóa này sẽ liên kết với không gian làm việc hiện tại và bị giam nghiêm ngặt (jailed) trong thư mục <strong>AI Inputs/</strong>.
+          </div>
+          <div style="margin-bottom:12px;">
+            <label style="display:block; font-size:12px; font-weight:600; color:var(--text-muted); margin-bottom:6px;">
+              Tên gợi nhớ (Display Name) *
+            </label>
+            <input type="text" id="inpAiKeyName" class="form-input" placeholder="Ví dụ: Cursor Agent, Codex Local" style="width:100%; box-sizing:border-box;" />
+          </div>
+          <div style="margin-bottom:12px;">
+            <label style="display:block; font-size:12px; font-weight:600; color:var(--text-muted); margin-bottom:6px;">
+              Không Gian Làm Việc (Workspace) *
+            </label>
+            <select id="selAiKeyWorkspace" class="form-input" style="width:100%; box-sizing:border-box;">
+              <option value="">Đang tải không gian làm việc...</option>
+            </select>
+          </div>
+          <div style="margin-bottom:12px;">
+            <label style="display:block; font-size:12px; font-weight:600; color:var(--text-muted); margin-bottom:6px;">
+              Thời Hạn Hiệu Lực
+            </label>
+            <select id="inpAiKeyExpiry" class="form-input" style="width:100%; box-sizing:border-box;">
+              <option value="30">30 ngày</option>
+              <option value="90">90 ngày</option>
+              <option value="365" selected>1 năm (365 ngày)</option>
+              <option value="0">Vô thời hạn</option>
+            </select>
+          </div>
+          <div style="margin-bottom:12px;">
+            <label style="display:block; font-size:12px; font-weight:600; color:var(--text-muted); margin-bottom:6px;">
+              Quyền Hạn An Toàn (Safe Scopes)
+            </label>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; background:rgba(255,255,255,0.03); padding:8px 12px; border-radius:6px; border:1px solid var(--border);">
+              <label style="font-size:11.5px; display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" class="chk-ai-scope" value="CREATE_FOLDER" checked /> CREATE_FOLDER</label>
+              <label style="font-size:11.5px; display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" class="chk-ai-scope" value="CREATE_SUBFOLDER" checked /> CREATE_SUBFOLDER</label>
+              <label style="font-size:11.5px; display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" class="chk-ai-scope" value="UPLOAD" checked /> UPLOAD</label>
+              <label style="font-size:11.5px; display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" class="chk-ai-scope" value="LIST" checked /> LIST</label>
+              <label style="font-size:11.5px; display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" class="chk-ai-scope" value="READ" checked /> READ</label>
+            </div>
+            <div style="font-size:11px; color:var(--text-dim); margin-top:4px;">Mặc định an toàn: Không cấp quyền DELETE hay quyền quản trị.</div>
+          </div>
+          <div class="modal-error-msg" id="aiKeyModalError" style="display:none; color:var(--danger,#ef4444); font-size:12px;"></div>
+        </div>
+        <div id="aiKeyResultSection" style="display:none; flex-direction:column; gap:10px;">
+          <div style="background:rgba(34, 197, 94, 0.1); border:1px solid rgba(34, 197, 94, 0.3); border-radius:6px; padding:12px;">
+            <div style="color:var(--success,#22c55e); font-weight:600; margin-bottom:4px;">✓ Tạo khóa thành công!</div>
+            <div style="font-size:11.5px; color:var(--text-dim);">Hãy sao chép ngay bây giờ. Vì lý do bảo mật, khóa bí mật này sẽ không hiển thị lại lần thứ hai.</div>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input type="password" id="inpAiKeySecretResult" readonly class="form-input font-mono" style="flex:1; font-size:12px; background:var(--bg-card,#0b1120); color:var(--accent-primary,#38bdf8);" />
+            <button type="button" class="btn-subtle" id="btnToggleAiKeyVisibility" title="Hiện/Ẩn khóa bí mật" style="padding:6px 10px; font-size:13px; border:1px solid var(--border);">👁️</button>
+            <button type="button" class="btn-action-primary" id="btnCopyAiKeySecret" style="padding:6px 14px;">Sao Chép</button>
+          </div>
+          <div style="font-size:11.5px; color:var(--text-dim); background:var(--bg-card,#0b1120); padding:8px 12px; border-radius:4px; font-family:monospace;">
+            2toolne auth add (dán khóa bảo mật khi được nhắc)
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:8px;">
+        <button type="button" class="btn-subtle" id="btnCancelModalCreateAiKey">Đóng</button>
+        <button type="button" class="btn-action-primary" id="btnSubmitModalCreateAiKey">Tạo Khóa</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 17: Chi Tiết Kịch Bản Cảnh / Bundle Scene Plan (Phase 2) -->
+  <div class="modal-backdrop" id="modalBundlePlan" style="display:none">
+    <div class="modal-box modal-box-lg" style="max-width: 820px; max-height: 85vh; display:flex; flex-direction:column;">
+      <div class="modal-header">
+        <h3 class="modal-title">📋 Kịch Bản Phân Cảnh (Scene Plan) — <span id="modalBundlePlanTitle">Bundle</span></h3>
+        <button type="button" class="btn-close-modal" id="btnCloseModalBundlePlan" title="Đóng (Esc)">✕</button>
+      </div>
+      <div class="modal-body" style="overflow-y:auto; flex:1; padding:16px;">
+        <div id="bundlePlanScenesList" style="display:flex; flex-direction:column; gap:10px;">
+          <!-- Dynamically populated scene cards -->
+        </div>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center;">
+        <span id="modalBundleSummaryBadge" style="font-size:12px; color:var(--text-dim);">0 cảnh</span>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="btn-subtle" id="btnDismissModalBundlePlan">Đóng</button>
+          <button type="button" class="btn-action-primary" id="btnModalRunPipeline">🚀 Chạy Toàn Bộ (Run All)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Xem Trước & Import Input Bundle vào Hàng Đợi (Section 6 & 7) -->
+  <div class="modal-backdrop" id="modalBundleImportPreview" style="display:none">
+    <div class="modal-box modal-box-lg" style="max-width: 860px; max-height: 85vh; display:flex; flex-direction:column;">
+      <div class="modal-header">
+        <h3 class="modal-title">📦 Xem Trước & Nhập Input Bundle Vào Hàng Đợi</h3>
+        <button type="button" class="btn-close-modal" id="btnCloseModalBundleImport" title="Đóng (Esc)">✕</button>
+      </div>
+      <div class="modal-body" style="overflow-y:auto; flex:1; padding:16px;">
+        <p style="font-size:12.5px; color:var(--text-muted); margin-bottom:12px;">
+          Kiểm tra cấu trúc và tính sẵn sàng của các thư mục Input Bundle đã chọn trước khi đưa vào hàng đợi xử lý.
+        </p>
+        <div id="bundleImportPreviewList" style="display:flex; flex-direction:column; gap:12px;">
+          <!-- Dynamically populated bundle cards -->
+        </div>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center;">
+        <span id="bundleImportSummaryText" style="font-size:12.5px; color:var(--text-dim);">Đã chọn 0 bundle</span>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="btn-subtle" id="btnCancelBundleImport">Hủy</button>
+          <button type="button" class="btn-action-primary" id="btnConfirmEnqueueBundles" style="background:#10b981; color:#fff; font-weight:700;">➕ Thêm vào Hàng Đợi</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Chọn Input Bundle từ 2TOOLNE Cloud / AI Inputs (Section 14 & 15) -->
+  <div class="modal-backdrop" id="modalCloudBundlePicker" style="display:none">
+    <div class="modal-box modal-box-md" style="max-width: 680px; max-height: 80vh; display:flex; flex-direction:column;">
+      <div class="modal-header">
+        <h3 class="modal-title">☁️ Chọn Input Bundle từ Cloud (AI Inputs)</h3>
+        <button type="button" class="btn-close-modal" id="btnCloseModalCloudBundlePicker" title="Đóng (Esc)">✕</button>
+      </div>
+      <div class="modal-body" style="overflow-y:auto; flex:1; padding:16px; display:flex; flex-direction:column; gap:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.25); padding:8px 12px; border-radius:6px; font-size:12px;">
+          <span style="color:var(--text-muted);">Thư mục Cloud: <strong style="color:var(--text-main);" id="txtCloudPickerCurrentFolder">AI Inputs/</strong></span>
+          <button type="button" class="btn-subtle" id="btnRefreshCloudBundlePicker" style="font-size:11px; padding:2px 8px;">🔄 Làm mới</button>
+        </div>
+        <div id="cloudBundleFoldersList" style="display:flex; flex-direction:column; gap:8px; max-height:380px; overflow-y:auto;">
+          <!-- Folder checkboxes -->
+        </div>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center;">
+        <span id="txtCloudSelectedCount" style="font-size:12px; color:var(--text-dim);">Đã chọn 0 thư mục</span>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="btn-subtle" id="btnCancelCloudBundlePicker">Hủy</button>
+          <button type="button" class="btn-action-primary" id="btnConfirmSelectCloudBundles">Kiểm Tra Bundle</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Chi Tiết Tác Vụ Queue Job (Section 17) -->
+  <div class="modal-backdrop" id="modalQueueJobDetails" style="display:none">
+    <div class="modal-box modal-box-md" style="max-width: 640px; max-height: 85vh; display:flex; flex-direction:column;">
+      <div class="modal-header">
+        <h3 class="modal-title">📋 Chi Tiết Tác Vụ: <span id="queueJobDetailsTitle">...</span></h3>
+        <button type="button" class="btn-close-modal" id="btnCloseModalQueueJobDetails" title="Đóng (Esc)">✕</button>
+      </div>
+      <div class="modal-body" id="queueJobDetailsContent" style="overflow-y:auto; flex:1; padding:16px; font-size:12.5px;">
+        <!-- Details populated dynamically -->
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center;">
+        <button type="button" class="btn-subtle" id="btnOpenJobBundleFolder">📂 Mở Thư Mục Nguồn</button>
+        <button type="button" class="btn-action-primary" id="btnDismissQueueJobDetails">Đóng</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Thêm Hồ Sơ Google Flow (Bug 4 Fix) -->
+  <div class="modal-backdrop" id="modalAddFlowProfile" style="display:none">
+    <div class="modal-box modal-box-sm" style="max-width:440px;">
+      <div class="modal-header">
+        <h3 class="modal-title">➕ Thêm Hồ Sơ Google Flow</h3>
+        <button type="button" class="btn-close-modal" id="btnCloseModalAddFlowProfile" title="Đóng (Esc)">✕</button>
+      </div>
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:12px; padding:16px;">
+        <p class="modal-desc" style="font-size:12.5px; color:var(--text-muted); line-height:1.5; margin:0;">
+          Mỗi hồ sơ tương ứng một phân vùng trình duyệt biệt lập (isolated session partition). Bạn có thể đăng nhập tài khoản Google Flow thứ 2 độc lập hoàn toàn mà không bị ghi đè phiên làm việc.
+        </p>
+        <div class="form-group" style="display:flex; flex-direction:column; gap:6px;">
+          <label for="inpFlowProfileName" style="font-size:12px; color:var(--text-main); font-weight:600;">Tên Hồ Sơ:</label>
+          <input type="text" id="inpFlowProfileName" class="form-input" placeholder="Ví dụ: Flow Công Việc, Flow Cá Nhân..." style="width:100%; font-size:13px; padding:8px 12px; box-sizing:border-box;" />
+        </div>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:8px; padding:12px 16px;">
+        <button type="button" class="btn-subtle" id="btnCancelModalAddFlowProfile">Hủy</button>
+        <button type="button" class="btn-hero-primary" id="btnConfirmAddFlowProfile">Tạo Hồ Sơ Mới</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Mini-Activity Popup (Phase 3) -->
+  <div id="floatingPipelineActivity" style="display:none; position:fixed; bottom:20px; right:24px; z-index:9999; background:rgba(15,23,42,0.96); border:1px solid var(--accent-primary,#38bdf8); border-radius:10px; box-shadow:0 10px 25px rgba(0,0,0,0.6); backdrop-filter:blur(10px); width:330px; padding:12px; font-family:inherit;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+      <div style="display:flex; align-items:center; gap:6px;">
+        <span style="font-size:14px;">⚡</span>
+        <span style="font-size:11px; font-weight:700; color:var(--accent-primary,#38bdf8); text-transform:uppercase; letter-spacing:0.5px;">Google Flow • Pipeline V2</span>
+      </div>
+      <span id="floatingFlowAccountBadge" style="font-size:10px; background:rgba(56,189,248,0.15); color:var(--accent-primary,#38bdf8); padding:1px 6px; border-radius:4px; font-weight:600;">Flow #1</span>
+    </div>
+    <div style="font-size:12.5px; font-weight:600; color:var(--text-main,#f8fafc); margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" id="floatingProjectTitle">
+      Dự Án Đang Chạy
+    </div>
+    <div style="font-size:11px; color:var(--text-dim,#94a3b8); margin-bottom:6px;" id="floatingSceneActivity">
+      Cảnh 001/003 — Đang xử lý...
+    </div>
+    <div style="background:rgba(0,0,0,0.4); height:5px; border-radius:3px; overflow:hidden; margin-bottom:8px;">
+      <div id="floatingProgressBar" style="background:var(--accent-primary,#38bdf8); height:100%; width:0%; transition:width 0.3s ease;"></div>
+    </div>
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <span id="floatingProgressPercent" style="font-size:11px; color:var(--text-muted,#64748b); font-weight:600;">0%</span>
+      <div style="display:flex; gap:6px;">
+        <button type="button" class="btn-subtle" id="btnFloatingPauseResume" style="font-size:10.5px; padding:2px 7px;">⏸ Tạm dừng</button>
+        <button type="button" class="btn-action-primary" id="btnFloatingViewQueue" style="font-size:10.5px; padding:2px 8px;">Xem Chi Tiết</button>
       </div>
     </div>
   </div>

@@ -191,4 +191,191 @@ class AuthController {
             'status' => $row['status'], // PENDING or REJECTED
         ]);
     }
+
+    public static function ensureSchema(): void {
+        static $done = false;
+        if ($done) return;
+        $done = true;
+        try {
+            $db = Database::getConnection();
+            $db->exec('
+                CREATE TABLE IF NOT EXISTS `app_auth_sessions` (
+                    `id` VARCHAR(64) NOT NULL,
+                    `challenge` VARCHAR(128) NULL,
+                    `code` VARCHAR(64) NULL,
+                    `code_challenge` VARCHAR(128) NULL,
+                    `code_challenge_method` VARCHAR(16) NOT NULL DEFAULT "S256",
+                    `port` INT NOT NULL DEFAULT 0,
+                    `status` VARCHAR(32) NOT NULL DEFAULT "PENDING",
+                    `user_id` VARCHAR(64) NULL,
+                    `token` TEXT NULL,
+                    `payload` TEXT NULL,
+                    `used_at` DATETIME NULL,
+                    `expires_at` DATETIME NOT NULL,
+                    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (`id`),
+                    KEY `idx_app_auth_code` (`code`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            ');
+
+            $cols = $db->query("DESCRIBE `app_auth_sessions`")->fetchAll(PDO::FETCH_COLUMN);
+            if (!in_array('code', $cols)) {
+                $db->exec("ALTER TABLE `app_auth_sessions` ADD COLUMN `code` VARCHAR(64) NULL AFTER `challenge`");
+            }
+            if (!in_array('code_challenge', $cols)) {
+                $db->exec("ALTER TABLE `app_auth_sessions` ADD COLUMN `code_challenge` VARCHAR(128) NULL AFTER `code`");
+            }
+            if (!in_array('code_challenge_method', $cols)) {
+                $db->exec("ALTER TABLE `app_auth_sessions` ADD COLUMN `code_challenge_method` VARCHAR(16) NOT NULL DEFAULT 'S256' AFTER `code_challenge`");
+            }
+            if (!in_array('refresh_token', $cols)) {
+                $db->exec("ALTER TABLE `app_auth_sessions` ADD COLUMN `refresh_token` VARCHAR(128) NULL AFTER `token`");
+            }
+            if (!in_array('used_at', $cols)) {
+                $db->exec("ALTER TABLE `app_auth_sessions` ADD COLUMN `used_at` DATETIME NULL AFTER `status`");
+            }
+        } catch (Throwable $e) {
+            // Non-blocking schema assurance
+        }
+    }
+
+    public static function tokenExchange(array $params, array $body): void {
+        self::ensureSchema();
+        $code = trim($body['code'] ?? '');
+        $verifier = trim($body['verifier'] ?? ($body['code_verifier'] ?? ''));
+
+        if (empty($code) || empty($verifier)) {
+            Router::error('code and verifier parameters are required', 400, 'INVALID_REQUEST');
+        }
+
+        $db = Database::getConnection();
+        $stmt = $db->prepare('SELECT * FROM app_auth_sessions WHERE code = ? LIMIT 1');
+        $stmt->execute([$code]);
+        $row = $stmt->fetch();
+
+        if (!$row) {
+            Router::error('Authorization code not found or invalid', 404, 'INVALID_CODE');
+        }
+
+        if (!empty($row['used_at'])) {
+            Router::error('Authorization code already used', 400, 'CODE_ALREADY_USED');
+        }
+
+        if (strtotime($row['expires_at']) < time()) {
+            Router::error('Authorization code expired', 400, 'CODE_EXPIRED');
+        }
+
+        if ($row['status'] !== 'APPROVED') {
+            Router::error('Authorization not approved', 403, 'CODE_NOT_APPROVED');
+        }
+
+        // PKCE S256 verification
+        $challenge = !empty($row['code_challenge']) ? $row['code_challenge'] : $row['challenge'];
+        $computedChallenge = rtrim(strtr(base64_encode(hash('sha256', $verifier, true)), '+/', '-_'), '=');
+
+        if ($challenge !== $computedChallenge && $challenge !== $verifier) {
+            Router::error('PKCE code_verifier verification failed', 401, 'INVALID_VERIFIER');
+        }
+
+        // Resolve user
+        $userId = $row['user_id'];
+        $stmt = $db->prepare('
+            SELECT u.*, l.plan, l.credit_mode, l.expires_at, w.balance as token_balance
+            FROM users u
+            LEFT JOIN license_entitlements l ON u.id = l.user_id
+            LEFT JOIN credit_wallets w ON u.id = w.user_id
+            WHERE u.id = ?
+        ');
+        $stmt->execute([$userId]);
+        $user = $stmt->fetch();
+
+        if (!$user) {
+            Router::error('User account not found', 404, 'USER_NOT_FOUND');
+        }
+
+        $token = !empty($row['token']) ? $row['token'] : ('2tl_at_' . bin2hex(random_bytes(24)));
+        $refreshToken = 'rft_' . bin2hex(random_bytes(24));
+        $now = date('Y-m-d H:i:s');
+
+        // Mark code as used and extend session to 30 days
+        $stmt = $db->prepare('
+            UPDATE app_auth_sessions 
+            SET used_at = ?, token = ?, refresh_token = ?, expires_at = DATE_ADD(NOW(), INTERVAL 30 DAY) 
+            WHERE id = ?
+        ');
+        $stmt->execute([$now, $token, $refreshToken, $row['id']]);
+
+        Router::json([
+            'success' => true,
+            'token' => $token,
+            'refresh_token' => $refreshToken,
+            'user' => [
+                'id' => (string)$user['id'],
+                'email' => $user['email'] ?: $user['username'],
+                'username' => $user['username'],
+                'full_name' => $user['fullname'] ?? '',
+                'role' => $user['role'] ?? 'user',
+                'plan' => $user['plan'] ?? 'PRO',
+                'credit_mode' => $user['credit_mode'] ?? 'METERED',
+                'token_balance' => (int)($user['token_balance'] ?? 0),
+                'expires_at' => $user['expires_at'],
+            ],
+        ]);
+    }
+
+    public static function refreshToken(array $params, array $body): void {
+        self::ensureSchema();
+        $token = trim($body['refresh_token'] ?? ($body['token'] ?? ''));
+        if (empty($token)) {
+            Router::error('Token or refresh_token required for refresh', 400);
+        }
+
+        // Return current active user if refresh_token or token matches active valid session
+        $db = Database::getConnection();
+        $stmt = $db->prepare('SELECT * FROM app_auth_sessions WHERE (refresh_token = ? OR token = ?) AND expires_at > NOW() LIMIT 1');
+        $stmt->execute([$token, $token]);
+        $row = $stmt->fetch();
+
+        if ($row && !empty($row['user_id'])) {
+            $stmtU = $db->prepare('
+                SELECT u.*, l.plan, l.credit_mode, l.expires_at, w.balance as token_balance
+                FROM users u
+                LEFT JOIN license_entitlements l ON u.id = l.user_id
+                LEFT JOIN credit_wallets w ON u.id = w.user_id
+                WHERE u.id = ?
+            ');
+            $stmtU->execute([$row['user_id']]);
+            $user = $stmtU->fetch();
+            if ($user) {
+                $newToken = '2tl_at_' . bin2hex(random_bytes(24));
+                $newRefreshToken = 'rft_' . bin2hex(random_bytes(24));
+
+                $updStmt = $db->prepare('
+                    UPDATE app_auth_sessions 
+                    SET token = ?, refresh_token = ?, expires_at = DATE_ADD(NOW(), INTERVAL 30 DAY) 
+                    WHERE id = ?
+                ');
+                $updStmt->execute([$newToken, $newRefreshToken, $row['id']]);
+
+                Router::json([
+                    'success' => true,
+                    'token' => $newToken,
+                    'refresh_token' => $newRefreshToken,
+                    'user' => [
+                        'id' => (string)$user['id'],
+                        'email' => $user['email'] ?: $user['username'],
+                        'username' => $user['username'],
+                        'full_name' => $user['fullname'] ?? '',
+                        'plan' => $user['plan'] ?? 'PRO',
+                        'credit_mode' => $user['credit_mode'] ?? 'METERED',
+                        'token_balance' => (int)($user['token_balance'] ?? 0),
+                        'expires_at' => $user['expires_at'],
+                    ],
+                ]);
+                return;
+            }
+        }
+
+        Router::error('Phiên đăng nhập đã hết hạn hoặc refresh token không hợp lệ.', 401, 'AUTH_REQUIRED');
+    }
 }

@@ -14,6 +14,7 @@ require_once __DIR__ . '/../Router.php';
 require_once __DIR__ . '/../storage/CloudAuthHelper.php';
 require_once __DIR__ . '/../storage/CryptoService.php';
 require_once __DIR__ . '/../storage/GoogleDriveStorageAdapter.php';
+require_once __DIR__ . '/../storage/CurlHelper.php';
 
 class CloudGoogleOAuthController {
 
@@ -137,6 +138,7 @@ class CloudGoogleOAuthController {
             CURLOPT_HTTPHEADER     => ['Content-Type: application/x-www-form-urlencoded'],
         ]);
 
+        CurlHelper::applySslOptions($ch);
         $tokenResponse = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curlErr = curl_error($ch);
@@ -166,6 +168,7 @@ class CloudGoogleOAuthController {
             CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $accessToken],
         ]);
 
+        CurlHelper::applySslOptions($chAbout);
         $aboutResponse = curl_exec($chAbout);
         $aboutCode = curl_getinfo($chAbout, CURLINFO_HTTP_CODE);
         curl_close($chAbout);

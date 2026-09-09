@@ -36,59 +36,17 @@ def build():
         print("PyInstaller not found in current environment. Installing PyInstaller...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller>=6.0"])
 
+    spec_file = os.path.join(SPEC_DIR, "autoedit-core.spec")
     cmd = [
         sys.executable,
         "-m",
         "PyInstaller",
         "--noconfirm",
         "--clean",
-        "--onedir",
-        "--name", "autoedit-core",
         "--distpath", DIST_DIR,
         "--workpath", BUILD_DIR,
-        "--specpath", SPEC_DIR,
-        "--paths", V2_ROOT,
-        "--hidden-import", "core",
-        "--hidden-import", "core.edit_plan",
-        "--hidden-import", "core.rule_engine",
-        "--hidden-import", "core.preset_manager",
-        "--hidden-import", "core.srt_timeline",
-        "--hidden-import", "core.timeline_builder",
-        "--hidden-import", "core.subtitles",
-        "--hidden-import", "core.subtitles.models",
-        "--hidden-import", "core.subtitles.script_normalizer",
-        "--hidden-import", "core.subtitles.speech_timestamp_provider",
-        "--hidden-import", "core.subtitles.script_aligner",
-        "--hidden-import", "core.subtitles.subtitle_segmenter",
-        "--hidden-import", "core.subtitles.srt_generator",
-        "--hidden-import", "core.subtitles.pipeline",
-        "--hidden-import", "adapters",
-        "--hidden-import", "adapters.capcut",
-        "--hidden-import", "adapters.capcut.detector",
-        "--hidden-import", "adapters.capcut.adapter",
-        "--hidden-import", "adapters.capcut.registry",
-        "--hidden-import", "adapters.capcut.version_9_3",
-        "--hidden-import", "adapters.capcut.validator",
-        "--hidden-import", "adapters.capcut.project_manager",
-        "--hidden-import", "adapters.capcut.launcher",
-        "--hidden-import", "desktop_bridge",
-        "--hidden-import", "desktop_bridge.protocol",
-        "--hidden-import", "desktop_bridge.bridge",
-        "--hidden-import", "desktop_bridge.sidecar_main",
-        "--hidden-import", "PIL",
-        "--hidden-import", "PIL.Image",
-        "--hidden-import", "PIL.ImageDraw",
-        "--hidden-import", "PIL.ImageFont",
-        "--collect-data", "faster_whisper",
+        spec_file,
     ]
-
-    if not sys.platform.startswith("win"):
-        cmd.extend(["--hidden-import", "fcntl", "--hidden-import", "plistlib"])
-    # Note on Windows: do NOT use --noconsole because it destroys sys.stdin/sys.stdout pipes
-    # in PyInstaller. Electron launches autoedit-core.exe with windowsHide: true (CREATE_NO_WINDOW),
-    # which ensures zero visible terminal while preserving full JSON-RPC stdin/stdout IPC.
-
-    cmd.append(ENTRY_POINT)
 
     print(f"Running command: {' '.join(cmd)}")
     subprocess.check_call(cmd)

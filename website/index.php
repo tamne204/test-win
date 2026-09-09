@@ -14,11 +14,13 @@ if (isset($_GET['app_auth'])) {
     $new_sess = trim($_GET['session'] ?? '');
     $new_chal = trim($_GET['challenge'] ?? '');
     $new_port = intval($_GET['port'] ?? 0);
+    $new_state = trim($_GET['state'] ?? '');
 
     $_SESSION['pending_app_auth'] = [
-        'session'   => (!empty($new_sess)) ? $new_sess : ($existing['session'] ?? ''),
+        'session'   => (!empty($new_sess)) ? $new_sess : ($existing['session'] ?? ('auth_' . bin2hex(random_bytes(16)))),
         'challenge' => (!empty($new_chal)) ? $new_chal : ($existing['challenge'] ?? ''),
         'port'      => ($new_port > 0) ? $new_port : ($existing['port'] ?? 0),
+        'state'     => (!empty($new_state)) ? $new_state : ($existing['state'] ?? ''),
     ];
 }
 $pending_app_auth = (!empty($_SESSION['pending_app_auth']['session'])) ? $_SESSION['pending_app_auth'] : null;
@@ -251,13 +253,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $sess_id   = trim($_POST['session_id'] ?? ($_SESSION['pending_app_auth']['session'] ?? ''));
         $port      = intval($_POST['port'] ?? ($_SESSION['pending_app_auth']['port'] ?? 0));
         $challenge = trim($_POST['challenge'] ?? ($_SESSION['pending_app_auth']['challenge'] ?? ''));
+        $state     = trim($_POST['state'] ?? ($_SESSION['pending_app_auth']['state'] ?? ''));
 
         $user_row = db_get_user($current_user);
         if ($user_row && !empty($sess_id)) {
             $uid = (string)$user_row['id'];
             $token = hash_hmac('sha256', $uid . time(), '2toolne_jwt_auth_secret_token_key_2026');
+            $auth_code = 'ac_' . bin2hex(random_bytes(24));
 
             $db = get_db();
+
+            // Ensure app_auth_sessions has PKCE columns
+            try {
+                $cols = $db->query("DESCRIBE `app_auth_sessions`")->fetchAll(PDO::FETCH_COLUMN);
+                if (!in_array('code', $cols)) {
+                    $db->exec("ALTER TABLE `app_auth_sessions` ADD COLUMN `code` VARCHAR(64) NULL AFTER `challenge`");
+                }
+                if (!in_array('code_challenge', $cols)) {
+                    $db->exec("ALTER TABLE `app_auth_sessions` ADD COLUMN `code_challenge` VARCHAR(128) NULL AFTER `code`");
+                }
+                if (!in_array('used_at', $cols)) {
+                    $db->exec("ALTER TABLE `app_auth_sessions` ADD COLUMN `used_at` DATETIME NULL AFTER `status`");
+                }
+            } catch (Throwable $e) {}
+
             $stmt = $db->prepare('
                 SELECT l.plan, l.credit_mode, l.expires_at, w.balance as token_balance
                 FROM users u
@@ -280,12 +299,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 'expires_at' => $extra['expires_at'] ?? null,
             ];
 
-            $stmt = $db->prepare('
-                UPDATE app_auth_sessions
-                SET status = "APPROVED", user_id = ?, token = ?, payload = ?
-                WHERE id = ?
-            ');
-            $stmt->execute([$uid, $token, json_encode($user_data), $sess_id]);
+            // Update or insert app_auth_sessions
+            $checkStmt = $db->prepare('SELECT id FROM app_auth_sessions WHERE id = ? LIMIT 1');
+            $checkStmt->execute([$sess_id]);
+            if ($checkStmt->fetch()) {
+                $stmt = $db->prepare('
+                    UPDATE app_auth_sessions
+                    SET status = "APPROVED", user_id = ?, token = ?, payload = ?, code = ?, code_challenge = ?, expires_at = DATE_ADD(NOW(), INTERVAL 120 SECOND)
+                    WHERE id = ?
+                ');
+                $stmt->execute([$uid, $token, json_encode($user_data), $auth_code, $challenge, $sess_id]);
+            } else {
+                $stmt = $db->prepare('
+                    INSERT INTO app_auth_sessions (id, challenge, code, code_challenge, port, status, user_id, token, payload, expires_at)
+                    VALUES (?, ?, ?, ?, ?, "APPROVED", ?, ?, ?, DATE_ADD(NOW(), INTERVAL 120 SECOND))
+                ');
+                $stmt->execute([$sess_id, $challenge, $auth_code, $challenge, $port, $uid, $token, json_encode($user_data)]);
+            }
 
             unset($_SESSION['pending_app_auth']);
 
@@ -296,6 +326,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 'port'      => $port,
                 'session'   => $sess_id,
                 'token'     => $token,
+                'code'      => $auth_code,
+                'state'     => $state,
                 'uid'       => $uid,
                 'email'     => $user_data['email'],
                 'challenge' => $challenge,
@@ -3670,6 +3702,7 @@ if (isset($_GET['registered'])) {
                     <input type="hidden" name="session_id" value="<?= htmlspecialchars($pending_app_auth['session'] ?? '') ?>">
                     <input type="hidden" name="port" value="<?= intval($pending_app_auth['port'] ?? 0) ?>">
                     <input type="hidden" name="challenge" value="<?= htmlspecialchars($pending_app_auth['challenge'] ?? '') ?>">
+                    <input type="hidden" name="state" value="<?= htmlspecialchars($pending_app_auth['state'] ?? '') ?>">
                     <button type="submit" class="btn btn-accent btn-lg" style="width:100%;font-weight:700;margin-bottom:10px;font-size:14px;padding:12px">
                         ✅ Duyệt Đăng Nhập Cho App
                     </button>
@@ -3692,39 +3725,45 @@ if (isset($_GET['registered'])) {
             <div style="font-size:54px;margin-bottom:12px">🎉</div>
             <h2 style="font-size:20px;font-weight:700;color:#fff;margin:0 0 8px">Đã Duyệt Đăng Nhập Thành Công!</h2>
             <p style="font-size:14px;color:rgba(255,255,255,0.7);line-height:1.5;margin:0 0 20px">
-                Ứng dụng <b>2toolne Upscale Desktop</b> đã được kết nối thành công với tài khoản <b><?= htmlspecialchars($approved_info['username']) ?></b>.
+                Ứng dụng <b>2TOOLNE AutoEdit Desktop</b> đã được cấp quyền kết nối với tài khoản <b><?= htmlspecialchars($approved_info['username']) ?></b>.
             </p>
             <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:12px;padding:12px;margin-bottom:20px">
                 <div style="font-size:15px;font-weight:700;color:#34d399"><?= htmlspecialchars($approved_info['username']) ?></div>
-                <div style="font-size:13px;color:#a7f3d0;margin-top:2px"><?= number_format($approved_info['balance']) ?> Lượt • Gói <?= htmlspecialchars($approved_info['plan']) ?></div>
+                <div style="font-size:13px;color:#a7f3d0;margin-top:2px"><?= number_format($approved_info['balance']) ?> Token • Gói <?= htmlspecialchars($approved_info['plan']) ?></div>
             </div>
-            <p style="font-size:13px;color:rgba(255,255,255,0.5);margin:0 0 20px">
-                Bạn có thể đóng tab trình duyệt này và quay lại ứng dụng 2toolne Upscale để tiếp tục sử dụng.
+            
+            <?php 
+                $cb_params = [
+                    'status' => 'success',
+                    'code' => $approved_info['code'] ?? '',
+                    'state' => $approved_info['state'] ?? '',
+                ];
+                $port_num = intval($approved_info['port'] ?? 0);
+                $loopback_url = ($port_num > 1024) ? "http://127.0.0.1:{$port_num}/callback?" . http_build_query($cb_params) : '';
+                $deeplink_url = "toolne://auth/callback?" . http_build_query($cb_params);
+            ?>
+
+            <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
+                <a href="<?= htmlspecialchars($deeplink_url) ?>" class="btn btn-accent" style="width:100%;padding:12px;font-weight:700;text-decoration:none;display:inline-block;border-radius:10px;">
+                    🚀 Quay Lại Ứng Dụng Desktop
+                </a>
+                <a href="index.php" class="btn btn-outline btn-sm" style="width:100%;padding:8px;text-align:center;text-decoration:none;display:inline-block;">
+                    Quay Lại Trang Chủ Web
+                </a>
+            </div>
+
+            <p style="font-size:12px;color:rgba(255,255,255,0.4);margin:0">
+                Nếu ứng dụng chưa tự mở, vui lòng bấm nút "Quay Lại Ứng Dụng Desktop" ở trên.
             </p>
-            <a href="index.php" class="btn btn-primary" style="width:100%;padding:10px;display:inline-block;text-decoration:none">
-                Quay Lại Trang Chủ
-            </a>
         </div>
     </div>
-    <?php if (!empty($approved_info['port']) && $approved_info['port'] > 1024): 
-        $cb_url = "http://127.0.0.1:" . intval($approved_info['port']) . "/callback?" . http_build_query([
-            'status' => 'success',
-            'session_id' => $approved_info['session'],
-            'challenge' => $approved_info['challenge'],
-            'token' => $approved_info['token'],
-            'user_id' => $approved_info['uid'],
-            'username' => $approved_info['username'],
-            'email' => $approved_info['email'],
-            'plan' => $approved_info['plan'],
-            'balance' => $approved_info['balance'],
-        ]);
-    ?>
+    <?php if (!empty($loopback_url)): ?>
     <script>
-        try {
-            fetch(<?= json_encode($cb_url) ?>, { mode: 'no-cors' }).catch(() => {});
-            const img = new Image();
-            img.src = <?= json_encode($cb_url) ?>;
-        } catch(e) {}
+        setTimeout(function() {
+            try {
+                window.location.href = <?= json_encode($loopback_url) ?>;
+            } catch(e) {}
+        }, 200);
     </script>
     <?php endif; ?>
     <?php endif; ?>

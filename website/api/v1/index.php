@@ -21,11 +21,16 @@ require_once __DIR__ . '/controllers/CloudDownloadController.php';
 require_once __DIR__ . '/controllers/CloudAdminController.php';
 require_once __DIR__ . '/controllers/CloudGoogleOAuthController.php';
 require_once __DIR__ . '/controllers/CapCutLicenseController.php';
+require_once __DIR__ . '/controllers/CloudShareController.php';
+require_once __DIR__ . '/services/WorkspacePermissionService.php';
+require_once __DIR__ . '/controllers/TeamController.php';
+require_once __DIR__ . '/controllers/AiGatewayController.php';
 
 $router = new Router();
 
 // Auto-Update Check
 $router->get('/update/check', [UpdateController::class, 'check']);
+$router->get('/app/version', [UpdateController::class, 'check']);
 
 // Health Check
 $router->get('/', function() {
@@ -43,6 +48,8 @@ $router->post('/auth/register', [AuthController::class, 'register']);
 $router->post('/auth/login', [AuthController::class, 'login']);
 $router->post('/auth/session/create', [AuthController::class, 'createSession']);
 $router->get('/auth/session/status', [AuthController::class, 'getSessionStatus']);
+$router->post('/auth/token', [AuthController::class, 'tokenExchange']);
+$router->post('/auth/refresh', [AuthController::class, 'refreshToken']);
 
 // Devices
 $router->post('/devices/activate', [DeviceController::class, 'activate']);
@@ -64,6 +71,7 @@ $router->post('/credits/release', [CreditsController::class, 'release']);
 
 // Wallet & Purchases
 $router->get('/wallet/balance', [WalletController::class, 'getBalance']);
+$router->get('/credits/balance', [WalletController::class, 'getBalance']);
 $router->get('/wallet/transactions', [WalletController::class, 'getTransactions']);
 $router->get('/packages', [WalletController::class, 'getPackages']);
 $router->post('/payments/create', [WalletController::class, 'createPayment']);
@@ -83,10 +91,17 @@ $router->get('/cloud/spaces/{spaceId}/quota', [CloudFilesController::class, 'get
 // Virtual File System (Folders, Files, Trash)
 $router->get('/cloud/spaces/{spaceId}/files', [CloudFilesController::class, 'listFiles']);
 $router->post('/cloud/spaces/{spaceId}/folders', [CloudFilesController::class, 'createFolder']);
+$router->post('/cloud/files/{id}/rename', [CloudFilesController::class, 'renameFile']);
+$router->post('/cloud/folders/{id}/rename', [CloudFilesController::class, 'renameFolder']);
+$router->post('/cloud/files/{id}/move', [CloudFilesController::class, 'moveFile']);
+$router->post('/cloud/folders/{id}/move', [CloudFilesController::class, 'moveFolder']);
 $router->post('/cloud/files/{id}/trash', [CloudFilesController::class, 'trashFile']);
+$router->post('/cloud/folders/{id}/trash', [CloudFilesController::class, 'trashFolder']);
 $router->get('/cloud/spaces/{spaceId}/trash', [CloudFilesController::class, 'listTrash']);
 $router->post('/cloud/files/{id}/restore', [CloudFilesController::class, 'restoreFile']);
+$router->post('/cloud/folders/{id}/restore', [CloudFilesController::class, 'restoreFolder']);
 $router->delete('/cloud/files/{id}/permanent', [CloudFilesController::class, 'permanentDeleteFile']);
+$router->delete('/cloud/folders/{id}/permanent', [CloudFilesController::class, 'permanentDeleteFolder']);
 
 // Uploads (Direct Resumable & Relay Fallback)
 $router->post('/cloud/spaces/{spaceId}/uploads/create', [CloudUploadsController::class, 'create']);
@@ -100,6 +115,28 @@ $router->post('/cloud/spaces/{spaceId}/uploads/{id}/abort', [CloudUploadsControl
 // Downloads & Streaming
 $router->get('/cloud/files/{id}/download', [CloudDownloadController::class, 'download']);
 $router->get('/cloud/files/{id}/preview', [CloudDownloadController::class, 'preview']);
+
+// Cloud Shares (Priority 5)
+$router->post('/cloud/spaces/{spaceId}/shares', [CloudShareController::class, 'createShare']);
+$router->get('/cloud/spaces/{spaceId}/shares', [CloudShareController::class, 'getItemShares']);
+$router->post('/cloud/shares/{id}/revoke', [CloudShareController::class, 'revokeShare']);
+$router->post('/cloud/public/share/resolve', [CloudShareController::class, 'resolvePublicShare']);
+$router->get('/cloud/public/share/download', [CloudShareController::class, 'publicDownload']);
+$router->get('/cloud/public/share/preview', [CloudShareController::class, 'publicPreview']);
+$router->get('/cloud/public/share/folder', [CloudShareController::class, 'publicFolder']);
+
+// Team & Workspaces (Priority 6)
+$router->post('/teams', [TeamController::class, 'createTeam']);
+$router->get('/teams/{id}', [TeamController::class, 'getTeam']);
+$router->get('/teams/{id}/members', [TeamController::class, 'listMembers']);
+$router->post('/teams/{id}/invitations', [TeamController::class, 'createInvitation']);
+$router->post('/teams/invitations/accept', [TeamController::class, 'acceptInvitation']);
+$router->post('/teams/{id}/members/{userId}/role', [TeamController::class, 'changeMemberRole']);
+$router->delete('/teams/{id}/members/{userId}', [TeamController::class, 'removeMember']);
+$router->get('/teams/{id}/seats', [TeamController::class, 'listSeats']);
+$router->post('/teams/{id}/seats/activate', [TeamController::class, 'activateSeat']);
+$router->post('/teams/{id}/seats/{seatId}/revoke', [TeamController::class, 'revokeSeat']);
+$router->delete('/teams/{id}', [TeamController::class, 'deleteTeam']);
 
 // Storage Pool Admin & Operations
 $router->get('/cloud/admin/pool/metrics', [CloudAdminController::class, 'getPoolMetrics']);
@@ -115,5 +152,18 @@ $router->get('/cloud/admin/quota-adjustments', [CloudAdminController::class, 'ge
 // Google Drive OAuth Flow
 $router->get('/admin/cloud/google/connect', [CloudGoogleOAuthController::class, 'connect']);
 $router->get('/admin/cloud/google/callback', [CloudGoogleOAuthController::class, 'callback']);
+
+// ==========================================
+// AI GATEWAY & ACCESS KEYS (Phase 1)
+// ==========================================
+$router->post('/ai/keys', [AiGatewayController::class, 'createKey']);
+$router->get('/ai/keys', [AiGatewayController::class, 'listKeys']);
+$router->delete('/ai/keys/{id}', [AiGatewayController::class, 'revokeKey']);
+$router->post('/ai/keys/{id}/revoke', [AiGatewayController::class, 'revokeKey']);
+$router->get('/ai/fs/list', [AiGatewayController::class, 'fsList']);
+$router->post('/ai/fs/mkdir', [AiGatewayController::class, 'fsMkdir']);
+$router->post('/ai/fs/upload', [AiGatewayController::class, 'fsUpload']);
+$router->get('/ai/fs/read', [AiGatewayController::class, 'fsRead']);
+$router->post('/ai/bundle/register', [AiGatewayController::class, 'bundleRegister']);
 
 $router->dispatch();

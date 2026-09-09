@@ -178,20 +178,58 @@ class SubtitleSegmenter:
         """
         Guarantees that cue timestamps are strictly monotonic, non-overlapping,
         and adhere to min/max duration constraints.
+        Consolidates sub-0.40s micro-cues within paragraph boundaries.
         """
         if not cues:
             return []
 
+        # Pass 1: Consolidate micro-cues (< 0.40s) within paragraph boundaries
+        max_words = self.options.max_words_per_cue
+        consolidated: List[SubtitleCue] = []
+        i = 0
+        while i < len(cues):
+            curr = cues[i]
+            if (
+                curr.duration_s < 0.40
+                and i + 1 < len(cues)
+                and (len(curr.tokens) + len(cues[i + 1].tokens)) <= max_words
+                and curr.paragraph_ids == cues[i + 1].paragraph_ids
+            ):
+                merged = self._build_cue(len(consolidated) + 1, curr.tokens + cues[i + 1].tokens)
+                consolidated.append(merged)
+                i += 2
+                continue
+            elif (
+                curr.duration_s < 0.40
+                and consolidated
+                and (len(consolidated[-1].tokens) + len(curr.tokens)) <= max_words
+                and consolidated[-1].paragraph_ids == curr.paragraph_ids
+            ):
+                prev = consolidated.pop()
+                merged = self._build_cue(len(consolidated) + 1, prev.tokens + curr.tokens)
+                consolidated.append(merged)
+                i += 1
+                continue
+            else:
+                consolidated.append(curr)
+                i += 1
+
+        cues = consolidated
+        for idx, c in enumerate(cues):
+            c.index = idx + 1
+
+        # Pass 2: Enforce timing hygiene (monotonicity, min_dur >= 0.40, non-overlapping)
+        target_min_dur = max(0.40, min_dur)
         for i in range(len(cues)):
             cue = cues[i]
 
-            # 1. Enforce minimum duration
-            if cue.duration_s < min_dur:
-                next_start = cues[i + 1].start_s if i + 1 < len(cues) else cue.start_s + min_dur + 1.0
+            # 1. Enforce minimum duration (at least 0.40s)
+            if cue.duration_s < target_min_dur:
+                next_start = cues[i + 1].start_s if i + 1 < len(cues) else cue.start_s + target_min_dur + 1.0
                 max_extendable_end = next_start - min_gap
-                cue.end_s = min(max_extendable_end, cue.start_s + min_dur)
-                if cue.end_s <= cue.start_s:
-                    cue.end_s = round(cue.start_s + 0.2, 3)
+                cue.end_s = min(max_extendable_end, cue.start_s + target_min_dur)
+                if cue.end_s - cue.start_s < 0.40:
+                    cue.end_s = round(cue.start_s + 0.40, 3)
 
             # 2. Enforce maximum duration
             if cue.duration_s > max_dur:
@@ -201,15 +239,11 @@ class SubtitleSegmenter:
             if i + 1 < len(cues):
                 next_cue = cues[i + 1]
                 if cue.end_s > next_cue.start_s - min_gap:
-                    # Resolve overlap: pull current end back or push next start forward
-                    midpoint = (cue.start_s + next_cue.end_s) / 2.0
-                    cue.end_s = round(max(cue.start_s + 0.2, next_cue.start_s - min_gap), 3)
-                    if cue.end_s >= next_cue.start_s:
-                        next_cue.start_s = round(cue.end_s + min_gap, 3)
-                        if next_cue.end_s <= next_cue.start_s:
-                            next_cue.end_s = round(next_cue.start_s + 0.3, 3)
+                    next_cue.start_s = round(cue.end_s + min_gap, 3)
+                    if next_cue.end_s <= next_cue.start_s:
+                        next_cue.end_s = round(next_cue.start_s + 0.40, 3)
 
             cue.start_s = round(max(0.0, cue.start_s), 3)
-            cue.end_s = round(max(cue.start_s + 0.1, cue.end_s), 3)
+            cue.end_s = round(max(cue.start_s + 0.40, cue.end_s), 3)
 
         return cues

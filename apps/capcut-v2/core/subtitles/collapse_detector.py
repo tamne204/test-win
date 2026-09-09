@@ -135,7 +135,13 @@ class CollapseDetector:
                 win_tps = win_toks / win_dur
                 win_cps = win_chars / win_dur
 
-                if win_tps > self.hard_token_rate or win_cps > hard_cps:
+                is_impossible_speed = (
+                    win_cps > hard_cps
+                    or win_tps > 8.0
+                    or (win_tps > self.hard_token_rate and win_cps > 24.0)
+                )
+
+                if is_impossible_speed:
                     violations.append(
                         f"Sustained impossible reading speed: {win_tps:.1f} tokens/sec ({win_cps:.1f} cps) "
                         f"across cues {i+1}-{i+3} at {window_cues[0].start_s:.2f}s."

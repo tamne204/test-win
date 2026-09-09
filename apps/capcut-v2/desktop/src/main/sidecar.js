@@ -51,9 +51,15 @@ class SidecarManager {
 
     // 1. Packaged location (process.resourcesPath/autoedit-core/...)
     if (process.resourcesPath) {
-      const packagedBin = path.join(process.resourcesPath, 'autoedit-core', binName);
-      if (fs.existsSync(packagedBin)) {
-        return { command: packagedBin, args: [], isBinary: true };
+      const candidates = [
+        path.join(process.resourcesPath, 'autoedit-core', isWin ? 'win-x64' : 'mac-arm64', binName),
+        path.join(process.resourcesPath, 'autoedit-core', binName),
+        path.join(process.resourcesPath, 'resources', 'autoedit-core', binName),
+      ];
+      for (const cand of candidates) {
+        if (fs.existsSync(cand)) {
+          return { command: cand, args: [], isBinary: true };
+        }
       }
       const packagedScript = path.join(process.resourcesPath, 'sidecar', 'desktop_bridge', 'sidecar_main.py');
       if (fs.existsSync(packagedScript)) {
@@ -66,9 +72,15 @@ class SidecarManager {
     }
 
     // 2. Local packaging output location
-    const localDistBin = path.resolve(__dirname, '../../../packaging/dist/autoedit-core', binName);
-    if (fs.existsSync(localDistBin)) {
-      return { command: localDistBin, args: [], isBinary: true };
+    const localCandidates = [
+      path.resolve(__dirname, '../../../packaging/dist/autoedit-core', binName),
+      path.resolve(__dirname, '../../resources/autoedit-core', isWin ? 'win-x64' : 'mac-arm64', binName),
+      path.resolve(__dirname, '../../dist/win-unpacked/resources/autoedit-core', binName),
+    ];
+    for (const cand of localCandidates) {
+      if (fs.existsSync(cand)) {
+        return { command: cand, args: [], isBinary: true };
+      }
     }
 
     // 3. Fallback: Run Python directly with venv or system python

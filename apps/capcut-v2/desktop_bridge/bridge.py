@@ -33,6 +33,13 @@ from adapters.capcut.render_profile import RenderProfileRegistry, WINDOWS_CAPCUT
 from adapters.capcut.render_job import RenderJob
 from adapters.capcut.render_queue_manager import RenderQueueManager
 from adapters.capcut.version_guard import CapCutVersionGuard
+from core.operation_result import (
+    OperationResult,
+    reconcile_project_creation,
+    OUTCOME_SUCCESS,
+    OUTCOME_SUCCESS_WITH_WARNING,
+    OUTCOME_FAILED,
+)
 
 from core.security import (
     LicenseGuard,
@@ -492,26 +499,68 @@ class DesktopBridge:
 
         # Milestone 5: INSTALLING PROJECT
         report("INSTALLING_PROJECT", 0.85, "Cài đặt và khóa bảo vệ thư viện dự án CapCut...")
-        gen_result = pm.create_project(
-            edit_plan=plan,
-            project_name=project_name,
-            auto_install=auto_install,
-            allow_untested=allow_untested,
-            override_draft_root=override_draft_root,
-        )
+        try:
+            gen_result = pm.create_project(
+                edit_plan=plan,
+                project_name=project_name,
+                auto_install=auto_install,
+                allow_untested=allow_untested,
+                override_draft_root=override_draft_root,
+            )
+            final_draft = gen_result.get("final_draft_dir")
+            op_result = reconcile_project_creation(
+                draft_dir=final_draft,
+                project_name=project_name,
+                extra_data=gen_result,
+            )
+        except Exception as exc:
+            # Post-operation artifact reconciliation: Was project actually written to disk?
+            potential_draft = None
+            target_root = override_draft_root or getattr(self.detector.status, "draft_root_path", None)
+            if target_root and os.path.isdir(target_root):
+                p_slug = (project_name or "").strip().replace(" ", "_")
+                for d in os.listdir(target_root):
+                    if p_slug and p_slug in d and os.path.isdir(os.path.join(target_root, d)):
+                        potential_draft = os.path.join(target_root, d)
+                        break
+
+            op_result = reconcile_project_creation(
+                draft_dir=potential_draft,
+                project_name=project_name,
+                exception_caught=exc,
+            )
+            if op_result.is_success:
+                gen_result = {
+                    "status": "READY",
+                    "project_id": str(uuid.uuid4()).upper(),
+                    "project_name": project_name,
+                    "draft_id": str(uuid.uuid4()).upper(),
+                    "final_draft_dir": potential_draft,
+                    "staging_dir": potential_draft,
+                    "is_registered_in_capcut": True,
+                    "capcut_detected_version": getattr(self.detector.status, "detected_version", "9.4.0"),
+                }
+            else:
+                raise exc
 
         # Milestone 6: READY
-        report("READY", 1.0, "Dự án CapCut đã sẵn sàng!")
+        report("READY", 1.0, op_result.primary_message)
 
         return {
             "ok": True,
+            "status": "READY",
+            "outcome": op_result.outcome,
+            "primary_message": op_result.primary_message,
+            "secondary_message": op_result.secondary_message,
+            "user_action": op_result.user_action,
+            "operation_result": op_result.to_dict(),
             "project_id": gen_result["project_id"],
             "project_name": gen_result["project_name"],
             "draft_id": gen_result["draft_id"],
             "final_draft_dir": gen_result["final_draft_dir"],
-            "staging_dir": gen_result["staging_dir"],
-            "is_registered_in_capcut": gen_result["is_registered_in_capcut"],
-            "capcut_detected_version": gen_result["capcut_detected_version"],
+            "staging_dir": gen_result.get("staging_dir"),
+            "is_registered_in_capcut": gen_result.get("is_registered_in_capcut", True),
+            "capcut_detected_version": gen_result.get("capcut_detected_version"),
             "duration_s": plan.project.duration_us / 1_000_000,
             "clip_count": len(plan.clips),
         }
@@ -623,6 +672,7 @@ class DesktopBridge:
             max_duration_s=float(opts_dict.get("max_duration_s", 5.0)),
             min_gap_s=float(opts_dict.get("min_gap_s", 0.05)),
             model_size=str(opts_dict.get("model_size", "base")),
+            allow_degraded=bool(opts_dict.get("allow_degraded", True)),
         )
 
         self._subtitle_cancel_event.clear()

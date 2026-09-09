@@ -10,7 +10,10 @@ const translations = {
     'nav.studio': 'Studio Làm Việc',
     'nav.subtitles': 'Phân Hệ Phụ Đề',
     'nav.queue': 'Hàng Đợi Xử Lý',
+    'nav.projects': 'Dự Án Đã Tạo',
+    'nav.flow': 'Google Flow',
     'nav.upscale': 'AI Upscale 4K',
+    'nav.cloud': 'Cloud Lưu Trữ',
     'nav.account': 'Tài Khoản & Bản Quyền',
     'nav.settings': 'Cài Đặt',
     'header.badge_ready': 'SẴN SÀNG',
@@ -29,8 +32,8 @@ const translations = {
     'studio.project_name': 'Tên Dự Án CapCut:',
     'studio.ratio': 'Tỉ Lệ Khung Hình:',
     'studio.timing_mode': 'Chế Độ Căn Thời Gian (Timing Mode):',
-    'studio.btn_create_project': '🚀 TẠO DỰ ÁN CAPCUT NGAY',
-    'studio.btn_add_queue': '➕ Thêm Vào Hàng Đợi (Queue)',
+    'studio.btn_create_project': '🚀 Tạo Dự Án Ngay',
+    'studio.btn_add_queue': '➕ Thêm Vào Hàng Đợi',
 
     // Subtitle View
     'sub.title': 'Phân Hệ Phụ Đề Tự Động (AutoSub & Forced Alignment)',
@@ -43,11 +46,11 @@ const translations = {
     'sub.btn_start_autosub': '🎙️ BẮT ĐẦU TỰ ĐỘNG TẠO PHỤ ĐỀ (AutoSub)',
 
     // Queue View
-    'queue.title': 'Hàng Đợi Xử Lý & Render Tự Động',
-    'queue.sub': 'Quản lý các tác vụ render video CapCut tự động theo thứ tự an toàn',
+    'queue.title': 'Hàng Đợi Tạo Dự Án & Xuất Video',
+    'queue.sub': 'Quản lý hàng đợi tạo dự án và xuất video CapCut tự động theo thứ tự an toàn',
     'queue.btn_resume': '▶️ Chạy Hàng Đợi',
     'queue.btn_pause': '⏸️ Tạm Dừng',
-    'queue.btn_clear': '🗑️ Xóa Đã Xong',
+    'queue.btn_clear': '🧹 Xóa Đã Xong',
 
     // AI Upscale View
     'upscale.title': 'Phân Hệ 2TOOLNE AI Upscale 4K',
@@ -75,7 +78,10 @@ const translations = {
     'nav.studio': 'Studio Workspace',
     'nav.subtitles': 'Subtitle Studio',
     'nav.queue': 'Job Queue',
+    'nav.projects': 'Projects',
+    'nav.flow': 'Google Flow',
     'nav.upscale': 'AI Upscale 4K',
+    'nav.cloud': 'Cloud Storage',
     'nav.account': 'Account & License',
     'nav.settings': 'Settings',
     'header.badge_ready': 'READY',
@@ -152,7 +158,10 @@ class I18nEngine {
 
   t(key, fallback = '') {
     const dict = translations[this.currentLang] || translations.vi;
-    return dict[key] || fallback || key;
+    if (dict && dict[key]) return dict[key];
+    if (translations.vi && translations.vi[key]) return translations.vi[key];
+    if (translations.en && translations.en[key]) return translations.en[key];
+    return fallback;
   }
 
   setLanguage(lang, persist = true) {
@@ -167,6 +176,7 @@ class I18nEngine {
   }
 
   applyToDOM() {
+    if (typeof document === 'undefined') return;
     document.querySelectorAll('[data-i18n]').forEach((el) => {
       const key = el.getAttribute('data-i18n');
       const text = this.t(key);

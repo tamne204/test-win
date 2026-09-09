@@ -471,10 +471,58 @@ class ProjectBuildQueueManager:
             job.current_step = VI_STATE_LABELS[STATE_CANCELLED]
             logger.info(f"Build job {job.job_id} cancelled.")
         except Exception as e:
+            # Evidence-based artifact reconciliation before classifying as failed
+            draft_dir = None
+            if isinstance(getattr(job, "result", None), dict) and job.result.get("final_draft_dir"):
+                draft_dir = job.result.get("final_draft_dir")
+
+            if not draft_dir:
+                try:
+                    from adapters.capcut.detector import CapCutDetector
+                    draft_root = CapCutDetector.get_draft_root()
+                    if draft_root and os.path.exists(draft_root):
+                        for folder in os.listdir(draft_root):
+                            full_folder = os.path.join(draft_root, folder)
+                            if os.path.isdir(full_folder) and (folder == job.project_name or folder.startswith(f"{job.project_name}_")):
+                                if abs(time.time() - os.path.getmtime(full_folder)) < 600:
+                                    draft_dir = full_folder
+                                    break
+                except Exception:
+                    pass
+
+            from core.operation_result import reconcile_project_creation
+            op_result = reconcile_project_creation(
+                draft_dir=draft_dir,
+                project_name=job.project_name,
+                exception_caught=e,
+            )
+
+            if op_result.is_success:
+                job.completed_at = time.time()
+                job.state = STATE_PROJECT_READY
+                job.progress = 100.0
+                job.current_step = f"Dự án đã sẵn sàng ({op_result.secondary_message or 'Lưu ý'})"
+                job.error = None
+                if not job.result:
+                    job.result = {
+                        "ok": True,
+                        "project_name": job.project_name,
+                        "final_draft_dir": draft_dir,
+                        "is_registered_in_capcut": True,
+                        "outcome": op_result.outcome,
+                        "warning": op_result.secondary_message,
+                    }
+                self.save_snapshot()
+                self._notify()
+                logger.warning(f"Build job {job.job_id} reconciled to PROJECT_READY despite exception: {e}")
+                return
+
             job.state = STATE_FAILED
             job.completed_at = time.time()
-            job.error = str(e)
-            job.current_step = f"Lỗi: {str(e)}"
+            job.error = op_result.primary_message
+            job.current_step = f"Lỗi: {op_result.primary_message}"
+            self.save_snapshot()
+            self._notify()
             logger.error(f"Build job {job.job_id} failed: {e}", exc_info=True)
 
     def _execute_default_build(
@@ -598,9 +646,12 @@ class ProjectBuildQueueManager:
     def recover_from_crash(self) -> None:
         """
         Detects any jobs that were mid-execution when the application abruptly exited.
-        Safely transitions them to FAILED so the user can inspect or retry.
+        Safely checks disk truth: if project exists and passes validation, reconciles to
+        STATE_PROJECT_READY and notifies 'Dự án đã được khôi phục.' Otherwise transitions to FAILED.
         """
-        recovered_count = 0
+        from core.operation_result import reconcile_project_creation
+        recovered_ready_count = 0
+        interrupted_failed_count = 0
         with self._lock:
             self._status = QUEUE_STATUS_IDLE
             self._active_job = None
@@ -613,11 +664,53 @@ class ProjectBuildQueueManager:
                     STATE_TIMELINE,
                     STATE_BUILDING_DRAFT,
                     STATE_VERIFYING,
+                    STATE_FAILED,
                 ):
-                    j.state = STATE_FAILED
-                    j.error = "Quá trình bị gián đoạn do ứng dụng đóng đột ngột. Vui lòng bấm 'Thử lại'."
-                    j.current_step = VI_STATE_LABELS[STATE_FAILED]
-                    recovered_count += 1
-            if recovered_count > 0:
+                    # Check disk for existing valid project
+                    draft_dir = None
+                    if isinstance(j.result, dict):
+                        draft_dir = j.result.get("final_draft_dir") or j.result.get("staging_dir")
+
+                    if not draft_dir:
+                        try:
+                            from adapters.capcut.detector import CapCutDetector
+                            draft_root = CapCutDetector.get_draft_root()
+                            if draft_root and os.path.exists(draft_root):
+                                for folder in os.listdir(draft_root):
+                                    full_folder = os.path.join(draft_root, folder)
+                                    if os.path.isdir(full_folder) and (folder == j.project_name or folder.startswith(f"{j.project_name}_")):
+                                        draft_dir = full_folder
+                                        break
+                        except Exception:
+                            pass
+
+                    if draft_dir:
+                        op_result = reconcile_project_creation(draft_dir=draft_dir, project_name=j.project_name)
+                        if op_result.is_success:
+                            j.state = STATE_PROJECT_READY
+                            j.progress = 100.0
+                            j.current_step = "Dự án đã được khôi phục."
+                            j.error = None
+                            if not j.result:
+                                j.result = {
+                                    "ok": True,
+                                    "project_name": j.project_name,
+                                    "final_draft_dir": draft_dir,
+                                    "is_registered_in_capcut": True,
+                                }
+                            recovered_ready_count += 1
+                            continue
+
+                    # If not recoverable to READY, mark as FAILED with friendly retry guidance
+                    if j.state != STATE_FAILED:
+                        j.state = STATE_FAILED
+                        j.error = "Quá trình bị gián đoạn do ứng dụng đóng đột ngột. Vui lòng bấm 'Thử lại'."
+                        j.current_step = VI_STATE_LABELS[STATE_FAILED]
+                        interrupted_failed_count += 1
+
+            if recovered_ready_count > 0 or interrupted_failed_count > 0:
                 self.save_snapshot()
-                logger.info(f"Recovered {recovered_count} interrupted build jobs after restart.")
+                logger.info(
+                    f"Crash recovery complete: {recovered_ready_count} restored to READY, "
+                    f"{interrupted_failed_count} marked FAILED."
+                )

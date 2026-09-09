@@ -8,11 +8,17 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/StorageProviderInterface.php';
+require_once __DIR__ . '/CurlHelper.php';
 
 class GoogleDriveStorageAdapter implements StorageProviderInterface {
     private const OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
     private const DRIVE_API_URL = 'https://www.googleapis.com/drive/v3';
     private const UPLOAD_API_URL = 'https://www.googleapis.com/upload/drive/v3/files';
+
+    private function executeCurl($ch) {
+        CurlHelper::applySslOptions($ch);
+        return curl_exec($ch);
+    }
 
     public function getProviderName(): string {
         return 'GOOGLE_DRIVE';
@@ -49,7 +55,7 @@ class GoogleDriveStorageAdapter implements StorageProviderInterface {
             CURLOPT_HTTPHEADER     => ['Content-Type: application/x-www-form-urlencoded'],
         ]);
 
-        $response = curl_exec($ch);
+        $response = $this->executeCurl($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curlErr  = curl_error($ch);
         curl_close($ch);
@@ -109,7 +115,7 @@ class GoogleDriveStorageAdapter implements StorageProviderInterface {
             CURLOPT_HTTPHEADER     => $headers,
         ]);
 
-        $response = curl_exec($ch);
+        $response = $this->executeCurl($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
         $curlErr  = curl_error($ch);
@@ -155,7 +161,7 @@ class GoogleDriveStorageAdapter implements StorageProviderInterface {
             CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $accessToken],
         ]);
 
-        $response = curl_exec($ch);
+        $response = $this->executeCurl($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
@@ -194,7 +200,7 @@ class GoogleDriveStorageAdapter implements StorageProviderInterface {
             CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $accessToken],
         ]);
 
-        $response = curl_exec($ch);
+        $response = $this->executeCurl($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
@@ -229,7 +235,7 @@ class GoogleDriveStorageAdapter implements StorageProviderInterface {
                 CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $accessToken],
             ]);
 
-            $response = curl_exec($ch);
+            $response = $this->executeCurl($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
 
@@ -271,7 +277,7 @@ class GoogleDriveStorageAdapter implements StorageProviderInterface {
             CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $accessToken],
         ]);
 
-        $response = curl_exec($ch);
+        $response = $this->executeCurl($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
@@ -312,7 +318,7 @@ class GoogleDriveStorageAdapter implements StorageProviderInterface {
                 CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $accessToken],
             ]);
 
-            $response = curl_exec($ch);
+            $response = $this->executeCurl($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
 
@@ -344,7 +350,7 @@ class GoogleDriveStorageAdapter implements StorageProviderInterface {
             CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $accessToken],
         ]);
 
-        $response = curl_exec($ch);
+        $response = $this->executeCurl($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
@@ -375,7 +381,7 @@ class GoogleDriveStorageAdapter implements StorageProviderInterface {
             ],
         ]);
 
-        $createRes = curl_exec($chCreate);
+        $createRes = $this->executeCurl($chCreate);
         $createCode = curl_getinfo($chCreate, CURLINFO_HTTP_CODE);
         curl_close($chCreate);
 
@@ -409,7 +415,7 @@ class GoogleDriveStorageAdapter implements StorageProviderInterface {
             CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $accessToken],
         ]);
 
-        $response = curl_exec($ch);
+        $response = $this->executeCurl($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
@@ -441,7 +447,7 @@ class GoogleDriveStorageAdapter implements StorageProviderInterface {
             ],
         ]);
 
-        $createRes = curl_exec($chCreate);
+        $createRes = $this->executeCurl($chCreate);
         $createCode = curl_getinfo($chCreate, CURLINFO_HTTP_CODE);
         curl_close($chCreate);
 

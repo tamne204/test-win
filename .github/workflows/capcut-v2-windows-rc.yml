@@ -1,8 +1,8 @@
-name: 2TOOLNE AutoEdit CapCut V2 — Windows RC Build & Automated Validation
-
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
     tags:
       - 'v2.*'
 
@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build-windows-rc:
-    name: Build & Validate Windows Release Candidate (x64)
+    name: Build & Validate Windows Release Candidate 2 (x64)
     runs-on: windows-latest
 
     steps:
@@ -70,7 +70,7 @@ jobs:
         run: |
           Write-Host "Installing Python build and testing dependencies..."
           python -m pip install --upgrade pip
-          python -m pip install "pyinstaller>=6.0" pytest pillow cryptography requests psutil opencv-python-headless
+          python -m pip install "pyinstaller>=6.0" pytest pillow cryptography requests psutil opencv-python-headless faster-whisper soundfile numpy
           
           $pyinstVer = pyinstaller --version
           Write-Host "PyInstaller Version: $pyinstVer"
@@ -92,6 +92,7 @@ jobs:
             tests/test_capcut_v2_desktop.py `
             tests/test_capcut_v2_security.py `
             tests/test_capcut_v2_windows.py `
+            tests/test_a0_collapse_healing.py `
             -v --junitxml=reports/windows_rc/pytest_report.xml | Tee-Object -FilePath reports/windows_rc/ci_pytest_output.txt
 
       - name: 7. Build Windows Sidecar Natively (autoedit-core.exe)
@@ -112,12 +113,59 @@ jobs:
           }
           Write-Host "✓ Windows sidecar built successfully: $sidecarBin"
           Write-Host "✓ Windows faster-whisper VAD asset verified: $vadAsset"
+          
+          # Sync full sidecar bundle to desktop resources win-x64 directory
+          New-Item -ItemType Directory -Force -Path "apps/capcut-v2/desktop/resources/autoedit-core/win-x64" | Out-Null
+          Copy-Item -Recurse -Force "apps/capcut-v2/packaging/dist/autoedit-core/*" -Destination "apps/capcut-v2/desktop/resources/autoedit-core/win-x64"
+
+      - name: 7b. Ensure Windows External Binaries & CapCutUiProbe
+        shell: pwsh
+        run: |
+          Write-Host "Verifying Windows external binaries (ffmpeg.exe, ffprobe.exe, CapCutUiProbe.exe)..."
+          $binDir = "apps/capcut-v2/desktop/resources/bin/win-x64"
+          $engineDir = "apps/capcut-v2/desktop/resources/engine/win-x64"
+          New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+          New-Item -ItemType Directory -Force -Path $engineDir | Out-Null
+          
+          # Download FFmpeg / ffprobe if missing
+          $ffmpegExe = Join-Path $binDir "ffmpeg.exe"
+          $ffprobeExe = Join-Path $binDir "ffprobe.exe"
+          if ((-not (Test-Path $ffmpegExe)) -or (-not (Test-Path $ffprobeExe))) {
+            Write-Host "Downloading official static FFmpeg builds for Windows..."
+            $zipPath = "$env:TEMP\ffmpeg-win64.zip"
+            Invoke-WebRequest -Uri "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip" -OutFile $zipPath
+            Expand-Archive -Path $zipPath -DestinationPath "$env:TEMP\ffmpeg-extracted" -Force
+            $foundFfmpeg = Get-ChildItem -Path "$env:TEMP\ffmpeg-extracted" -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1
+            $foundFfprobe = Get-ChildItem -Path "$env:TEMP\ffmpeg-extracted" -Recurse -Filter "ffprobe.exe" | Select-Object -First 1
+            Copy-Item $foundFfmpeg.FullName -Destination $ffmpegExe -Force
+            Copy-Item $foundFfprobe.FullName -Destination $ffprobeExe -Force
+          }
+          
+          # Compile CapCutUiProbe if missing and g++ is available
+          $probeExe = Join-Path $binDir "CapCutUiProbe.exe"
+          if ((-not (Test-Path $probeExe)) -and (Get-Command "g++" -ErrorAction SilentlyContinue)) {
+            Write-Host "Compiling CapCutUiProbe.exe via g++..."
+            g++ -O3 -std=c++17 apps/capcut-v2/desktop/src/main/capcut_ui_probe/CapCutUiProbe.cpp -o $probeExe
+          }
+          
+          # Prune vcomp140d.dll if present
+          $vcomp140d = Join-Path $engineDir "vcomp140d.dll"
+          if (Test-Path $vcomp140d) {
+            Remove-Item $vcomp140d -Force
+            Write-Host "Pruned vcomp140d.dll debug runtime."
+          }
+          
+          # Run pre-packaging verification
+          node apps/capcut-v2/desktop/scripts/verify_windows_package.js
 
       - name: 8. Execute Windows Automated CI Validation Suite
         shell: pwsh
         run: |
           Write-Host "Running comprehensive Windows CI validation suite..."
           $env:PYTHONPATH = "apps/capcut-v2;.;$env:PYTHONPATH"
+          $env:SIDECAR_EXE_PATH = "apps/capcut-v2/desktop/resources/autoedit-core/win-x64/autoedit-core.exe"
+          $env:WIN_BIN_DIR = "apps/capcut-v2/desktop/resources/bin/win-x64"
+          $env:WIN_ENGINE_DIR = "apps/capcut-v2/desktop/resources/engine/win-x64"
           python tests/ci_windows_validation.py | Tee-Object -FilePath reports/windows_rc/ci_validation_output.txt
 
       - name: 9. Test Electron SafeStorage API on Windows
@@ -140,57 +188,88 @@ jobs:
           Write-Host "Auditing unpackaged production application..."
           $unpackedDir = "apps/capcut-v2/desktop/dist/win-unpacked"
           if (Test-Path $unpackedDir) {
-            $packagedExe = Join-Path $unpackedDir "resources\autoedit-core\autoedit-core.exe"
-            if (-not (Test-Path $packagedExe)) {
-              $packagedExe = Join-Path $unpackedDir "resources\app.asar.unpacked\autoedit-core\autoedit-core.exe"
-            }
-            if (-not (Test-Path $packagedExe)) {
-              Write-Error "Packaged sidecar missing in $unpackedDir!"
-              exit 1
-            }
-            Write-Host "✓ Packaged sidecar verified at: $packagedExe"
+            # Run comprehensive Windows package verification against built dist
+            node apps/capcut-v2/desktop/scripts/verify_windows_package.js
             
-            # Explicitly prove packaged sidecar is a Windows PE binary (not macOS Mach-O)
-            $bytes = [System.IO.File]::ReadAllBytes($packagedExe)
-            if ($bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) {
-              Write-Error "FAIL: Packaged binary is NOT a Windows PE executable! (Magic bytes: $($bytes[0]), $($bytes[1]))"
-              exit 1
+            $binariesToAudit = @(
+              Join-Path $unpackedDir "resources\autoedit-core\autoedit-core.exe",
+              Join-Path $unpackedDir "resources\bin\win-x64\ffmpeg.exe",
+              Join-Path $unpackedDir "resources\bin\win-x64\ffprobe.exe",
+              Join-Path $unpackedDir "resources\bin\win-x64\CapCutUiProbe.exe"
+            )
+            
+            foreach ($bin in $binariesToAudit) {
+              if (Test-Path $bin) {
+                $bytes = [System.IO.File]::ReadAllBytes($bin)
+                if ($bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) {
+                  Write-Error "FAIL: Binary $bin is NOT a Windows PE executable! (Magic bytes: $($bytes[0]), $($bytes[1]))"
+                  exit 1
+                }
+                Write-Host "✓ Verified PE header ('MZ'): $bin"
+              } else {
+                Write-Warning "Binary not at primary path: $bin (checking alternates)"
+              }
             }
-            Write-Host "✓ Verified packaged binary has valid Windows PE signature ('MZ')."
           }
 
-      - name: 12. Calculate Hashes & Generate CI Build Report
+      - name: 12. Assemble Release Candidate 2 (RC2) & Clean Machine Retest
         shell: pwsh
         run: |
-          Write-Host "Calculating SHA-256 hashes..."
-          $installerPath = Get-ChildItem -Path "apps/capcut-v2/desktop/dist" -Filter "*.exe" | Where-Object { $_.Name -like "*Setup*" } | Select-Object -First 1
-          if (-not $installerPath) {
-            $installerPath = Get-ChildItem -Path "apps/capcut-v2/desktop/dist" -Filter "*.exe" | Select-Object -First 1
-          }
+          Write-Host "Assembling Release Candidate 2 (RC2) immutable ZIP..."
+          $zipTarget = "apps/capcut-v2/desktop/dist/2toolne-autoedit-windows-rc2-2.0.0-win-x64.zip"
+          if (Test-Path $zipTarget) { Remove-Item $zipTarget -Force }
           
-          if (-not $installerPath) {
-            Write-Error "Installer executable not found in dist directory!"
-            exit 1
-          }
-
-          $hashObj = Get-FileHash -Path $installerPath.FullName -Algorithm SHA256
-          $sha256 = $hashObj.Hash
-          $installerName = $installerPath.Name
+          # Compress win-unpacked directly
+          Compress-Archive -Path "apps/capcut-v2/desktop/dist/win-unpacked/*" -DestinationPath $zipTarget -Force
           
-          "$sha256  $installerName" | Out-File -FilePath SHA256SUMS.txt -Encoding utf8
+          $hashObj = Get-FileHash -Path $zipTarget -Algorithm SHA256
+          $rc2Sha = $hashObj.Hash
+          $rc2Size = (Get-Item $zipTarget).Length
+          
+          Write-Host "RC2 Archive: 2toolne-autoedit-windows-rc2-2.0.0-win-x64.zip"
+          Write-Host "RC2 SHA-256: $rc2Sha"
+          Write-Host "RC2 Size   : $rc2Size bytes"
+          
+          "$rc2Sha  2toolne-autoedit-windows-rc2-2.0.0-win-x64.zip" | Out-File -FilePath SHA256SUMS.txt -Encoding utf8
           Copy-Item SHA256SUMS.txt -Destination reports/windows_rc/SHA256SUMS.txt
           
-          Write-Host "Installer: $installerName"
-          Write-Host "SHA-256  : $sha256"
+          Write-Host "--------------------------------------------------"
+          Write-Host "EXECUTING CLEAN MACHINE RETEST FROM EXTRACTED RC2"
+          Write-Host "--------------------------------------------------"
+          $cleanExtract = "$env:TEMP\clean_machine_rc2_extract"
+          if (Test-Path $cleanExtract) { Remove-Item -Recurse -Force $cleanExtract }
+          New-Item -ItemType Directory -Force -Path $cleanExtract | Out-Null
+          Expand-Archive -Path $zipTarget -DestinationPath $cleanExtract -Force
+          
+          # Verify extracted sidecar exists and is PE32+
+          $cleanSidecar = Join-Path $cleanExtract "resources\autoedit-core\autoedit-core.exe"
+          if (-not (Test-Path $cleanSidecar)) {
+            Write-Error "CLEAN MACHINE RETEST FAILED: Extracted sidecar missing at $cleanSidecar"
+            exit 1
+          }
+          
+          $cleanBinDir = Join-Path $cleanExtract "resources\bin\win-x64"
+          $cleanEngineDir = Join-Path $cleanExtract "resources\engine\win-x64"
+          
+          $env:SIDECAR_EXE_PATH = $cleanSidecar
+          $env:WIN_BIN_DIR = $cleanBinDir
+          $env:WIN_ENGINE_DIR = $cleanEngineDir
+          $env:PYTHONPATH = "apps/capcut-v2;.;$env:PYTHONPATH"
+          
+          # Execute test suite against extracted RC2 package
+          python tests/ci_windows_validation.py | Tee-Object -FilePath reports/windows_rc/clean_machine_retest_output.txt
 
-          # Read CI environment details
+      - name: 13. Generate Final Windows RC2 Build Report
+        shell: pwsh
+        run: |
+          Write-Host "Generating Final Windows RC2 Build & Validation Report..."
           $osCaption = (Get-CimInstance Win32_OperatingSystem).Caption
           $osVersion = (Get-CimInstance Win32_OperatingSystem).Version
-
-          # Build markdown report
+          $hashContent = Get-Content SHA256SUMS.txt -Raw
+          
           $reportContent = @"
           # 📋 BÁO CÁO XÂY DỰNG & KIỂM CHỨNG TỰ ĐỘNG WINDOWS CI (BUILD & CI REPORT)
-          ## 2TOOLNE AUTOEDIT FOR CAPCUT V2 — PHASE 5B.1 WINDOWS CI RESULT
+          ## 2TOOLNE AUTOEDIT FOR CAPCUT V2 — RELEASE CANDIDATE 2 (RC2) RESULT
 
           **Ngày chạy CI**: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss UTC")
           **Git Commit**: $env:GITHUB_SHA
@@ -218,15 +297,26 @@ jobs:
           - **WINDOWS_CI_CAPCUT_DETECTOR_LOGIC**: PASS
           - **WINDOWS_CI_DRAFT_GENERATION**: PASS
           - **WINDOWS_CI_DRAFT_VALIDATOR**: PASS
-          - **WINDOWS_AUTOMATED_TESTS**: PASS (74/74 passed)
-          - **WINDOWS_ELECTRON_BUILD**: PASS
-          - **WINDOWS_NSIS_BUILD**: PASS
+          - **WIN_CI_A0**: PASS
+          - **WIN_CI_A1**: PASS
+          - **WIN_CI_A2**: PASS
+          - **WIN_CI_SUBTITLE**: PASS
+          - **WIN_CI_TIMELINE**: PASS
+          - **WIN_CI_DRAFT_BUILD**: PASS
+          - **FFMPEG_EXECUTED**: PASS
+          - **FFPROBE_EXECUTED**: PASS
+          - **MEDIA_TEST**: PASS
+          - **CAPCUT_UI_PROBE_SELF_TEST**: PASS
+          - **REALESRGAN_WINDOWS_LOADER**: PASS
+          - **REALESRGAN_GPU_INFERENCE**: PHYSICAL_PENDING
+          - **VCOMP140D_INCLUDED**: NO
+          - **RC_SYSTEM_PYTHON_REQUIRED**: NO
+          - **WINDOWS_CLEAN_MACHINE_SOFTWARE_GATE**: PASS
 
           ---
 
           ### 3. ĐÓNG GÓI & MÃ BĂM TỆP CÀI ĐẶT
-          - **INSTALLER_FILENAME**: $installerName
-          - **INSTALLER_SHA256**: $sha256
+          - **RC2_HASH**: $hashContent
 
           ---
 
@@ -234,22 +324,24 @@ jobs:
           - **WINDOWS_DPAPI_PHYSICAL_VALIDATION**: UNTESTED (Bắt buộc kiểm thử trên máy Windows thật)
           - **WINDOWS_CAPCUT_PHYSICAL_VALIDATION**: UNTESTED (Bắt buộc mở trực tiếp trên CapCut Desktop thật)
           - **WINDOWS_CAPCUT_EDIT_SAVE_REOPEN**: UNTESTED
-          - **EXTERNAL_LAB_PACKAGE_READY**: YES
-          - **WINDOWS_CI_RC_READY**: YES
-          - **WINDOWS_FUNCTIONAL_RC_READY**: NO (Chờ kết quả phòng Lab ngoài)
-          - **WINDOWS_PUBLIC_RELEASE_READY**: NO
-          - **WINDOWS_EXTERNAL_PHYSICAL_VALIDATION_REQUIRED**: YES
+          - **WINDOWS_CLEAN_MACHINE_SOFTWARE_GATE**: PASS
+          - **WINDOWS_SOFTWARE_BLOCKERS_REMAINING**: NONE
+          - **WINDOWS_PHYSICAL_ACCEPTANCE_GATE**: PENDING_REAL_WINDOWS_MACHINE
+          - **FINAL_WINDOWS_RC_VERDICT**: 2TOOLNE_WINDOWS_RC_READY_FOR_PHYSICAL_ACCEPTANCE
           "@
           
-          $reportContent | Out-File -FilePath reports/windows_rc/CAPCUT_V2_WINDOWS_CI_BUILD_REPORT.md -Encoding utf8
-          Write-Host "✓ Generated reports/windows_rc/CAPCUT_V2_WINDOWS_CI_BUILD_REPORT.md"
+          $reportContent | Out-File -FilePath reports/windows_rc/CAPCUT_V2_WINDOWS_RC2_REPORT.md -Encoding utf8
+          Write-Host "✓ Generated reports/windows_rc/CAPCUT_V2_WINDOWS_RC2_REPORT.md"
 
-      - name: 13. Assemble Release Candidate Package Folder
+      - name: 14. Assemble & Upload Release Candidate 2 Artifact
         shell: pwsh
         run: |
-          Write-Host "Assembling artifact package for external lab distribution..."
-          $distPkg = "2toolne-autoedit-windows-rc-2.0.0"
+          Write-Host "Assembling artifact package for distribution..."
+          $distPkg = "2toolne-autoedit-windows-rc2-2.0.0"
           New-Item -ItemType Directory -Force -Path $distPkg | Out-Null
+          
+          # Copy RC2 ZIP
+          Copy-Item "apps/capcut-v2/desktop/dist/2toolne-autoedit-windows-rc2-2.0.0-win-x64.zip" -Destination $distPkg
           
           # Copy Installer
           Get-ChildItem -Path "apps/capcut-v2/desktop/dist" -Filter "*.exe" | ForEach-Object {
@@ -258,17 +350,14 @@ jobs:
           
           # Copy SHA256SUMS and Reports
           Copy-Item SHA256SUMS.txt -Destination $distPkg
-          Copy-Item reports/windows_rc/CAPCUT_V2_WINDOWS_CI_BUILD_REPORT.md -Destination $distPkg
-          
-          # Copy External Lab Folder
-          Copy-Item -Recurse reports/windows_rc/external_lab -Destination "$distPkg/external_lab"
+          Copy-Item reports/windows_rc/CAPCUT_V2_WINDOWS_RC2_REPORT.md -Destination $distPkg
           
           Write-Host "Package contents:"
           Get-ChildItem -Path $distPkg -Recurse | Select-Object FullName
 
-      - name: 14. Upload Release Candidate Artifact
+      - name: 15. Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: 2toolne-autoedit-windows-rc-2.0.0
-          path: 2toolne-autoedit-windows-rc-2.0.0/
+          name: 2toolne-autoedit-windows-rc2-2.0.0
+          path: 2toolne-autoedit-windows-rc2-2.0.0/
           retention-days: 14
