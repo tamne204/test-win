@@ -56,7 +56,9 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 :: 4. Launch PowerShell Harness
-powershell.exe -ExecutionPolicy Bypass -NoProfile -File "%SCRIPT_PATH%" %*
+set PASS_ARGS=%*
+if "%1"=="--ci-smoke" set PASS_ARGS=-CiSmoke
+powershell.exe -ExecutionPolicy Bypass -NoProfile -File "%SCRIPT_PATH%" %PASS_ARGS%
 
 set HARNESS_EXIT=%ERRORLEVEL%
 echo.

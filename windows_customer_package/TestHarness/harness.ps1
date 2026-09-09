@@ -7,10 +7,13 @@
 
 [CmdletBinding()]
 param(
+    [Alias("ci-smoke", "smoke", "cismoke")]
     [switch]$CiSmoke,
     [switch]$PreflightOnly,
     [switch]$Auto,
-    [switch]$Resume
+    [switch]$Resume,
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$RemainingArgs
 )
 
 # Parse raw args for --ci-smoke
