@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -21,40 +21,40 @@
 
       <nav class="sidebar-nav">
         <button type="button" class="nav-btn active" data-tab="studio">
-          <span class="nav-icon">🎬</span>
+          <span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line><line x1="2" y1="7" x2="7" y2="7"></line><line x1="2" y1="17" x2="7" y2="17"></line><line x1="17" y1="17" x2="22" y2="17"></line><line x1="17" y1="7" x2="22" y2="7"></line></svg></span>
           <span class="nav-label" data-i18n="nav.studio">Studio Dựng Phim</span>
         </button>
         <button type="button" class="nav-btn" data-tab="queue">
-          <span class="nav-icon">📋</span>
+          <span class="nav-icon"><svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></span>
           <span class="nav-label" data-i18n="nav.queue">Hàng Đợi (Queue)</span>
           <span class="nav-badge" id="queueBadge" style="display:none">0</span>
         </button>
         <button type="button" class="nav-btn" data-tab="flow" id="navBtnFlow">
-          <span class="nav-icon">🌊</span>
+          <span class="nav-icon"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg></span>
           <span class="nav-label">Google Flow</span>
           <span class="nav-badge" id="flowStatusBadge" style="display:none">LIVE</span>
         </button>
         <button type="button" class="nav-btn" data-tab="projects">
-          <span class="nav-icon">📁</span>
+          <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></span>
           <span class="nav-label" data-i18n="nav.projects">Dự Án Đã Tạo</span>
         </button>
         <button type="button" class="nav-btn" data-tab="upscale">
-          <span class="nav-icon">🔍</span>
+          <span class="nav-icon"><svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg></span>
           <span class="nav-label" data-i18n="nav.upscale">AI Upscale 4K</span>
         </button>
         <button type="button" class="nav-btn" data-tab="cloud">
-          <span class="nav-icon">☁️</span>
+          <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg></span>
           <span class="nav-label" data-i18n="nav.cloud">Cloud Lưu Trữ</span>
         </button>
       </nav>
 
       <div class="sidebar-footer">
         <button type="button" class="nav-btn" data-tab="account">
-          <span class="nav-icon">👤</span>
+          <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></span>
           <span class="nav-label" data-i18n="nav.account">Tài Khoản &amp; Ví</span>
         </button>
         <button type="button" class="nav-btn" data-tab="settings">
-          <span class="nav-icon">⚙️</span>
+          <span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></span>
           <span class="nav-label" data-i18n="nav.settings">Cài Đặt</span>
         </button>
       </div>
@@ -178,13 +178,13 @@
                 </div>
 
                 <!-- AI Input Bundle Banner & Scene Preview -->
-                <div id="bundleStatusBanner" style="display:none; background:rgba(15,23,42,0.85); border:1px solid var(--accent-primary,#38bdf8); border-radius:8px; padding:12px; margin-bottom:14px;">
+                <div id="bundleStatusBanner" class="bundle-status-banner" style="display:none;">
                   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                     <div style="display:flex; align-items:center; gap:8px;">
                       <span style="font-size:20px;">📦</span>
                       <div>
-                        <strong id="bundleProjectTitle" style="font-size:13px; color:var(--text-main);">AI Input Bundle: Project</strong>
-                        <div id="bundleSceneStats" style="font-size:11.5px; color:var(--text-dim);">0 cảnh • 0 ảnh • 0 video</div>
+                        <strong id="bundleProjectTitle" style="font-size:13px; color:var(--text-primary);">AI Input Bundle: Project</strong>
+                        <div id="bundleSceneStats" style="font-size:11.5px; color:var(--text-secondary);">0 cảnh • 0 ảnh • 0 video</div>
                       </div>
                     </div>
                     <div style="display:flex; gap:6px;">
@@ -193,8 +193,8 @@
                       <button type="button" class="btn-link-danger" id="btnClearBundle" style="font-size:11px; padding:3px 8px;">✕ Đóng Bundle</button>
                     </div>
                   </div>
-                  <div style="background:rgba(0,0,0,0.4); height:6px; border-radius:3px; overflow:hidden; margin-top:6px;">
-                    <div id="bundleProgressFill" style="background:var(--accent-primary,#38bdf8); height:100%; width:0%;"></div>
+                  <div style="background:var(--surface-3); height:6px; border-radius:3px; overflow:hidden; margin-top:6px;">
+                    <div id="bundleProgressFill" style="background:var(--brand-primary); height:100%; width:0%;"></div>
                   </div>
                 </div>
 
@@ -413,11 +413,11 @@ Quy tắc:
             <div class="queue-subpane-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
               <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                 <button type="button" class="btn-subtle" id="btnAddBuildJob" title="Thêm Job mới từ Studio">➕ Thêm Job</button>
-                <button type="button" class="btn-action-primary" id="btnImportBundleQueue" title="Nạp một hoặc nhiều Input Bundle từ máy tính" style="background:var(--accent-primary,#38bdf8); color:#000; font-weight:700;">📦 Import Bundle</button>
+                <button type="button" class="btn-action-primary" id="btnImportBundleQueue" title="Nạp một hoặc nhiều Input Bundle từ máy tính" style="background:var(--brand-primary); color:#FFFFFF; font-weight:600;">📦 Import Bundle</button>
                 <button type="button" class="btn-subtle" id="btnImportCloudBundleQueue" title="Nạp Input Bundle từ 2TOOLNE Cloud / AI Inputs">☁ Import từ Cloud</button>
               </div>
               <div class="pane-buttons" style="display:flex; align-items:center; gap:8px;">
-                <button type="button" class="btn-action-primary" id="btnRunAllPipelineJobs" style="background:#10b981; color:#fff; font-weight:700;">▶ Chạy tất cả</button>
+                <button type="button" class="btn-action-primary" id="btnRunAllPipelineJobs" style="background:var(--success); color:#FFFFFF; font-weight:600;">▶ Chạy tất cả</button>
                 <button type="button" class="btn-subtle" id="btnStopBuildQueue">⏹️ Dừng</button>
                 <button type="button" class="btn-subtle" id="btnClearBuildQueue">🧹 Xóa Đã Xong</button>
               </div>
@@ -428,13 +428,13 @@ Quy tắc:
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
                 <div style="display:flex; align-items:center; gap:8px;">
                   <span style="font-size:16px;">⚡</span>
-                  <h4 style="margin:0; font-size:13px; font-weight:700; color:var(--text-main);">Pipeline Queue V2 (AI Input Bundle → CapCut)</h4>
-                  <span class="status-badge" id="pipelineActiveCountBadge" style="font-size:11px; padding:2px 7px; background:rgba(56,189,248,0.1); color:var(--accent-primary,#38bdf8);">0 tác vụ</span>
+                  <h4 style="margin:0; font-size:13px; font-weight:700; color:var(--text-primary);">Pipeline Queue V2 (AI Input Bundle → CapCut)</h4>
+                  <span class="status-badge" id="pipelineActiveCountBadge" style="font-size:11px; padding:2px 7px; background:var(--brand-soft); color:var(--brand-primary);">0 tác vụ</span>
                 </div>
                 <button type="button" class="btn-subtle" id="btnClearCompletedPipelineJobs" style="font-size:11px; padding:3px 8px;">🧹 Xóa Đã Hoàn Tất</button>
               </div>
               <div id="pipelineJobsList" style="display:flex; flex-direction:column; gap:12px; width: 100%;">
-                <div style="background:rgba(15,23,42,0.4); border:1px dashed rgba(255,255,255,0.1); border-radius:8px; padding:16px; text-align:center; color:var(--text-muted); font-size:12px;">
+                <div style="background:var(--surface-1); border:1px dashed var(--border-default); border-radius:8px; padding:16px; text-align:center; color:var(--text-muted); font-size:12px;">
                   Chưa có tác vụ AI Bundle trong Pipeline V2. Hãy nạp Bundle từ tab Studio và bấm "Chạy Toàn Bộ (Run All)"!
                 </div>
               </div>
@@ -603,7 +603,7 @@ Quy tắc:
                     <span class="dz-icon" style="font-size: 40px; margin-bottom: 6px;">🚀</span>
                     <span class="dz-title" style="font-size: 14px; font-weight: 700;">Kéo thả ảnh vào đây hoặc bấm nút chọn</span>
                     <p class="dz-hint" style="color: var(--text-dim); margin-top: 4px; font-size: 11.5px;">Hỗ trợ định dạng PNG, JPG, JPEG, WEBP. Ảnh được phóng to giữ trọn chi tiết.</p>
-                    <div class="dz-buttons" style="margin-top: 14px;">
+                    <div class="dz-buttons" style="margin-top: 14px; display: flex; justify-content: center;">
                       <button type="button" class="btn-action-primary" id="btnBrowseUpscale" style="padding: 8px 20px; font-size: 12.5px;">📁 Chọn tệp ảnh từ máy tính</button>
                     </div>
                   </div>
@@ -967,8 +967,8 @@ Quy tắc:
               </div>
 
               <!-- Default Render Output Folder (GAP-06) -->
-              <div style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 16px;">
-                <h4 style="font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 10px;">📁 Thư Mục Xuất File MP4 Mặc Định</h4>
+              <div style="margin-top: 20px; border-top: 1px solid var(--border-default); padding-top: 16px;">
+                <h4 style="font-size: 13px; font-weight: 700; color: var(--text-primary); margin-bottom: 10px;">📁 Thư Mục Xuất File MP4 Mặc Định</h4>
                 <div style="display:flex; gap:8px; align-items:center;">
                   <input type="text" id="inpRenderOutputDir" class="form-input font-mono" placeholder="Mặc định: Thư mục dự án hoặc Desktop" readonly style="flex:1; font-size:12px;" />
                   <button type="button" class="btn-subtle" id="btnBrowseRenderOutputDir" title="Chọn thư mục xuất">📂 Chọn</button>
@@ -978,9 +978,22 @@ Quy tắc:
                 <span class="hint-text">💡 Các tác vụ xuất video (Render Queue &amp; Xuất Trực Tiếp) sẽ tự động lưu file MP4 hoàn chỉnh vào thư mục này.</span>
               </div>
 
+              <!-- Appearance / Theme Settings -->
+              <div style="margin-top: 20px; border-top: 1px solid var(--border-default); padding-top: 16px;">
+                <h4 style="font-size: 13px; font-weight: 700; color: var(--text-primary); margin-bottom: 10px;">🎨 Chế Độ Giao Diện (Appearance)</h4>
+                <div style="display:flex; gap:10px; align-items:center;">
+                  <select id="selAppTheme" class="form-select" style="max-width: 240px;">
+                    <option value="dark" selected>🌙 Tối (Dark - Mặc định)</option>
+                    <option value="light">☀️ Sáng (Light)</option>
+                    <option value="system">🖥️ Theo Hệ Thống (System)</option>
+                  </select>
+                  <span class="hint-text">💡 Chuyển đổi giữa chế độ Dark chuyên nghiệp hoặc Light theo sở thích.</span>
+                </div>
+              </div>
+
               <!-- Language / Localization Settings (GAP-13) -->
-              <div style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 16px;">
-                <h4 style="font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 10px;" data-i18n="settings.language">🌐 Ngôn Ngữ Giao Diện (Language)</h4>
+              <div style="margin-top: 20px; border-top: 1px solid var(--border-default); padding-top: 16px;">
+                <h4 style="font-size: 13px; font-weight: 700; color: var(--text-primary); margin-bottom: 10px;" data-i18n="settings.language">🌐 Ngôn Ngữ Giao Diện (Language)</h4>
                 <div style="display:flex; gap:10px; align-items:center;">
                   <select id="selAppLanguage" class="form-select" style="max-width: 240px;">
                     <option value="vi" selected>🇻🇳 Tiếng Việt (Mặc định)</option>
@@ -991,8 +1004,8 @@ Quy tắc:
               </div>
 
               <!-- Faster Whisper & ASR Engine Settings -->
-              <div style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 16px;">
-                <h4 style="font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 10px;">⚡ Động Cơ Nhận Diện Thoại &amp; Phụ Đề (ASR Engine)</h4>
+              <div style="margin-top: 20px; border-top: 1px solid var(--border-default); padding-top: 16px;">
+                <h4 style="font-size: 13px; font-weight: 700; color: var(--text-primary); margin-bottom: 10px;">⚡ Động Cơ Nhận Diện Thoại &amp; Phụ Đề (ASR Engine)</h4>
                 <div class="input-field">
                   <label for="selAsrEngine">Chế Độ Xử Lý:</label>
                   <select id="selAsrEngine" class="form-select">
@@ -1005,19 +1018,19 @@ Quy tắc:
               </div>
 
               <!-- Diagnostic Bundle Export (GAP-26) -->
-              <div style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 16px;">
-                <h4 style="font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 6px;">🩺 Chẩn Đoán &amp; Hỗ Trợ Kỹ Thuật</h4>
-                <p style="font-size:12px; color:#94a3b8; margin-bottom:10px;">Xuất gói thông tin hệ thống, cấu hình CapCut, môi trường thực thi và nhật ký hàng đợi ra màn hình Desktop để hỗ trợ xử lý sự cố.</p>
+              <div style="margin-top: 20px; border-top: 1px solid var(--border-default); padding-top: 16px;">
+                <h4 style="font-size: 13px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px;">🩺 Chẩn Đoán &amp; Hỗ Trợ Kỹ Thuật</h4>
+                <p style="font-size:12px; color:var(--text-secondary); margin-bottom:10px;">Xuất gói thông tin hệ thống, cấu hình CapCut, môi trường thực thi và nhật ký hàng đợi ra màn hình Desktop để hỗ trợ xử lý sự cố.</p>
                 <button type="button" class="btn-subtle" id="btnExportDiagnostics">📦 Xuất Gói Chẩn Đoán (Diagnostic Bundle)</button>
               </div>
 
               <!-- Auto Update Check (GAP-05) -->
-              <div style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 16px;">
-                <h4 style="font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 10px;">🔄 Cập Nhật Phiên Bản Ứng Dụng</h4>
+              <div style="margin-top: 20px; border-top: 1px solid var(--border-default); padding-top: 16px;">
+                <h4 style="font-size: 13px; font-weight: 700; color: var(--text-primary); margin-bottom: 10px;">🔄 Cập Nhật Phiên Bản Ứng Dụng</h4>
                 <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
                   <div>
-                    <span style="font-size:12.5px; color:#e2e8f0;">Phiên bản hiện tại: <strong id="txtAppCurrentVersion">v2.0.0</strong></span>
-                    <div style="font-size:11.5px; color:#94a3b8; margin-top:2px;" id="txtUpdateStatus">Đang sử dụng phiên bản ổn định mới nhất.</div>
+                    <span style="font-size:12.5px; color:var(--text-primary);">Phiên bản hiện tại: <strong id="txtAppCurrentVersion">v2.0.0</strong></span>
+                    <div style="font-size:11.5px; color:var(--text-muted); margin-top:2px;" id="txtUpdateStatus">Đang sử dụng phiên bản ổn định mới nhất.</div>
                   </div>
                   <div style="display:flex; gap:8px; align-items:center;">
                     <button type="button" class="btn-subtle" id="btnCheckUpdate">🔄 Kiểm Tra Cập Nhật</button>
@@ -1025,13 +1038,13 @@ Quy tắc:
                 </div>
 
                 <!-- Update Progress Bar (Hidden by default) -->
-                <div id="boxUpdateProgress" style="display:none; margin-top:12px; background: rgba(15, 23, 42, 0.6); padding:10px 14px; border-radius:8px; border:1px solid var(--border-color);">
-                  <div style="display:flex; justify-content:space-between; font-size:11.5px; color:#cbd5e1; margin-bottom:6px;">
+                <div id="boxUpdateProgress" style="display:none; margin-top:12px; background: var(--surface-2); padding:10px 14px; border-radius:8px; border:1px solid var(--border-default);">
+                  <div style="display:flex; justify-content:space-between; font-size:11.5px; color:var(--text-secondary); margin-bottom:6px;">
                     <span id="txtUpdateProgressState">Đang tải bản cập nhật...</span>
                     <span id="txtUpdateSpeed">0% — 0 KB/s</span>
                   </div>
-                  <div style="width:100%; height:8px; background:#1e293b; border-radius:4px; overflow:hidden;">
-                    <div id="barUpdateProgress" style="width:0%; height:100%; background:linear-gradient(90deg, #38bdf8, #6366f1); transition: width 0.2s ease;"></div>
+                  <div style="width:100%; height:8px; background:var(--surface-3); border-radius:4px; overflow:hidden;">
+                    <div id="barUpdateProgress" style="width:0%; height:100%; background:var(--brand-primary); transition: width 0.2s ease;"></div>
                   </div>
                 </div>
 
@@ -1131,10 +1144,10 @@ Quy tắc:
         <p class="modal-desc">
           Hệ thống phát hiện các số thứ tự sau đây bị khuyết trong danh sách ảnh:
         </p>
-        <div id="missingIndicesDetails" style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:6px;padding:8px 12px;margin:10px 0;font-family:monospace;color:#f87171;font-size:12px;max-height:80px;overflow-y:auto;">
+        <div id="missingIndicesDetails" style="background:var(--danger-bg);border:1px solid var(--danger-border);border-radius:6px;padding:8px 12px;margin:10px 0;font-family:monospace;color:var(--danger);font-size:12px;max-height:80px;overflow-y:auto;">
           --
         </div>
-        <p style="font-size:12px;font-weight:600;color:#fff;margin:12px 0 6px;">Chọn phương án xử lý bù đắp thời lượng cảnh:</p>
+        <p style="font-size:12px;font-weight:600;color:var(--text-primary);margin:12px 0 6px;">Chọn phương án xử lý bù đắp thời lượng cảnh:</p>
         <div style="display:flex;flex-direction:column;gap:8px;font-size:12px;">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
             <input type="radio" name="radMissingOption" value="stretch_prev" checked />
@@ -1168,8 +1181,8 @@ Quy tắc:
         <div id="renderResultSuccessContent" style="display:none;">
           <div style="text-align:center;margin-bottom:16px;">
             <div style="font-size:42px;margin-bottom:8px;">🎉</div>
-            <h4 style="font-size:16px;color:#34d399;font-weight:700;" id="renderResultProjectName">Tên Dự Án</h4>
-            <p style="font-size:13px;color:#94a3b8;margin-top:4px;">Video MP4 đã được xuất và xác thực toàn vẹn bằng OutputVerifier!</p>
+            <h4 style="font-size:16px;color:var(--success);font-weight:700;" id="renderResultProjectName">Tên Dự Án</h4>
+            <p style="font-size:13px;color:var(--text-secondary);margin-top:4px;">Video MP4 đã được xuất và xác thực toàn vẹn bằng OutputVerifier!</p>
           </div>
           <div class="info-row">
             <span class="info-lbl">Tệp Video:</span>
@@ -1184,10 +1197,10 @@ Quy tắc:
         <div id="renderResultErrorContent" style="display:none;">
           <div style="text-align:center;margin-bottom:16px;">
             <div style="font-size:42px;margin-bottom:8px;">⚠️</div>
-            <h4 style="font-size:16px;color:#f87171;font-weight:700;" id="renderResultErrorProject">Không thể xuất video</h4>
-            <p style="font-size:13px;color:#cbd5e1;margin-top:6px;" id="renderResultErrorMessage">Mô tả lỗi</p>
+            <h4 style="font-size:16px;color:var(--danger);font-weight:700;" id="renderResultErrorProject">Không thể xuất video</h4>
+            <p style="font-size:13px;color:var(--text-secondary);margin-top:6px;" id="renderResultErrorMessage">Mô tả lỗi</p>
           </div>
-          <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:6px;padding:10px;font-size:11.5px;color:#fca5a5;max-height:100px;overflow-y:auto;" id="renderResultErrorDetails">
+          <div style="background:var(--danger-bg);border:1px solid var(--danger-border);border-radius:6px;padding:10px;font-size:11.5px;color:var(--danger);max-height:100px;overflow-y:auto;" id="renderResultErrorDetails">
             --
           </div>
         </div>
@@ -1214,9 +1227,9 @@ Quy tắc:
         <button type="button" class="btn-close-modal" id="btnCloseModalDeleteProject" title="Đóng (Esc)">✕</button>
       </div>
       <div class="modal-body">
-        <p style="font-size:13.5px;color:#e2e8f0;margin-bottom:12px;">Bạn có chắc chắn muốn xóa dự án <strong id="deleteProjectTargetName" style="color:#f87171;">--</strong>?</p>
-        <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.18);border-radius:6px;padding:12px;margin-bottom:14px;">
-          <div style="font-size:13px;color:#e2e8f0;line-height:1.5;">
+        <p style="font-size:13.5px;color:var(--text-primary);margin-bottom:12px;">Bạn có chắc chắn muốn xóa dự án <strong id="deleteProjectTargetName" style="color:var(--danger);">--</strong>?</p>
+        <div style="background:var(--danger-bg);border:1px solid var(--danger-border);border-radius:6px;padding:12px;margin-bottom:14px;">
+          <div style="font-size:13px;color:var(--text-primary);line-height:1.5;">
             Chỉ xóa dự án CapCut đã tạo.<br/>
             Ảnh, audio và script gốc sẽ <strong>không</strong> bị xóa.
           </div>
@@ -1268,8 +1281,8 @@ Quy tắc:
 
         <div id="quickLoginWaiting" style="display:none; text-align:center; padding:20px 10px;">
           <div class="spinner" style="width:36px; height:36px; border-width:3px; margin: 0 auto 16px auto;"></div>
-          <h4 style="font-size:14px; font-weight:600; color:#f8fafc; margin-bottom:8px;">Đang chờ xác thực từ trình duyệt web...</h4>
-          <p style="font-size:12px; color:#94a3b8; line-height:1.4; margin-bottom:16px;">
+          <h4 style="font-size:14px; font-weight:600; color:var(--text-primary); margin-bottom:8px;">Đang chờ xác thực từ trình duyệt web...</h4>
+          <p style="font-size:12px; color:var(--text-secondary); line-height:1.4; margin-bottom:16px;">
             Vui lòng hoàn tất đăng nhập trên tab trình duyệt vừa mở. Ứng dụng sẽ tự động đồng bộ tài khoản ngay khi bạn xác nhận.
           </p>
           <button type="button" class="btn-subtle" id="btnCancelQuickLoginAction">Hủy Bỏ</button>
@@ -1359,7 +1372,7 @@ Quy tắc:
         <button type="button" class="btn-close-modal" id="btnCloseModalCloudConfirmDelete" title="Đóng (Esc)">✕</button>
       </div>
       <div class="modal-body">
-        <p id="cloudDeleteModalMessage" style="font-size:13px; color:#e2e8f0; line-height:1.5;">
+        <p id="cloudDeleteModalMessage" style="font-size:13px; color:var(--text-primary); line-height:1.5;">
           Bạn có chắc chắn muốn chuyển mục này vào thùng rác?
         </p>
         <div class="modal-error-msg" id="cloudDeleteError" style="display:none"></div>
@@ -1451,11 +1464,11 @@ Quy tắc:
             <span class="badge" style="background:#064e3b; color:#34d399; font-size:11px; padding:3px 8px; border-radius:4px; font-weight:600;">● Đang hoạt động</span>
             <span id="cloudShareActiveExpires" style="font-size:11.5px; color:var(--text-muted);">Hết hạn: --</span>
           </div>
-          <div style="font-size:12px; color:#e2e8f0;">
-            Quyền truy cập: <strong id="cloudShareActiveAccess" style="color:var(--accent-cyan);">Cho phép tải xuống</strong>
+          <div style="font-size:12px; color:var(--text-primary);">
+            Quyền truy cập: <strong id="cloudShareActiveAccess" style="color:var(--brand-primary);">Cho phép tải xuống</strong>
           </div>
           <div style="display:flex; gap:8px;">
-            <input type="text" id="inpCloudActiveShareUrl" class="form-input" readonly style="flex:1; font-family:monospace; font-size:12px; background:#0b1120; border-color:#334155; color:#38bdf8;" />
+            <input type="text" id="inpCloudActiveShareUrl" class="form-input" readonly style="flex:1; font-family:monospace; font-size:12px; background:var(--surface-2); border-color:var(--border-default); color:var(--text-primary);" />
             <button type="button" class="btn-action-primary" id="btnCopyActiveShareLink" style="padding:0 14px; white-space:nowrap;">Sao chép</button>
           </div>
           <div style="display:flex; justify-content:flex-end; margin-top:4px;">

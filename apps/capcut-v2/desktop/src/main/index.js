@@ -5,7 +5,10 @@
  * Production hardening: Strict CSP, disabled navigation, disabled devtools, safeStorage.
  * Spawns and manages Python Core Sidecar.
  */
-const { app, BrowserWindow, ipcMain, dialog, shell, session, clipboard } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, session, clipboard, nativeTheme } = require('electron');
+if (nativeTheme) {
+  nativeTheme.themeSource = 'dark';
+}
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -262,7 +265,7 @@ async function createWindow() {
     minWidth: 980,
     minHeight: 700,
     title: '2TOOLNE AutoEdit',
-    backgroundColor: '#FCF8F1',
+    backgroundColor: '#0F1012',
     icon: path.join(__dirname, '../../assets/icon.png'),
     show: false,
     webPreferences: {

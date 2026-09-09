@@ -4,11 +4,23 @@
  * Exposes strictly typed APIs on window.autoedit via contextBridge.
  * Completely shields Renderer from raw Electron, Node.js, and filesystem access.
  */
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 let _lastPreloadAiKeyCall = null;
 
 contextBridge.exposeInMainWorld('autoedit', {
+  // Path resolver for HTML5 Drag & Drop File objects (Electron 30+)
+  getPathForFile: (file) => {
+    try {
+      if (webUtils && typeof webUtils.getPathForFile === 'function') {
+        return webUtils.getPathForFile(file);
+      }
+    } catch (e) {
+      console.warn('[Preload] getPathForFile error:', e.message);
+    }
+    return file?.path || '';
+  },
+
   // Native File Dialogs & Archive Importer
   selectImages: () => ipcRenderer.invoke('dialog:select-images'),
   selectAudio: () => ipcRenderer.invoke('dialog:select-audio'),

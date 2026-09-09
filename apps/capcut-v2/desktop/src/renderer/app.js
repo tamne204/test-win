@@ -390,6 +390,7 @@ const DOM = {
   missingIndicesDetails: document.getElementById('missingIndicesDetails'),
   selAsrEngine: document.getElementById('selAsrEngine'),
   selAppLanguage: document.getElementById('selAppLanguage'),
+  selAppTheme: document.getElementById('selAppTheme'),
 
   // Cloud Explorer & Studio Integration (Priority 4)
   btnBrowseCloudImages: document.getElementById('btnBrowseCloudImages'),
@@ -838,6 +839,19 @@ window.addEventListener('keydown', (e) => {
 async function handleImportPaths(paths) {
   if (!paths || !paths.length) return;
 
+  // Auto-detect if user dropped/selected an Input Bundle directory
+  if (paths.length === 1 && typeof paths[0] === 'string' && window.autoedit?.bundle?.validateLocal) {
+    try {
+      const checkBundle = await window.autoedit.bundle.validateLocal(paths[0]);
+      if (checkBundle && checkBundle.ok && (checkBundle.has_manifest || checkBundle.has_prompts)) {
+        await loadBundleFromDirectory(paths[0]);
+        return;
+      }
+    } catch (bundleCheckErr) {
+      // Continue normal image processing
+    }
+  }
+
   try {
     const res = await window.autoedit.processImportPaths(paths);
     if (res && res.images && res.images.length) {
@@ -1004,6 +1018,16 @@ function renderMediaGrid() {
     return;
   }
 
+function toFileUrl(filePath) {
+  if (!filePath) return '';
+  if (filePath.startsWith('file://')) return filePath;
+  let normalized = filePath.replace(/\\/g, '/');
+  if (!normalized.startsWith('/')) {
+    normalized = '/' + normalized;
+  }
+  return `file://${normalized}`;
+}
+
   DOM.mediaGrid.innerHTML = '';
   state.mediaList.forEach((imgPath, idx) => {
     const card = document.createElement('div');
@@ -1012,7 +1036,7 @@ function renderMediaGrid() {
 
     const img = document.createElement('img');
     img.className = 'media-thumb-img';
-    img.src = `file://${imgPath}`;
+    img.src = toFileUrl(imgPath);
     img.alt = `Ảnh ${idx + 1}`;
 
     const delBtn = document.createElement('button');
@@ -1042,8 +1066,22 @@ DOM.mediaDropZone.addEventListener('dragleave', () => {
 DOM.mediaDropZone.addEventListener('drop', async (e) => {
   e.preventDefault();
   DOM.mediaDropZone.classList.remove('dragover');
-  const files = Array.from(e.dataTransfer.files).map((f) => f.path);
-  await handleImportPaths(files);
+  const rawFiles = Array.from(e.dataTransfer?.files || []);
+  const files = rawFiles
+    .map((f) => {
+      if (window.autoedit?.getPathForFile) {
+        try {
+          const p = window.autoedit.getPathForFile(f);
+          if (p) return p;
+        } catch (err) {}
+      }
+      return f.path || '';
+    })
+    .filter(Boolean);
+
+  if (files.length > 0) {
+    await handleImportPaths(files);
+  }
 });
 
 DOM.btnBrowseFiles.addEventListener('click', async () => {
@@ -2651,7 +2689,9 @@ DOM.upscaleDropZone?.addEventListener('dragleave', () => {
 DOM.upscaleDropZone?.addEventListener('drop', (e) => {
   e.preventDefault();
   DOM.upscaleDropZone.classList.remove('active');
-  const dropped = Array.from(e.dataTransfer.files || []).map(f => f.path).filter(Boolean);
+  const dropped = Array.from(e.dataTransfer.files || [])
+    .map((f) => (window.autoedit?.getPathForFile ? window.autoedit.getPathForFile(f) : f.path))
+    .filter(Boolean);
   if (dropped.length) {
     state.upscaleFiles = [...new Set([...state.upscaleFiles, ...dropped])];
     renderUpscaleList();
@@ -4161,7 +4201,8 @@ function initCloudExplorer() {
       const files = Array.from(e.dataTransfer?.files || []);
       if (files.length > 0) {
         files.forEach((f) => {
-          if (f.path) startCloudUpload(f.path);
+          const filePath = (window.autoedit?.getPathForFile ? window.autoedit.getPathForFile(f) : f.path) || '';
+          if (filePath) startCloudUpload(filePath);
         });
       }
     });
@@ -5458,31 +5499,56 @@ async function loadBundleFromDirectory(bundleDir) {
     DOM.inpProjectName.value = res.project_name;
   }
 
-  // If script present, fill script box
-  if (res.script && DOM.txtScript && !DOM.txtScript.value.trim()) {
-    DOM.txtScript.value = res.script;
-    updateScriptWordCount();
+  // If script present, fill Studio script box
+  if (res.script && DOM.inpScriptText && !DOM.inpScriptText.value.trim()) {
+    DOM.inpScriptText.value = res.script;
   }
 
-  // Populate images into Studio Media Grid
+  // Populate images into Studio Media Grid (state.mediaList)
   const validImages = [];
-  for (const scene of res.scenes) {
-    const matched = res.assets.mapped_scenes.find((m) => m.scene_id === scene.scene_id);
-    if (matched && matched.image_path) {
-      validImages.push({
-        id: `bndl_img_${scene.scene_id}`,
-        name: matched.image_file,
-        path: matched.image_path,
-        scene_id: scene.scene_id,
-        slug: scene.slug,
-      });
+  if (Array.isArray(res.scenes)) {
+    for (const scene of res.scenes) {
+      const matched = res.assets?.mapped_scenes?.find((m) => m.scene_id === scene.scene_id);
+      if (matched && matched.image_path) {
+        validImages.push(matched.image_path);
+      }
     }
   }
 
+  // Fallback: check assets.parsed_assets for images
+  if (validImages.length === 0 && Array.isArray(res.assets?.parsed_assets)) {
+    for (const asset of res.assets.parsed_assets) {
+      if (asset.type === 'image' && asset.full_path) {
+        validImages.push(asset.full_path);
+      }
+    }
+  }
+
+  // Fallback 2: scan directory files
+  if (validImages.length === 0 && res.bundle_dir) {
+    try {
+      const scanRes = await window.autoedit.processImportPaths([res.bundle_dir]);
+      if (scanRes && Array.isArray(scanRes.images) && scanRes.images.length > 0) {
+        validImages.push(...scanRes.images);
+      }
+    } catch (e) {}
+  }
+
   if (validImages.length > 0) {
-    state.images = validImages;
+    for (const img of validImages) {
+      if (!state.mediaList.includes(img)) {
+        state.mediaList.push(img);
+      }
+    }
     renderMediaGrid();
-    updateMediaCount();
+  }
+
+  // Auto-set audio if present in bundle
+  const audioCandidate = res.assets?.mapped_scenes?.find((m) => m.audio_path)?.audio_path ||
+                         res.audio_file ||
+                         res.assets?.audio_path;
+  if (audioCandidate && typeof setAudioPathUI === 'function') {
+    setAudioPathUI(audioCandidate);
   }
 
   showToast(`Đã nạp Input Bundle: ${res.project_name} (${res.scenes_count} cảnh)`, 'success');
@@ -6683,6 +6749,40 @@ window.addEventListener('DOMContentLoaded', async () => {
     DOM.inpProjectName.value = generateDefaultProjectName();
     DOM.inpProjectName.focus();
   });
+
+  // Initialize Theme Engine (Section 16: Dark default, Light, System)
+  function initTheme() {
+    const applyTheme = (theme) => {
+      if (theme === 'system') {
+        const isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+      } else {
+        document.documentElement.setAttribute('data-theme', theme);
+      }
+    };
+
+    const savedTheme = localStorage.getItem('2toolne_theme') || 'dark';
+    applyTheme(savedTheme);
+
+    if (DOM.selAppTheme) {
+      DOM.selAppTheme.value = savedTheme;
+      DOM.selAppTheme.addEventListener('change', (e) => {
+        const newTheme = e.target.value;
+        localStorage.setItem('2toolne_theme', newTheme);
+        applyTheme(newTheme);
+      });
+    }
+
+    if (window.matchMedia) {
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+        const current = localStorage.getItem('2toolne_theme') || 'dark';
+        if (current === 'system') {
+          applyTheme('system');
+        }
+      });
+    }
+  }
+  initTheme();
 
   // Initialize i18n Localization (GAP-13)
   if (window.i18n) {
