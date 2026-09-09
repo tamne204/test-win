@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     TestHarness.psm1 - 2TOOLNE AutoEdit V2 Windows Physical Acceptance Test Library
     Pure PowerShell 5.1+ & .NET. Zero development dependencies required on Windows.

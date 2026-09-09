@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     RUN_WINDOWS_PHYSICAL_GATE.ps1
     Authoritative Windows Physical Acceptance Harness for 2TOOLNE AutoEdit V2 (RC2).
@@ -34,16 +34,14 @@ Start-Transcript -Path $LogFile -Append | Out-Null
 # Import module
 Import-Module (Join-Path $LibDir "TestHarness.psm1") -Force
 
-Write-Host @"
-================================================================================
-          2TOOLNE AUTOEDIT FOR CAPCUT V2 — WINDOWS PHYSICAL GATE
-                      IMMUTABLE RELEASE CANDIDATE 2 (RC2)
-================================================================================
-Workstation Architecture: Physical Acceptance Testing Harness
-Authoritative Target    : CapCut Desktop 9.3.0.3970 on Windows 10/11 x64
-Expected RC2 Hash       : 217265079cfdce4a40d5e99853e0948c184c56c82c193df32429e0345c13e7cc
-================================================================================
-"@ -ForegroundColor Cyan
+Write-Host "================================================================================" -ForegroundColor Cyan
+Write-Host "          2TOOLNE AUTOEDIT FOR CAPCUT V2 -- WINDOWS PHYSICAL GATE" -ForegroundColor Cyan
+Write-Host "                      IMMUTABLE RELEASE CANDIDATE 2 (RC2)" -ForegroundColor Cyan
+Write-Host "================================================================================" -ForegroundColor Cyan
+Write-Host "Workstation Architecture: Physical Acceptance Testing Harness" -ForegroundColor Cyan
+Write-Host "Authoritative Target    : CapCut Desktop 9.3.0.3970 on Windows 10/11 x64" -ForegroundColor Cyan
+Write-Host "Expected RC2 Hash       : 217265079cfdce4a40d5e99853e0948c184c56c82c193df32429e0345c13e7cc" -ForegroundColor Cyan
+Write-Host "================================================================================" -ForegroundColor Cyan
 
 # ------------------------------------------------------------------------------
 # Checkpoint & State Management
@@ -131,7 +129,7 @@ function Prompt-GateResult {
     }
 
     while ($true) {
-        Write-Host "`nLựa chọn kết quả cho $GateId:"
+        Write-Host "`nLựa chọn kết quả cho [$GateId]:"
         Write-Host "  [1] PASS    - Đạt tiêu chuẩn nghiệm thu" -ForegroundColor Green
         Write-Host "  [2] FAIL    - Thất bại / Lỗi phát sinh" -ForegroundColor Red
         Write-Host "  [3] BLOCKED - Bị chặn do thiếu điều kiện (VD: sai phiên bản CapCut)" -ForegroundColor Yellow
@@ -194,7 +192,9 @@ $rcCandidates = @(
     $RcPath,
     (Join-Path $ScriptDir "2toolne-autoedit-windows-rc2-2.0.0-win-x64.zip"),
     (Join-Path (Split-Path -Parent $ScriptDir) "2toolne-autoedit-windows-rc2-2.0.0-win-x64.zip"),
+    (Join-Path (Split-Path -Parent (Split-Path -Parent $ScriptDir)) "2toolne-autoedit-windows-rc2-2.0.0-win-x64.zip"),
     (Join-Path (Split-Path -Parent $ScriptDir) "desktop\dist\2toolne-autoedit-windows-rc2-2.0.0-win-x64.zip"),
+    (Join-Path $env:USERPROFILE "Downloads\2toolne-autoedit-windows-rc2-2.0.0-win-x64.zip"),
     "C:\2TOOLNE\2toolne-autoedit-windows-rc2-2.0.0-win-x64.zip"
 )
 
@@ -562,17 +562,15 @@ if ($Results['WINPHYS-25'] -ne "PASS") {
 Write-FinalReport -OutputDir $OutputDir -Results $Results -SysInfo $SysInfo -Notes $Notes
 Save-CurrentState
 
-Write-Host @"
-
-================================================================================
-          HOÀN THÀNH QUY TRÌNH KIỂM THỬ VẬT LÝ WINDOWS (PHYSICAL GATE DONE)
-================================================================================
-Báo cáo nghiệm thu chính thức đã được xuất bản tại:
-  -> $OutputDir\FINAL_REPORT.md
-
-Tất cả nhật ký và bằng chứng thực nghiệm lưu trữ tại:
-  -> $OutputDir\
-================================================================================
-"@ -ForegroundColor Green
+Write-Host ""
+Write-Host "================================================================================" -ForegroundColor Green
+Write-Host "          HOÀN THÀNH QUY TRÌNH KIỂM THỬ VẬT LÝ WINDOWS (PHYSICAL GATE DONE)" -ForegroundColor Green
+Write-Host "================================================================================" -ForegroundColor Green
+Write-Host "Báo cáo nghiệm thu chính thức đã được xuất bản tại:" -ForegroundColor Green
+Write-Host "  -> $OutputDir\FINAL_REPORT.md" -ForegroundColor Green
+Write-Host ""
+Write-Host "Tất cả nhật ký và bằng chứng thực nghiệm lưu trữ tại:" -ForegroundColor Green
+Write-Host "  -> $OutputDir\" -ForegroundColor Green
+Write-Host "================================================================================" -ForegroundColor Green
 
 Stop-Transcript | Out-Null

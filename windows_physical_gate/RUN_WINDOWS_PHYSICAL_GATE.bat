@@ -4,7 +4,7 @@ title 2TOOLNE AutoEdit V2 - Windows Physical Acceptance Gate
 chcp 65001 > nul
 
 echo ================================================================================
-echo           2TOOLNE AUTOEDIT FOR CAPCUT V2 — WINDOWS PHYSICAL GATE
+echo           2TOOLNE AUTOEDIT FOR CAPCUT V2 -- WINDOWS PHYSICAL GATE
 echo                       IMMUTABLE RELEASE CANDIDATE 2
 echo ================================================================================
 echo.
