@@ -7,7 +7,7 @@
 
 [CmdletBinding()]
 param(
-    [Alias("ci-smoke", "smoke", "cismoke")]
+    [Alias("ci-smoke", "smoke")]
     [switch]$CiSmoke,
     [switch]$PreflightOnly,
     [switch]$Auto,
