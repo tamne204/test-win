@@ -1,28 +1,34 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
 import sys
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
-
 SPEC_DIR = os.path.dirname(os.path.abspath(SPEC))
 V2_ROOT = os.path.abspath(os.path.join(SPEC_DIR, '..'))
+if V2_ROOT not in sys.path:
+    sys.path.insert(0, V2_ROOT)
+
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+
 ENTRY_POINT = os.path.join(V2_ROOT, 'desktop_bridge', 'sidecar_main.py')
 
 datas = []
-try:
-    datas += collect_data_files('faster_whisper')
-except Exception:
-    pass
+for pkg in ('faster_whisper', 'ctranslate2'):
+    try:
+        datas += collect_data_files(pkg)
+    except Exception:
+        pass
 
 hiddenimports = [
     'PIL', 'PIL.Image', 'PIL.ImageDraw', 'PIL.ImageFont',
-    'cryptography', 'requests', 'psutil', 'numpy',
+    'cryptography', 'requests', 'psutil', 'numpy', 'soundfile',
+    'capcut_version',
 ]
-try:
-    hiddenimports += collect_submodules('core')
-    hiddenimports += collect_submodules('adapters')
-    hiddenimports += collect_submodules('desktop_bridge')
-except Exception:
-    pass
+for pkg in ('core', 'adapters', 'desktop_bridge', 'faster_whisper', 'ctranslate2'):
+    try:
+        subs = collect_submodules(pkg)
+        if subs:
+            hiddenimports += subs
+    except Exception:
+        pass
 
 if not sys.platform.startswith('win'):
     hiddenimports += ['fcntl', 'plistlib']

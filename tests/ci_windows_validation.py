@@ -47,7 +47,15 @@ def send_ipc(proc: subprocess.Popen, msg: Dict[str, Any], timeout_sec: float = 8
     
     resp_line = proc.stdout.readline()
     if not resp_line:
-        raise RuntimeError("Premature EOF received from sidecar stdout")
+        time.sleep(0.5)
+        exit_code = proc.poll()
+        stderr_txt = ""
+        try:
+            if proc.stderr:
+                stderr_txt = proc.stderr.read()
+        except Exception:
+            pass
+        raise RuntimeError(f"Premature EOF received from sidecar stdout (exit code: {exit_code}).\n--- SIDECAR STDERR ---\n{stderr_txt}\n--- END STDERR ---")
     return json.loads(resp_line.strip())
 
 
