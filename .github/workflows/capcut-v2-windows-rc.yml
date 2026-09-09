@@ -403,18 +403,18 @@ jobs:
           # Update RELEASE_INFO.txt with exact build ID and Git commit
           $shortSha = $env:GITHUB_SHA.Substring(0, 7)
           $buildId = "CUSTOMER-TEST-READY-2.0.0-hardened-WIN-X64-$shortSha"
-          $releaseInfo = @"
-PRODUCT_NAME=2TOOLNE AutoEdit for CapCut
-PRODUCT_VERSION=2.0.0-hardened
-BUILD_ID=$buildId
-GIT_SHA=$env:GITHUB_SHA
-PACKAGE_FILENAME=2TOOLNE_Windows_Customer_Test_2.0.0-hardened.zip
-BUILD_DATE=$(Get-Date -Format "yyyy-MM-ddTHH:mm:ss.fffZ")
-TARGET_OS=Windows 10/11 x64
-AUTHORITATIVE_CAPCUT_VERSION=9.3.0.3970
-STATUS=CUSTOMER_TEST_READY
-"@
-          $releaseInfo | Out-File -FilePath (Join-Path $staging "RELEASE_INFO.txt") -Encoding utf8
+          $lines = @(
+            "PRODUCT_NAME=2TOOLNE AutoEdit for CapCut",
+            "PRODUCT_VERSION=2.0.0-hardened",
+            "BUILD_ID=$buildId",
+            "GIT_SHA=$env:GITHUB_SHA",
+            "PACKAGE_FILENAME=2TOOLNE_Windows_Customer_Test_2.0.0-hardened.zip",
+            "BUILD_DATE=$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ss.fffZ')",
+            "TARGET_OS=Windows 10/11 x64",
+            "AUTHORITATIVE_CAPCUT_VERSION=9.3.0.3970",
+            "STATUS=CUSTOMER_TEST_READY"
+          )
+          $lines | Out-File -FilePath (Join-Path $staging "RELEASE_INFO.txt") -Encoding utf8
           
           Write-Host "Copying Customer Launcher, TestHarness, and TestBundle..."
           Copy-Item "windows_customer_package\START_TEST.bat" $staging -Force
