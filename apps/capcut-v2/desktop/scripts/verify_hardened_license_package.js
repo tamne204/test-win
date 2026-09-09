@@ -18,18 +18,18 @@ function verifyLicenseContract(appDir) {
 
   const asarPath = path.join(appDir, 'resources', 'app.asar');
   if (fs.existsSync(asarPath)) {
-    // Read from asar via asar module if available, or extract
+    const { execSync } = require('child_process');
+    const os = require('os');
+    const tmpExtract = fs.mkdtempSync(path.join(os.tmpdir(), 'asar_extract_'));
     try {
-      const asar = require('asar');
-      mainContent = asar.extractFile(asarPath, 'src/main/index.js').toString('utf8');
-      preloadContent = asar.extractFile(asarPath, 'src/preload/preload.js').toString('utf8');
-      rendererContent = asar.extractFile(asarPath, 'src/renderer/app.js').toString('utf8');
-    } catch (e) {
-      // Fallback: search string directly in asar binary
-      const buf = fs.readFileSync(asarPath);
-      mainContent = buf.toString('utf8');
-      preloadContent = mainContent;
-      rendererContent = mainContent;
+      execSync(`npx asar extract-file "${asarPath}" src/main/index.js`, { cwd: tmpExtract, stdio: 'pipe' });
+      execSync(`npx asar extract-file "${asarPath}" src/preload/preload.js`, { cwd: tmpExtract, stdio: 'pipe' });
+      execSync(`npx asar extract-file "${asarPath}" src/renderer/app.js`, { cwd: tmpExtract, stdio: 'pipe' });
+      mainContent = fs.readFileSync(path.join(tmpExtract, 'index.js'), 'utf8');
+      preloadContent = fs.readFileSync(path.join(tmpExtract, 'preload.js'), 'utf8');
+      rendererContent = fs.readFileSync(path.join(tmpExtract, 'app.js'), 'utf8');
+    } finally {
+      try { fs.rmSync(tmpExtract, { recursive: true, force: true }); } catch (_) {}
     }
   } else {
     // Unpacked or source tree
