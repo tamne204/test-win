@@ -52,6 +52,15 @@ jobs:
           New-Item -ItemType Directory -Force -Path $appDir | Out-Null
           Write-Host "Extracting RC2 into 2TOOLNE directory..."
           Expand-Archive -Path "D:\\rc2.zip" -DestinationPath $appDir -Force
+          
+          # Mirror win-x64 subfolders to top-level bin and engine for universal compatibility
+          if (Test-Path "$appDir\\resources\\bin\\win-x64") {
+              Copy-Item "$appDir\\resources\\bin\\win-x64\\*" "$appDir\\resources\\bin\\" -Recurse -Force
+          }
+          if (Test-Path "$appDir\\resources\\engine\\win-x64") {
+              Copy-Item "$appDir\\resources\\engine\\win-x64\\*" "$appDir\\resources\\engine\\" -Recurse -Force
+          }
+          
           $exe1 = Join-Path $appDir "2TOOLNE AutoEdit.exe"
           $exe2 = Join-Path $appDir "2TOOLNE.exe"
           if ((Test-Path $exe1) -and -not (Test-Path $exe2)) { Copy-Item $exe1 $exe2 -Force }
