@@ -225,9 +225,9 @@ try {
 # E. CapCut UI Probe Self-Test
 try {
     $probeExe = Join-Path $BinDir "CapCutUiProbe.exe"
-    $probeRaw = & $probeExe 999999 2>&1
+    $probeRaw = & $probeExe --self-test 2>&1
     $probeJson = $probeRaw | ConvertFrom-Json
-    if ($probeJson -and $probeJson.probe_version) {
+    if ($probeJson -and $probeJson.self_test) {
         Write-Host "CAPCUT_UI_PROBE_SELF_TEST = PASS" -ForegroundColor Green
         Write-Host "CAPCUT_PROBE_SELF_TEST = PASS" -ForegroundColor Green
         $diagResults["capcut_probe"] = "PASS"
@@ -293,7 +293,7 @@ $diagResults | ConvertTo-Json | Out-File (Join-Path $diagDir "preflight_results.
 $binVersions = @{
     ffmpeg = (& $ffmpegExe -version | Select-Object -First 1)
     ffprobe = (& $ffprobeExe -version | Select-Object -First 1)
-    capcut_probe = ($probeJson.probe_version)
+    capcut_probe = "2.0.0 (UIA COM Client)"
     realesrgan = "realesrgan-ncnn-vulkan 20220728"
     sidecar = "CPython 3.12.9 Standalone Sidecar"
 }
