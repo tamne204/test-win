@@ -1,0 +1,115 @@
+name: Verify Customer-Safe Release Pipeline (windows-latest)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "windows_customer_package/**"
+      - ".github/workflows/verify-customer-package.yml"
+
+jobs:
+  customer-package-gate:
+    name: Customer Test-Ready Package Gate (Windows x64)
+    runs-on: windows-latest
+
+    steps:
+      - name: 1. Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 2. Verify Windows Shells & Environment
+        shell: cmd
+        run: |
+          echo ================================================================
+          echo RUNNER OS VERSION AND ARCHITECTURE
+          echo ================================================================
+          ver
+          echo PROCESSOR_ARCHITECTURE=%PROCESSOR_ARCHITECTURE%
+          echo.
+          echo ================================================================
+          echo WINDOWS POWERSHELL 5.1 VERSION
+          echo ================================================================
+          powershell.exe -NoProfile -Command "$PSVersionTable"
+
+      - name: 3. Download Authoritative Immutable RC2 Archive
+        shell: powershell
+        run: |
+          $rcUrl = "https://drive.usercontent.google.com/download?id=1qPGfnuQfzAzrbuSbUBtCjQ1yULLmZO3G&export=download&confirm=t"
+          $rcDest = "D:\\rc2.zip"
+          Write-Host "Downloading RC2 from Cloud 2TOOLNE..."
+          curl.exe -L --retry 3 --retry-delay 5 -o $rcDest $rcUrl
+          $expectedHash = "217265079cfdce4a40d5e99853e0948c184c56c82c193df32429e0345c13e7cc"
+          $actualHash = (Get-FileHash -Path $rcDest -Algorithm SHA256).Hash.ToLower()
+          Write-Host "RC2 Expected Hash: $expectedHash"
+          Write-Host "RC2 Actual Hash  : $actualHash"
+          if ($actualHash -ne $expectedHash) { throw "RC2 SHA-256 mismatch!" }
+          Write-Host "RC2_VERIFIED = PASS" -ForegroundColor Green
+
+      - name: 4. Assemble Unified Customer Package (2TOOLNE_Windows_Customer_Test_2.0.0.zip)
+        shell: powershell
+        run: |
+          $staging = "D:\\CustomerStaging"
+          $appDir = Join-Path $staging "2TOOLNE"
+          New-Item -ItemType Directory -Force -Path $appDir | Out-Null
+          Write-Host "Extracting RC2 into 2TOOLNE directory..."
+          Expand-Archive -Path "D:\\rc2.zip" -DestinationPath $appDir -Force
+          $exe1 = Join-Path $appDir "2TOOLNE AutoEdit.exe"
+          $exe2 = Join-Path $appDir "2TOOLNE.exe"
+          if ((Test-Path $exe1) -and -not (Test-Path $exe2)) { Copy-Item $exe1 $exe2 -Force }
+          Write-Host "Copying Customer Launcher, TestHarness, and TestBundle..."
+          Copy-Item "windows_customer_package\\START_TEST.bat" $staging -Force
+          Copy-Item "windows_customer_package\\README.txt" $staging -Force
+          Copy-Item "windows_customer_package\\RELEASE_INFO.txt" $staging -Force
+          Copy-Item "windows_customer_package\\TestHarness" $staging -Recurse -Force
+          Copy-Item "windows_customer_package\\TestBundle" $staging -Recurse -Force
+          $distDir = "D:\\CustomerDist"
+          New-Item -ItemType Directory -Force -Path $distDir | Out-Null
+          $zipPath = Join-Path $distDir "2TOOLNE_Windows_Customer_Test_2.0.0.zip"
+          Write-Host "Compressing unified customer package..."
+          Compress-Archive -Path (Join-Path $staging "*") -DestinationPath $zipPath -Force
+          $pkgHash = (Get-FileHash -Path $zipPath -Algorithm SHA256).Hash.ToLower()
+          Write-Host "CUSTOMER_PACKAGE = 2TOOLNE_Windows_Customer_Test_2.0.0.zip" -ForegroundColor Green
+          Write-Host "CUSTOMER_PACKAGE_SHA256 = $pkgHash" -ForegroundColor Green
+
+      - name: 5. Execute Exact Customer ZIP in Completely Isolated Directory
+        shell: cmd
+        env:
+          CI: "true"
+        run: |
+          echo ================================================================
+          echo EXTRACTING AND EXECUTING EXACT CUSTOMER ARTIFACT ON NATIVE WINDOWS
+          echo ================================================================
+          powershell.exe -NoProfile -Command "Expand-Archive -Path \"D:\\CustomerDist\\2TOOLNE_Windows_Customer_Test_2.0.0.zip\" -DestinationPath \"C:\\IsolatedCustomerTest\" -Force"
+          cd /d C:\\IsolatedCustomerTest
+          echo Running START_TEST.bat --ci-smoke...
+          call START_TEST.bat --ci-smoke
+
+      - name: 6. Verify Customer Diagnostics & Run Secret Scan
+        shell: powershell
+        run: |
+          $diagZip = "C:\\IsolatedCustomerTest\\diagnostics.zip"
+          if (-not (Test-Path $diagZip)) { throw "diagnostics.zip was not created!" }
+          Write-Host "CUSTOMER_DIAGNOSTICS = PASS" -ForegroundColor Green
+          $diagExtract = "C:\\DiagCheck"
+          Expand-Archive -Path $diagZip -DestinationPath $diagExtract -Force
+          $leaks = @()
+          $files = Get-ChildItem -Path $diagExtract -Recurse -File
+          foreach ($f in $files) {
+              $content = Get-Content $f.FullName -Raw
+              if ($content -match "AIza[A-Za-z0-9_\-]{35}") { $leaks += "Google API Key in $($f.Name)" }
+              if ($content -match "sk-[A-Za-z0-9]{32,}") { $leaks += "OpenAI Key in $($f.Name)" }
+              if ($content -match "password\s*=\s*[^\s\[]+") { $leaks += "Plain Password in $($f.Name)" }
+          }
+          if ($leaks.Count -gt 0) {
+              Write-Host "CUSTOMER_SECRET_SCAN = FAIL" -ForegroundColor Red
+              foreach ($l in $leaks) { Write-Host "  [-] $l" -ForegroundColor Red }
+              throw "Secret scan detected leaked credentials!"
+          }
+          Write-Host "CUSTOMER_SECRET_SCAN = PASS" -ForegroundColor Green
+          Write-Host "CUSTOMER_TEST_READY_GATE = PASS" -ForegroundColor Green
+
+      - name: 7. Upload Customer Test-Ready Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: 2TOOLNE_Windows_Customer_Test_2.0.0
+          path: D:\\CustomerDist\\2TOOLNE_Windows_Customer_Test_2.0.0.zip
+          retention-days: 14

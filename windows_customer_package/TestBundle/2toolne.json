@@ -1,0 +1,37 @@
+{
+  "bundle_id": "bndl_physical_test_win",
+  "project_name": "Physical Test Windows 9.3.0",
+  "title": "Physical Test Windows 9.3.0",
+  "version": "2.0.0",
+  "created_at": "2026-09-09T17:00:00Z",
+  "scenes": [
+    {
+      "scene_id": "001",
+      "slug": "portrait",
+      "description": "Chân dung nhân vật chính trong bối cảnh ánh sáng điện ảnh",
+      "image_path": "images/001-portrait.png",
+      "duration_sec": 2.0
+    },
+    {
+      "scene_id": "002",
+      "slug": "architecture",
+      "description": "Kiến trúc công trình biểu tượng với góc nhìn điện ảnh",
+      "image_path": "images/002-architecture.png",
+      "duration_sec": 2.0
+    },
+    {
+      "scene_id": "003",
+      "slug": "abstract",
+      "description": "Hình ảnh đồ họa chuyển động trừu tượng hiện đại",
+      "image_path": "images/003-abstract.png",
+      "duration_sec": 2.0
+    }
+  ],
+  "audio": {
+    "voice_path": "audio/voice.wav",
+    "duration_sec": 6.0
+  },
+  "subtitles": {
+    "srt_path": "subtitles.srt"
+  }
+}

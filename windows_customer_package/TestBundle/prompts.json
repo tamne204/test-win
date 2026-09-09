@@ -1,0 +1,5 @@
+[
+  { "scene_id": "001", "slug": "portrait", "prompt": "Chân dung nhân vật điện ảnh" },
+  { "scene_id": "002", "slug": "architecture", "prompt": "Kiến trúc công trình biểu tượng" },
+  { "scene_id": "003", "slug": "abstract", "prompt": "Đồ họa chuyển động trừu tượng" }
+]
