@@ -121,7 +121,7 @@ class FileImporter {
       }
 
       if (path7za && fs.existsSync(path7za)) {
-        execFile(path7za, ['x', '-y', `-o${targetDir}`, archivePath], (err, stdout, stderr) => {
+        execFile(path7za, ['x', '-y', `-o${targetDir}`, archivePath], { windowsHide: true }, (err, stdout, stderr) => {
           if (err) {
             reject(new Error(stderr || err.message));
           } else {
@@ -130,7 +130,7 @@ class FileImporter {
         });
       } else {
         // Fallback for macOS/Linux zip
-        execFile('unzip', ['-o', archivePath, '-d', targetDir], (err, stdout, stderr) => {
+        execFile('unzip', ['-o', archivePath, '-d', targetDir], { windowsHide: true }, (err, stdout, stderr) => {
           if (err) {
             reject(new Error(stderr || err.message));
           } else {

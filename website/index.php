@@ -564,8 +564,11 @@ if (isset($_GET['registered'])) {
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>2tamne.site — Commercial AI Software Suite & Production Tools</title>
+    <title>2TOOLNE — Commercial AI Software Suite &amp; Production Tools</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -1431,9 +1434,9 @@ if (isset($_GET['registered'])) {
     <header class="site-nav">
         <div class="container nav-inner">
             <a href="index.php" class="nav-brand">
-                <div class="nav-brand-logo">2</div>
-                <span>2tamne.site</span>
-                <span class="badge desktop-only" style="font-size:10px;padding:1px 6px">v1.0-rc</span>
+                <img src="assets/favicon.png" alt="2TOOLNE Logo" style="width:26px;height:26px;border-radius:6px;object-fit:contain;">
+                <span>2TOOLNE</span>
+                <span class="badge desktop-only" style="font-size:10px;padding:1px 6px">v2.0</span>
             </a>
 
             <!-- DESKTOP NAV MENU -->

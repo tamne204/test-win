@@ -16,10 +16,19 @@
   --border-strong: #3f3f46;
   --border-hover: #52525b;
 
-  --primary: #3b82f6;
-  --primary-hover: #2563eb;
+  /* 2TOOLNE Authoritative Brand Palette */
+  --brand-primary: #FB6B08;
+  --brand-primary-hover: #E05A00;
+  --brand-secondary: #FB9020;
+  --brand-warm-beige: #F3D1A5;
+  --brand-soft-peach: #E2AF8F;
+  --brand-warm-brown: #B58C6A;
+  --brand-cream-bg: #FCF8F1;
+
+  --primary: #FB6B08;
+  --primary-hover: #E05A00;
   --primary-foreground: #ffffff;
-  --primary-subtle: rgba(59, 130, 246, 0.12);
+  --primary-subtle: rgba(251, 107, 8, 0.14);
 
   --emerald: #10b981;
   --emerald-hover: #059669;

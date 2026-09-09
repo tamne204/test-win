@@ -261,8 +261,9 @@ async function createWindow() {
     height: 840,
     minWidth: 980,
     minHeight: 700,
-    title: '2toolne AutoEdit',
-    backgroundColor: '#121417',
+    title: '2TOOLNE AutoEdit',
+    backgroundColor: '#FCF8F1',
+    icon: path.join(__dirname, '../../assets/icon.png'),
     show: false,
     webPreferences: {
       contextIsolation: true,
@@ -769,7 +770,8 @@ async function runAiConnectionTrace(win) {
     const cliScript = path.resolve(__dirname, '../../../../cli/2toolne.js');
     const cliRes = await new Promise((resolve) => {
       const p = spawnCli('node', [cliScript, 'auth', 'add'], {
-        stdio: ['pipe', 'pipe', 'pipe']
+        stdio: ['pipe', 'pipe', 'pipe'],
+        windowsHide: true,
       });
       let out = '', err = '';
       p.stdout.on('data', d => out += d);
@@ -786,9 +788,9 @@ async function runAiConnectionTrace(win) {
     trace.CLI_AUTH_STATUS = 'PASS';
 
     // Verify CLI auth status and cloud ls
-    const cliStatusOut = execCliSync(`node "${cliScript}" auth status`, { encoding: 'utf8' });
+    const cliStatusOut = execCliSync(`node "${cliScript}" auth status`, { encoding: 'utf8', windowsHide: true });
     console.log('  CLI Status Output:\n' + cliStatusOut);
-    const cliLsOut = execCliSync(`node "${cliScript}" cloud ls`, { encoding: 'utf8' });
+    const cliLsOut = execCliSync(`node "${cliScript}" cloud ls`, { encoding: 'utf8', windowsHide: true });
     console.log('  CLI Cloud Ls Output:\n' + cliLsOut);
     trace.CLI_SCOPED_ACCESS = 'PASS';
 
@@ -2318,18 +2320,18 @@ ipcMain.handle('upscale:process-images', async (event, { filePaths, resolution =
             '-vf', `scale='if(gt(a,16/9),${targetDim},-2)':'if(gt(a,16/9),-2,${is4K ? 2160 : 1440})':flags=lanczos`,
             outputP,
           ];
-          const proc = spawn(ffmpegBin, args);
+          const proc = spawn(ffmpegBin, args, { windowsHide: true });
           proc.on('close', (code) => {
             if (code === 0 && fs.existsSync(outputP)) {
               resolve();
             } else {
-              const sipsProc = spawn('sips', ['-Z', String(targetDim), inputP, '--out', outputP]);
+              const sipsProc = spawn('sips', ['-Z', String(targetDim), inputP, '--out', outputP], { windowsHide: true });
               sipsProc.on('close', (c) => (c === 0 && fs.existsSync(outputP) ? resolve() : reject(new Error('Sips failed'))));
               sipsProc.on('error', reject);
             }
           });
           proc.on('error', () => {
-            const sipsProc = spawn('sips', ['-Z', String(targetDim), inputP, '--out', outputP]);
+            const sipsProc = spawn('sips', ['-Z', String(targetDim), inputP, '--out', outputP], { windowsHide: true });
             sipsProc.on('close', (c) => (c === 0 && fs.existsSync(outputP) ? resolve() : reject(new Error('Sips failed'))));
             sipsProc.on('error', reject);
           });

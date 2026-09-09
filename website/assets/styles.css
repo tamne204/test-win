@@ -11,9 +11,10 @@
   --bg-card-elev: #1c1d22;
   --border: rgba(255, 255, 255, 0.07);
   --border-subtle: rgba(255, 255, 255, 0.04);
-  --border-hover: rgba(255, 255, 255, 0.14);
-  --primary: #3b82f6;
-  --primary-hover: #2563eb;
+  --brand-primary: #FB6B08;
+  --brand-secondary: #FB9020;
+  --primary: #FB6B08;
+  --primary-hover: #E05A00;
   --success: #34d399;
   --success-bg: rgba(52, 211, 153, 0.08);
   --warning: #fbbf24;

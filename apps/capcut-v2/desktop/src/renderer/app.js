@@ -714,7 +714,7 @@ function switchTab(tabId) {
 
   // Update Header Title with localized string
   const lang = window.i18n?.currentLang || 'vi';
-  const meta = VIEW_METADATA[tabId]?.[lang] || VIEW_METADATA[tabId]?.vi || { title: '2toolne AutoEdit', sub: '' };
+  const meta = VIEW_METADATA[tabId]?.[lang] || VIEW_METADATA[tabId]?.vi || { title: '2TOOLNE AutoEdit', sub: '' };
   DOM.viewTitle.textContent = meta.title;
   DOM.viewSub.textContent = meta.sub;
 

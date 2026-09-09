@@ -346,7 +346,7 @@ class AutoUpdateManager extends EventEmitter {
    * Creates Windows swap helper scripts (PowerShell .ps1 and wrapper .bat)
    * Handles PID termination waiting, backup, atomic replacement, and SWAP_FAILURE_ROLLBACK.
    */
-  createWindowsSwapHelper(targetDir, sourceDir, backupDir, parentPid = process.pid, relaunch = true, exeName = '2toolne AutoEdit.exe', swapLogPath = null) {
+  createWindowsSwapHelper(targetDir, sourceDir, backupDir, parentPid = process.pid, relaunch = true, exeName = '2TOOLNE AutoEdit.exe', swapLogPath = null) {
     const helperPsPath = path.join(this.cacheDir, 'swap_helper.ps1');
     const helperBatPath = path.join(this.cacheDir, 'swap_helper.bat');
     if (!swapLogPath) swapLogPath = path.join(this.cacheDir, 'swap.log');
@@ -619,7 +619,7 @@ exit 0
       console.log('[AutoUpdateManager] Staged Windows update at:', stagedExtractDir);
 
       let targetAppPath = this.options.targetAppPath || null;
-      let exeName = '2toolne AutoEdit.exe';
+      let exeName = '2TOOLNE AutoEdit.exe';
 
       if (!targetAppPath && app && app.isPackaged) {
         const exePath = app.getPath('exe');

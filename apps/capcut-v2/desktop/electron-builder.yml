@@ -38,6 +38,7 @@ extraResources:
       - "**/*"
 
 mac:
+  icon: assets/icon.icns
   category: public.app-category.video
   target:
     - target: dmg
@@ -52,6 +53,7 @@ mac:
   gatekeeperAssess: false
 
 win:
+  icon: assets/icon.ico
   target:
     - target: nsis
       arch:
@@ -68,4 +70,7 @@ nsis:
   createStartMenuShortcut: true
   shortcutName: 2TOOLNE AutoEdit
   uninstallDisplayName: 2TOOLNE AutoEdit
-  artifactName: "${productName}-Setup-${version}.${ext}"
+  installerIcon: assets/installerIcon.ico
+  uninstallerIcon: assets/uninstallerIcon.ico
+  installerHeaderIcon: assets/icon.ico
+  artifactName: "2TOOLNE-AutoEdit-Setup-${version}.${ext}"
