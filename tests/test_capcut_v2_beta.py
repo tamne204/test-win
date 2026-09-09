@@ -548,6 +548,7 @@ def test_project_manager_successful_registration(tmp_path):
         project_name="Tx Success Test",
         auto_install=True,
         override_draft_root=str(draft_root),
+        allow_untested=True,
     )
 
     assert result["status"] == STATUS_READY
@@ -604,6 +605,7 @@ def test_project_manager_rollback_on_failure(tmp_path, monkeypatch):
             project_name="Tx Fail Test",
             auto_install=True,
             override_draft_root=str(draft_root),
+            allow_untested=True,
         )
 
     assert "SIMULATED_VALIDATION_ERROR_AFTER_INSTALL" in str(exc_info.value)

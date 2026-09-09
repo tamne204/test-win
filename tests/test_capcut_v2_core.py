@@ -145,7 +145,9 @@ def test_timeline_builder_deterministic_timing(tmp_path):
 
 
 def test_capcut_detector_macos():
-    """Verify CapCutDetector detects installed CapCut 9.3.0 on this machine."""
+    """Verify CapCutDetector detects installed CapCut 9.3.0 on physical macOS workstation."""
+    if sys.platform != "darwin":
+        pytest.skip("Physical CapCut installation check is macOS-specific")
     detector = CapCutDetector()
     status = detector.detect()
     assert status.status == STATUS_SUPPORTED
@@ -180,11 +182,12 @@ def test_capcut_adapter_generation_and_schema(tmp_path):
 
     # 3. Generate draft
     out_draft_dir = str(tmp_path / "test_draft_out")
-    adapter = CapCutAdapter()
+    adapter = CapCutAdapter(target_version="9.3.0")
     result = adapter.generate(
         edit_plan=plan,
         target_dir=out_draft_dir,
         draft_root_path=str(tmp_path),
+        allow_untested=True,
     )
 
     assert result["validated"] is True

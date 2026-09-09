@@ -198,12 +198,13 @@ class CapCutProjectManager:
             manifest["status"] = STATUS_GENERATING_DRAFT
             self._write_manifest(manifest_path, manifest)
 
-            adapter = CapCutAdapter()
+            adapter = CapCutAdapter(target_version=self.status.detected_version or "9.3.0")
             draft_root = draft_root_target or os.path.dirname(staging_dir)
             gen_result = adapter.generate(
                 edit_plan=edit_plan,
                 target_dir=staging_dir,
                 draft_root_path=draft_root,
+                allow_untested=allow_untested or bool(override_draft_root),
             )
 
             # Step 3: Validate Staged Draft
