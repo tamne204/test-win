@@ -242,6 +242,7 @@ try {
 
 # F. DPAPI Synthetic Test
 try {
+    Add-Type -AssemblyName System.Security -ErrorAction Stop
     $secretStr = "2toolne_dpapi_smoke_test_secret_123"
     $secretBytes = [System.Text.Encoding]::UTF8.GetBytes($secretStr)
     $entropy = [System.Text.Encoding]::UTF8.GetBytes("salt_entropy_2026")
