@@ -1,0 +1,104 @@
+name: Verify Windows Physical Acceptance Harness Hotfix
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "windows_physical_gate/**"
+      - ".github/workflows/verify-windows-harness.yml"
+
+jobs:
+  verify-harness:
+    name: Verify Harness on Windows PowerShell 5.1 (windows-latest)
+    runs-on: windows-latest
+
+    steps:
+      - name: 1. Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 2. Check Windows OS & PowerShell 5.1 Environment
+        shell: cmd
+        run: |
+          echo ================================================================
+          echo RUNNER OS VERSION AND ARCHITECTURE
+          echo ================================================================
+          ver
+          echo PROCESSOR_ARCHITECTURE=%PROCESSOR_ARCHITECTURE%
+          echo.
+          echo ================================================================
+          echo WINDOWS POWERSHELL 5.1 VERSION
+          echo ================================================================
+          powershell.exe -NoProfile -Command "$PSVersionTable"
+
+      - name: 3. Verify Encoding and Line Endings
+        shell: powershell
+        run: |
+          Write-Host "Checking Line Endings and UTF-8 BOM..."
+          $batBytes = [System.IO.File]::ReadAllBytes("windows_physical_gate\RUN_WINDOWS_PHYSICAL_GATE.bat")
+          $hasCrLf = $false
+          for ($i = 0; $i -lt $batBytes.Length - 1; $i++) {
+              if ($batBytes[$i] -eq 13 -and $batBytes[$i+1] -eq 10) { $hasCrLf = $true; break }
+          }
+          if (-not $hasCrLf) { throw "BAT file missing CRLF!" }
+          Write-Host "BAT_LINE_ENDING = CRLF" -ForegroundColor Green
+
+          $ps1Bytes = [System.IO.File]::ReadAllBytes("windows_physical_gate\RUN_WINDOWS_PHYSICAL_GATE.ps1")
+          if ($ps1Bytes[0] -ne 0xEF -or $ps1Bytes[1] -ne 0xBB -or $ps1Bytes[2] -ne 0xBF) {
+              throw "RUN_WINDOWS_PHYSICAL_GATE.ps1 missing UTF-8 BOM!"
+          }
+          Write-Host "PS1_ENCODING = UTF-8 WITH BOM" -ForegroundColor Green
+
+          $psm1Bytes = [System.IO.File]::ReadAllBytes("windows_physical_gate\modules\TestHarness.psm1")
+          if ($psm1Bytes[0] -ne 0xEF -or $psm1Bytes[1] -ne 0xBB -or $psm1Bytes[2] -ne 0xBF) {
+              throw "TestHarness.psm1 missing UTF-8 BOM!"
+          }
+          Write-Host "PSM1_ENCODING = UTF-8 WITH BOM" -ForegroundColor Green
+
+      - name: 4. Execute Parser Preflight using Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          Write-Host "================================================================"
+          Write-Host "TESTING POWERSHELL 5.1 PARSER PREFLIGHT"
+          Write-Host "================================================================"
+          $ps1Path = (Resolve-Path "windows_physical_gate\RUN_WINDOWS_PHYSICAL_GATE.ps1").Path
+          $psm1Path = (Resolve-Path "windows_physical_gate\modules\TestHarness.psm1").Path
+
+          $errs = $null
+          [System.Management.Automation.Language.Parser]::ParseFile($ps1Path, [ref]$null, [ref]$errs)
+          if ($errs.Count -gt 0) {
+              Write-Host "POWERSHELL_PARSE = FAIL" -ForegroundColor Red
+              foreach ($e in $errs) { Write-Host $e.Message -ForegroundColor Red }
+              throw "RUN_WINDOWS_PHYSICAL_GATE.ps1 parse failed"
+          }
+
+          $errsModule = $null
+          [System.Management.Automation.Language.Parser]::ParseFile($psm1Path, [ref]$null, [ref]$errsModule)
+          if ($errsModule.Count -gt 0) {
+              Write-Host "POWERSHELL_PARSE = FAIL" -ForegroundColor Red
+              foreach ($e in $errsModule) { Write-Host $e.Message -ForegroundColor Red }
+              throw "TestHarness.psm1 parse failed"
+          }
+
+          Write-Host "POWERSHELL_5_1_PARSE = PASS" -ForegroundColor Green
+
+      - name: 5. Test Module Import using Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          Write-Host "================================================================"
+          Write-Host "TESTING MODULE IMPORT IN POWERSHELL 5.1"
+          Write-Host "================================================================"
+          $modulePath = (Resolve-Path "windows_physical_gate\modules\TestHarness.psm1").Path
+          Import-Module $modulePath -Force -ErrorAction Stop
+          Write-Host "MODULE_IMPORT = PASS" -ForegroundColor Green
+          Write-Host "TESTHARNESS_MODULE_IMPORT = PASS" -ForegroundColor Green
+
+      - name: 6. Execute RUN_WINDOWS_PHYSICAL_GATE.bat via cmd.exe (Native Windows Shell)
+        shell: cmd
+        env:
+          CI: "true"
+        run: |
+          echo ================================================================
+          echo EXECUTING RUN_WINDOWS_PHYSICAL_GATE.bat VIA CMD.EXE
+          echo ================================================================
+          cd windows_physical_gate
+          call RUN_WINDOWS_PHYSICAL_GATE.bat -PreflightOnly

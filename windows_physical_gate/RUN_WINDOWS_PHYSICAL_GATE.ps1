@@ -9,12 +9,31 @@
 param(
     [switch]$Auto,
     [switch]$Resume,
-    [string]$RcPath
+    [string]$RcPath,
+    [switch]$PreflightOnly
 )
 
 # Set UTF-8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
+
+# ------------------------------------------------------------------------------
+# 0. PowerShell 5.1 In-Process Parser Preflight
+# ------------------------------------------------------------------------------
+$ps1Path = $MyInvocation.MyCommand.Path
+if ($ps1Path -and (Test-Path $ps1Path)) {
+    $parseErrors = $null
+    [System.Management.Automation.Language.Parser]::ParseFile($ps1Path, [ref]$null, [ref]$parseErrors)
+    if ($parseErrors -and $parseErrors.Count -gt 0) {
+        Write-Host "POWERSHELL_PARSE = FAIL" -ForegroundColor Red
+        foreach ($pe in $parseErrors) {
+            Write-Host "  [-] $($pe.Message) at line $($pe.Extent.StartLineNumber)" -ForegroundColor Red
+        }
+        Exit 1
+    }
+}
+Write-Host "POWERSHELL_5_1_PARSE = PASS" -ForegroundColor Green
+
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $OutputDir = Join-Path $ScriptDir "windows_physical_test"
@@ -32,7 +51,35 @@ $LogFile = Join-Path $LogDir "physical_test_session_$(Get-Date -Format 'yyyyMMdd
 Start-Transcript -Path $LogFile -Append | Out-Null
 
 # Import module
-Import-Module (Join-Path $LibDir "TestHarness.psm1") -Force
+$modulePath = Join-Path $LibDir "TestHarness.psm1"
+$moduleErrors = $null
+[System.Management.Automation.Language.Parser]::ParseFile($modulePath, [ref]$null, [ref]$moduleErrors)
+if ($moduleErrors -and $moduleErrors.Count -gt 0) {
+    Write-Host "POWERSHELL_PARSE = FAIL" -ForegroundColor Red
+    foreach ($me in $moduleErrors) {
+        Write-Host "  [-] Module Parse Error: $($me.Message) at line $($me.Extent.StartLineNumber)" -ForegroundColor Red
+    }
+    Exit 1
+}
+
+try {
+    Import-Module $modulePath -Force -ErrorAction Stop
+    Write-Host "MODULE_IMPORT = PASS" -ForegroundColor Green
+    Write-Host "TESTHARNESS_MODULE_IMPORT = PASS" -ForegroundColor Green
+} catch {
+    Write-Host "POWERSHELL_PARSE = FAIL" -ForegroundColor Red
+    Write-Host "MODULE_IMPORT = FAIL: $_" -ForegroundColor Red
+    Write-Host "TESTHARNESS_MODULE_IMPORT = FAIL" -ForegroundColor Red
+    Exit 1
+}
+
+Write-Host "HARNESS_START = PASS" -ForegroundColor Green
+Write-Host "HARNESS_BOOT = PASS" -ForegroundColor Green
+
+if ($PreflightOnly) {
+    Write-Host "[+] Preflight verification completed successfully." -ForegroundColor Green
+    Exit 0
+}
 
 Write-Host "================================================================================" -ForegroundColor Cyan
 Write-Host "          2TOOLNE AUTOEDIT FOR CAPCUT V2 -- WINDOWS PHYSICAL GATE" -ForegroundColor Cyan
