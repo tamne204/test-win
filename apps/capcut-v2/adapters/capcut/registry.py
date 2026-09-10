@@ -6,6 +6,8 @@ and prevents silent fallback to unverified schemas.
 """
 from __future__ import annotations
 
+import os
+import sys
 import re
 from typing import Dict, Type, Optional, Tuple, Any
 
@@ -22,7 +24,11 @@ class CapCutAdapterRegistry:
     Registry for resolving detected CapCut versions to compatible adapter classes.
     """
 
-    # Explicit map of verified version regex patterns to adapter classes
+    SUPPORTED_WINDOWS_CAPCUT_VERSIONS = {
+        "9.3.0.3970",
+    }
+
+    # Explicit map of verified version regex patterns to adapter classes (macOS)
     _VERIFIED_REGISTRY: Dict[str, Type] = {
         r"^9\.[3-4](\.\d+)?$": CapCutVersionAdapter_9_3,
     }
@@ -37,13 +43,15 @@ class CapCutAdapterRegistry:
         cls,
         version_str: Optional[str],
         allow_untested: bool = False,
+        platform_name: Optional[str] = None,
     ) -> Tuple[Optional[Type], str, str]:
         """
         Resolve a version string to (AdapterClass, status_code, diagnostic_message).
 
         Args:
-            version_str: Detected CapCut version (e.g. "9.3.0").
+            version_str: Detected CapCut version (e.g. "9.3.0.3970").
             allow_untested: If True, allows candidate adapter for untested versions in developer mode.
+            platform_name: Target platform (defaults to sys.platform).
 
         Returns:
             Tuple of (AdapterClass or None, status_code, diagnostic_message)
@@ -61,7 +69,30 @@ class CapCutAdapterRegistry:
                 "CapCut version is unknown. Automatic project registration blocked for safety.",
             )
 
-        # 1. Check verified matches
+        target_platform = platform_name or sys.platform
+
+        # 1. Windows strict allowlist matching
+        if target_platform.startswith("win"):
+            if version_str in cls.SUPPORTED_WINDOWS_CAPCUT_VERSIONS:
+                return (
+                    CapCutVersionAdapter_9_3,
+                    STATUS_VERIFIED,
+                    f"CapCut {version_str} is VERIFIED on Windows with {CapCutVersionAdapter_9_3.__name__}.",
+                )
+            else:
+                if allow_untested:
+                    return (
+                        CapCutVersionAdapter_9_3,
+                        STATUS_UNTESTED,
+                        f"CapCut {version_str} is UNTESTED on Windows. Candidate adapter permitted in override mode.",
+                    )
+                return (
+                    None,
+                    STATUS_UNSUPPORTED,
+                    f"CapCut {version_str} is UNSUPPORTED on Windows. Production support is locked to {cls.SUPPORTED_WINDOWS_CAPCUT_VERSIONS}.",
+                )
+
+        # 2. Non-Windows (macOS) verified registry matching
         for pattern, adapter_cls in cls._VERIFIED_REGISTRY.items():
             if re.match(pattern, version_str):
                 return (
@@ -70,7 +101,7 @@ class CapCutAdapterRegistry:
                     f"CapCut {version_str} is VERIFIED with {adapter_cls.__name__}.",
                 )
 
-        # 2. Check explicitly unsupported matches
+        # 3. Check explicitly unsupported matches
         for pattern in cls._UNSUPPORTED_PATTERNS:
             if re.match(pattern, version_str):
                 return (
@@ -79,9 +110,8 @@ class CapCutAdapterRegistry:
                     f"CapCut {version_str} is known to be UNSUPPORTED.",
                 )
 
-        # 3. Handle untested version (e.g. 9.4, 8.7, 10.x)
+        # 4. Handle untested version on other platforms
         if allow_untested:
-            # Candidate fallback in dev override
             return (
                 CapCutVersionAdapter_9_3,
                 STATUS_UNTESTED,

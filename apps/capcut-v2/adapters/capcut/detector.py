@@ -37,7 +37,7 @@ class CapCutStatus:
         self.detected_version = detected_version
         self.app_path = app_path
         self.draft_root_path = draft_root_path
-        self.supported_adapter_version = supported_adapter_version or "None"
+        self.supported_adapter_version = supported_adapter_version
         self.diagnostic_message = diagnostic_message
 
     def to_dict(self) -> Dict[str, Any]:
@@ -101,6 +101,25 @@ class CapCutDetector:
             diagnostic_message=diag_msg,
         )
 
+    @classmethod
+    def get_draft_root(cls) -> Optional[str]:
+        """
+        Returns authoritative draft root path for current OS.
+        On Windows: %LOCALAPPDATA%\\CapCut\\User Data\\Projects\\com.lveditor.draft
+        On macOS: ~/Movies/CapCut/User Data/Projects/com.lveditor.draft
+        """
+        if sys.platform == "darwin":
+            user_movies = os.path.expanduser("~/Movies/CapCut/User Data/Projects/com.lveditor.draft")
+            return user_movies
+        elif sys.platform.startswith("win"):
+            candidates = cls._get_candidate_draft_roots_windows()
+            for c in candidates:
+                if os.path.isdir(c):
+                    return c
+            # Fallback to authoritative default candidate even if not yet created
+            return candidates[-1] if candidates else None
+        return None
+
     @staticmethod
     def _get_candidate_app_paths_windows() -> List[str]:
         local_app_data = os.environ.get("LOCALAPPDATA", "")
@@ -114,6 +133,8 @@ class CapCutDetector:
         candidates = []
         if local_app_data:
             candidates.append(os.path.join(local_app_data, "CapCut", "Apps"))
+            candidates.append(os.path.join(local_app_data, "CapCut"))
+            candidates.append(os.path.join(local_app_data, "Programs", "CapCut"))
         candidates.append(os.path.join(prog_files, "CapCut"))
         candidates.append(os.path.join(prog_files_x86, "CapCut"))
         return candidates
@@ -152,14 +173,24 @@ class CapCutDetector:
         """
         Robust multi-probe detection for Windows CapCut Desktop.
         Probes User AppData, Program Files (64/32-bit), and config INI files.
+        Guarantees draft_root_path is ALWAYS resolved independently of executable detection.
         """
         app_path: Optional[str] = None
         detected_version: Optional[str] = None
         draft_path: Optional[str] = None
 
-        app_candidates = CapCutDetector._get_candidate_app_paths_windows()
+        # 1. ALWAYS determine draft directory first (decoupled from executable discovery)
+        draft_candidates = CapCutDetector._get_candidate_draft_roots_windows()
+        for dc in draft_candidates:
+            if os.path.isdir(dc):
+                draft_path = dc
+                break
+        if not draft_path and draft_candidates:
+            # Fallback to authoritative default candidate even if folder hasn't been created yet
+            draft_path = draft_candidates[-1]
 
-        # 1. Search for executable and version
+        # 2. Search for executable and version
+        app_candidates = CapCutDetector._get_candidate_app_paths_windows()
         for base in app_candidates:
             if not os.path.isdir(base):
                 continue
@@ -181,17 +212,15 @@ class CapCutDetector:
                 break
 
         if not app_path or not os.path.isfile(app_path):
+            adapter_cls, status_code, diag_msg = CapCutAdapterRegistry.resolve_adapter("Unknown")
             return CapCutStatus(
                 status=STATUS_NOT_FOUND,
-                diagnostic_message="CapCut Desktop executable not found in Windows search paths.",
+                detected_version="Unknown",
+                app_path=None,
+                draft_root_path=draft_path,
+                supported_adapter_version=None,
+                diagnostic_message=diag_msg,
             )
-
-        # 2. Determine draft directory
-        draft_candidates = CapCutDetector._get_candidate_draft_roots_windows()
-        for dc in draft_candidates:
-            if os.path.isdir(dc):
-                draft_path = dc
-                break
 
         adapter_cls, status_code, diag_msg = CapCutAdapterRegistry.resolve_adapter(detected_version)
 

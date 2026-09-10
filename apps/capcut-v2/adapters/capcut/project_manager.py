@@ -103,6 +103,27 @@ def file_lock(file_path: str, timeout_sec: float = 5.0):
                 pass
 
 
+def sanitize_windows_filename(name: str) -> str:
+    """
+    Sanitize project names for safe folder creation on Windows & cross-platform.
+    Strips illegal characters: < > : " / \\ | ? *
+    Strips trailing spaces and trailing periods.
+    Guards against DOS reserved names: CON, PRN, AUX, NUL, COM1-9, LPT1-9.
+    """
+    cleaned = re.sub(r'[<>:"/\\|?*]', '_', name.strip())
+    cleaned = re.sub(r'[\x00-\x1f\x7f]', '', cleaned)
+    cleaned = cleaned.strip(' .')
+    reserved = {"CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4",
+                "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2",
+                "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"}
+    base_name = cleaned.split('.')[0].upper()
+    if base_name in reserved:
+        cleaned = f"project_{cleaned}"
+    if not cleaned:
+        cleaned = "project"
+    return cleaned[:80]
+
+
 class CapCutProjectManager:
     """
     Handles project creation in isolated staging workspaces,
@@ -152,11 +173,11 @@ class CapCutProjectManager:
         if project_name:
             edit_plan.project.name = project_name
 
-        draft_root_target = override_draft_root or self.status.draft_root_path
+        draft_root_target = override_draft_root or self.status.draft_root_path or CapCutDetector.get_draft_root()
 
         project_id = str(uuid.uuid4()).upper()
         now_ts = int(time.time())
-        project_slug = re.sub(r'[^A-Za-z0-9_\-]', '_', edit_plan.project.name.strip()) or "project"
+        project_slug = sanitize_windows_filename(edit_plan.project.name)
         folder_name = f"2toolne_{now_ts}_{project_slug}"
 
         # Setup structured workspace: projects_capcut/<project_id>/
@@ -198,7 +219,8 @@ class CapCutProjectManager:
             manifest["status"] = STATUS_GENERATING_DRAFT
             self._write_manifest(manifest_path, manifest)
 
-            adapter = CapCutAdapter(target_version=self.status.detected_version or "9.3.0")
+            version_to_use = self.status.detected_version
+            adapter = CapCutAdapter(target_version=version_to_use)
             draft_root = draft_root_target or os.path.dirname(staging_dir)
             gen_result = adapter.generate(
                 edit_plan=edit_plan,
@@ -222,12 +244,27 @@ class CapCutProjectManager:
                         f"Installation blocked: CapCut version '{self.status.detected_version}' is not VERIFIED."
                     )
 
-                manifest["status"] = STATUS_INSTALLING_DRAFT
-                self._write_manifest(manifest_path, manifest)
+                # Ensure draft root directory exists on disk and is writable
+                try:
+                    os.makedirs(draft_root_target, exist_ok=True)
+                except Exception as e:
+                    raise PermissionError(f"CAPCUT_DRAFT_FOLDER_NOT_WRITABLE: Cannot create CapCut draft root '{draft_root_target}': {e}")
 
+                if not os.access(draft_root_target, os.W_OK):
+                    raise PermissionError(f"CAPCUT_DRAFT_FOLDER_NOT_WRITABLE: CapCut draft root is not writable: '{draft_root_target}'")
+
+                # Canonical path traversal guard
+                canonical_root = os.path.realpath(os.path.abspath(draft_root_target))
                 capcut_draft_dir = os.path.join(draft_root_target, folder_name)
+                canonical_dest = os.path.realpath(os.path.abspath(capcut_draft_dir))
+                if not canonical_dest.startswith(canonical_root + os.sep) and canonical_dest != canonical_root:
+                    raise SecurityError(f"Path traversal detected: Destination '{canonical_dest}' escapes '{canonical_root}'")
+
                 if os.path.exists(capcut_draft_dir):
                     raise FileExistsError(f"Safety violation: Target draft path already exists: {capcut_draft_dir}")
+
+                manifest["status"] = STATUS_INSTALLING_DRAFT
+                self._write_manifest(manifest_path, manifest)
 
                 root_meta_path = os.path.join(draft_root_target, "root_meta_info.json")
 

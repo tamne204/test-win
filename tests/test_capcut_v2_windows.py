@@ -178,3 +178,113 @@ def test_windows_launcher_dispatch():
                     assert res["ok"] is True
                     assert res["platform"] == "Windows"
                     mock_popen.assert_called_once_with(["C:\\Program Files\\CapCut\\CapCut.exe"])
+
+
+def test_windows_capcut_exact_version_allowlist():
+    """Verify strict Windows version allowlist: only 9.3.0.3970 supported."""
+    from adapters.capcut.registry import CapCutAdapterRegistry
+
+    # 1. Supported
+    adapter_cls, status, _ = CapCutAdapterRegistry.resolve_adapter("9.3.0.3970", platform_name="win32")
+    assert status == "CAPCUT_VERSION_SUPPORTED"
+    assert adapter_cls.__name__ == "CapCutVersionAdapter_9_3"
+
+    # 2. Exact version mismatches must be UNSUPPORTED
+    unsupported_versions = ["9.3.0.3969", "9.3.1.0", "9.4.0.0", "10.0.0.0"]
+    for v in unsupported_versions:
+        adapter_cls, status, _ = CapCutAdapterRegistry.resolve_adapter(v, allow_untested=False, platform_name="win32")
+        assert status == "CAPCUT_VERSION_UNSUPPORTED", f"Expected UNSUPPORTED for {v}, got {status}"
+        assert adapter_cls is None
+
+    # 3. Unknown must be UNTESTED/UNSUPPORTED
+    adapter_cls, status, _ = CapCutAdapterRegistry.resolve_adapter("Unknown", allow_untested=False, platform_name="win32")
+    assert status == "CAPCUT_VERSION_UNTESTED"
+    assert adapter_cls is None
+
+
+def test_windows_capcut_get_draft_root():
+    """Verify get_draft_root resolves to %LOCALAPPDATA%\\CapCut\\User Data\\Projects\\com.lveditor.draft."""
+    fake_env = {"LOCALAPPDATA": "C:\\Users\\hieun\\AppData\\Local"}
+    with patch.dict(os.environ, fake_env, clear=True):
+        with patch("sys.platform", "win32"):
+            root = CapCutDetector.get_draft_root()
+            expected = os.path.join("C:\\Users\\hieun\\AppData\\Local", "CapCut", "User Data", "Projects", "com.lveditor.draft")
+            assert root == expected
+
+
+def test_windows_filename_sanitization():
+    """Verify Windows illegal characters and reserved names are safely sanitized."""
+    from adapters.capcut.project_manager import sanitize_windows_filename
+    assert sanitize_windows_filename('Test <1> : * ? " / \\ |') == "Test _1_ _ _ _ _ _ _ _"
+    assert sanitize_windows_filename("CON") == "project_CON"
+    assert sanitize_windows_filename("NUL") == "project_NUL"
+    assert sanitize_windows_filename("ProjectName . . ") == "ProjectName"
+
+
+def test_windows_unknown_version_blocks_project_installation(tmp_path):
+    """Verify that unknown or unsupported version strictly blocks installation into draft root."""
+    from PIL import Image
+    fake_local = tmp_path / "AppData" / "Local"
+    draft_root = fake_local / "CapCut" / "User Data" / "Projects" / "com.lveditor.draft"
+    draft_root.mkdir(parents=True, exist_ok=True)
+
+    test_img = tmp_path / "test.png"
+    Image.new("RGB", (100, 100)).save(str(test_img))
+
+    fake_env = {"LOCALAPPDATA": str(fake_local)}
+    with patch.dict(os.environ, fake_env, clear=True):
+        with patch("sys.platform", "win32"):
+            # No CapCut.exe present -> status = CAPCUT_NOT_FOUND, version = Unknown
+            pm = CapCutProjectManager(staging_base_dir=str(tmp_path / "staging"))
+            assert pm.status.status == "CAPCUT_NOT_FOUND"
+            assert pm.status.draft_root_path == str(draft_root)
+            assert pm.status.supported_adapter_version is None
+
+            plan = EditPlan(
+                project=EditPlanProject(name="Blocked Proj", width=1080, height=1920, fps=60.0, duration_us=5000000),
+                clips=[EditPlanClip(clip_id="c1", media_path=str(test_img), start_us=0, duration_us=5000000)]
+            )
+            with pytest.raises(RuntimeError) as exc_info:
+                pm.create_project(edit_plan=plan, auto_install=True)
+            assert "Installation blocked" in str(exc_info.value) or "CAPCUT_VERSION_UNTESTED" in str(exc_info.value)
+
+
+def test_windows_project_creation_and_registration_in_draft_root(tmp_path):
+    """Verify real project is generated directly inside com.lveditor.draft when 9.3.0.3970 is detected."""
+    from PIL import Image
+    fake_local = tmp_path / "AppData" / "Local"
+    draft_root = fake_local / "CapCut" / "User Data" / "Projects" / "com.lveditor.draft"
+    draft_root.mkdir(parents=True, exist_ok=True)
+
+    # Place fake CapCut 9.3.0.3970 executable
+    exe_dir = fake_local / "CapCut" / "Apps" / "9.3.0.3970"
+    exe_dir.mkdir(parents=True, exist_ok=True)
+    fake_exe = exe_dir / "CapCut.exe"
+    fake_exe.write_text("dummy")
+
+    test_img = tmp_path / "test.png"
+    Image.new("RGB", (100, 100)).save(str(test_img))
+
+    fake_env = {"LOCALAPPDATA": str(fake_local)}
+    with patch.dict(os.environ, fake_env, clear=True):
+        with patch("sys.platform", "win32"):
+            pm = CapCutProjectManager(staging_base_dir=str(tmp_path / "staging"))
+            assert pm.status.status == "CAPCUT_VERSION_SUPPORTED"
+            assert pm.status.detected_version == "9.3.0.3970"
+
+            plan = EditPlan(
+                project=EditPlanProject(name="Test Real Project", width=1080, height=1920, fps=60.0, duration_us=5000000),
+                clips=[EditPlanClip(clip_id="c1", media_path=str(test_img), start_us=0, duration_us=5000000)]
+            )
+            res = pm.create_project(edit_plan=plan, auto_install=True)
+            assert res["status"] == "READY"
+            assert res["is_registered_in_capcut"] is True
+            assert "com.lveditor.draft" in res["final_draft_dir"]
+
+            final_dir = res["final_draft_dir"]
+            assert os.path.isfile(os.path.join(final_dir, "draft_info.json"))
+            assert os.path.isfile(os.path.join(final_dir, "draft_meta_info.json"))
+            assert os.path.isfile(os.path.join(final_dir, "draft_cover.jpg"))
+            assert os.path.isfile(os.path.join(str(draft_root), "root_meta_info.json"))
+
+

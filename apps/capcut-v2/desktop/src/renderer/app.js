@@ -1471,16 +1471,19 @@ DOM.btnGenerateProject.addEventListener('click', async () => {
         }
       }, 500);
     } else {
-      const errDetail = res?.primary_message || res?.error || 'Không thể tạo dự án CapCut lúc này.';
+      const errDetail = res?.primary_message
+        ? (res.secondary_message ? `${res.primary_message}\n${res.secondary_message}` : res.primary_message)
+        : (res?.error || 'Không thể tạo dự án CapCut lúc này.');
       throw new Error(errDetail);
     }
   } catch (err) {
     hideModal(DOM.modalProgress);
-    const friendlyMsg = (err.message && !err.message.includes('Traceback') && !err.message.includes('object'))
-      ? err.message
-      : 'Không thể tạo dự án CapCut lúc này. Vui lòng kiểm tra lại tệp tin đầu vào hoặc thử lại.';
+    let friendlyMsg = err.message || 'Không thể tạo dự án CapCut lúc này.';
+    if (friendlyMsg.includes('Traceback') || friendlyMsg.includes('[object Object]')) {
+      friendlyMsg = 'Không thể tạo dự án CapCut lúc này. Vui lòng kiểm tra lại cấu hình thư mục CapCut hoặc thử lại.';
+    }
     showAlert(`Lỗi tạo dự án:\n${friendlyMsg}`, 'Thất Bại');
-    showToast(friendlyMsg, 'error', 4000);
+    showToast(friendlyMsg, 'error', 5000);
   } finally {
     DOM.btnGenerateProject.disabled = false;
     DOM.btnGenerateProject.innerHTML = origHtml;

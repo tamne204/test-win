@@ -156,23 +156,35 @@ def reconcile_project_creation(
     user_action = "RETRY"
     recoverable = True
 
-    if "audio" in err_str.lower() and ("không tìm thấy" in err_str.lower() or "missing" in err_str.lower()):
+    if "not writable" in err_str.lower() or "permission" in err_str.lower():
+        primary = "Thư mục lưu dự án của CapCut không có quyền ghi."
+        err_code = "CAPCUT_DRAFT_FOLDER_NOT_WRITABLE"
+        user_action = "CHECK_PERMISSIONS"
+    elif "draft_folder_not_found" in err_str.lower() or ("draft" in err_str.lower() and "not found" in err_str.lower()):
+        primary = "Không tìm thấy thư mục lưu dự án của CapCut."
+        err_code = "CAPCUT_DRAFT_FOLDER_NOT_FOUND"
+        user_action = "CHECK_CAPCUT"
+    elif "audio" in err_str.lower() and ("không tìm thấy" in err_str.lower() or "missing" in err_str.lower() or "not found" in err_str.lower()):
         primary = "Không tìm thấy tệp âm thanh đã chọn."
-        err_code = "MISSING_AUDIO"
+        err_code = "SOURCE_ASSET_MISSING"
         user_action = "CHOOSE_AUDIO"
     elif "ảnh" in err_str.lower() or "image" in err_str.lower() or "tệp tin" in err_str.lower() or ".png" in err_str.lower() or ".jpg" in err_str.lower():
         primary = "Không tìm thấy tệp hình ảnh nguồn."
-        err_code = "MISSING_IMAGES"
+        err_code = "SOURCE_ASSET_MISSING"
         user_action = "CHOOSE_IMAGES"
-    elif "version" in err_str.lower():
+    elif "version" in err_str.lower() or "unsupported" in err_str.lower():
         primary = "Phiên bản CapCut hiện tại chưa được hỗ trợ."
-        err_code = "UNSUPPORTED_VERSION"
+        err_code = "UNSUPPORTED_CAPCUT_VERSION"
         user_action = "CHECK_CAPCUT"
         recoverable = False
     elif "lock" in err_str.lower() or "bận" in err_str.lower():
         primary = "CapCut đang bận hoặc thư viện dự án đang được truy cập."
         err_code = "CAPCUT_BUSY"
         user_action = "RETRY"
+    elif "write" in err_str.lower() or "space" in err_str.lower() or "disk" in err_str.lower():
+        primary = "Lỗi khi ghi dự án vào thư mục CapCut (kiểm tra dung lượng ổ đĩa)."
+        err_code = "PROJECT_WRITE_FAILED"
+        user_action = "CHECK_DISK_SPACE"
     else:
         primary = "Không thể tạo dự án CapCut lúc này."
         err_code = "BUILD_ERROR"
