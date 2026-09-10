@@ -23,13 +23,16 @@ require_once __DIR__ . '/controllers/CloudGoogleOAuthController.php';
 require_once __DIR__ . '/controllers/CapCutLicenseController.php';
 require_once __DIR__ . '/controllers/CloudShareController.php';
 require_once __DIR__ . '/services/WorkspacePermissionService.php';
+require_once __DIR__ . '/services/DownloadEntitlementService.php';
 require_once __DIR__ . '/controllers/TeamController.php';
 require_once __DIR__ . '/controllers/AiGatewayController.php';
+require_once __DIR__ . '/controllers/DownloadController.php';
 
 $router = new Router();
 
-// Auto-Update Check
+// Auto-Update Check & Secure Streaming
 $router->get('/update/check', [UpdateController::class, 'check']);
+$router->get('/update/download', [UpdateController::class, 'download']);
 $router->get('/app/version', [UpdateController::class, 'check']);
 
 // Health Check
@@ -58,6 +61,11 @@ $router->get('/devices/status', [DeviceController::class, 'status']);
 
 // License Signing
 $router->post('/license/issue', [LicenseController::class, 'issue']);
+
+// Secure Authenticated Software Download Gate
+$router->post('/downloads/request', [DownloadController::class, 'requestDownload']);
+$router->get('/downloads/file', [DownloadController::class, 'streamDownload']);
+$router->post('/downloads/claim-trial', [DownloadController::class, 'claimTrial']);
 
 // CapCut V2 Commercial License Endpoints (Phase 4)
 $router->post('/capcut/activate', [CapCutLicenseController::class, 'activate']);
