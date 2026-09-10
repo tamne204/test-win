@@ -157,12 +157,28 @@ jobs:
             GIT_COMMIT = $env:GITHUB_SHA
           } | ConvertTo-Json | Out-File -FilePath "dist/manifest_204.json" -Encoding utf8
 
-      - name: 10. Upload Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: 2toolne-autoedit-2.0.4-windows-artifact
-          path: |
-            apps/capcut-v2/packaging/dist/autoedit-core/autoedit-core.exe
-            dist/2toolne-autoedit-2.0.4-win-x64.zip
-            dist/manifest_204.json
-          retention-days: 7
+      - name: 10. Deploy Package & Sidecar to Production Host via FTP
+        shell: pwsh
+        run: |
+          Write-Host "=================================================="
+          Write-Host "DEPLOYING 2.0.4 WINDOWS PACKAGE DIRECTLY TO PRODUCTION SERVER"
+          Write-Host "=================================================="
+          $ftpHost = "43.129.165.150"
+          $ftpUser = "2tamne_site_code"
+          $ftpPass = "eKZ8ZN5tsd7D"
+          
+          # 1. Upload autoedit-core.exe
+          $coreExe = "apps/capcut-v2/packaging/dist/autoedit-core/autoedit-core.exe"
+          Write-Host "Uploading fresh autoedit-core.exe ($((Get-Item $coreExe).Length) bytes)..."
+          curl.exe -s -T $coreExe -u "${ftpUser}:${ftpPass}" "ftp://${ftpHost}:21/storage/packages/autoedit-core-204.exe"
+          
+          # 2. Upload manifest
+          $manifest = "dist/manifest_204.json"
+          curl.exe -s -T $manifest -u "${ftpUser}:${ftpPass}" "ftp://${ftpHost}:21/storage/packages/manifest_204.json"
+          
+          # 3. Upload 2toolne-autoedit-2.0.4-win-x64.zip
+          $pkgZip = "dist/2toolne-autoedit-2.0.4-win-x64.zip"
+          Write-Host "Uploading 2toolne-autoedit-2.0.4-win-x64.zip ($((Get-Item $pkgZip).Length) bytes)..."
+          curl.exe -T $pkgZip -u "${ftpUser}:${ftpPass}" "ftp://${ftpHost}:21/storage/packages/2toolne-autoedit-2.0.4-win-x64.zip"
+          
+          Write-Host "Upload completed successfully!"
