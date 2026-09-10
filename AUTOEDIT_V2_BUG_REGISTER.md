@@ -1,8 +1,10 @@
 # 2TOOLNE AUTOEDIT V2 — BUG REGISTER & RESOLUTION LOG
 
-**Version**: 2.0.0 Final  
-**Head Commit**: `f75b1b8fec0b4343fe188a6479fdeb56a8c7d828`  
-**Audit Date**: 2026-09-10  
+**Current Production Version**: `2.0.1`  
+**Current Release Git SHA**: `3756c1b333671fc6a76059293f9c6d5951d8b9d7`  
+**Previous Baseline Version**: `2.0.0`  
+**Previous Baseline Git SHA**: `f75b1b8fec0b4343fe188a6479fdeb56a8c7d828`  
+**Audit Date**: 2026-09-11  
 **Status**: 100% RESOLVED & VERIFIED  
 
 ---
