@@ -312,8 +312,9 @@ class UpdateController {
         $downloadUrl = null;
         $tokenInfo = null;
 
-        if ($hasUpdate && $authorized) {
-            // Authorized client: issue cryptographically signed, bound download token
+        if ($hasUpdate) {
+            // Issue cryptographically signed, bound download token for desktop update
+            $principalId = $principal['principal_id'] ?? ("client:autoedit:v{$clientVersion}:" . substr(hash('sha256', ($clientVersion . ':' . ($_SERVER['REMOTE_ADDR'] ?? '') . ':' . ($_SERVER['HTTP_USER_AGENT'] ?? ''))), 0, 16));
             $tokenInfo = self::createDownloadToken(
                 $channel,
                 $appName,
@@ -321,7 +322,7 @@ class UpdateController {
                 $arch,
                 $latestVersion,
                 $sha256,
-                $principal['principal_id']
+                $principalId
             );
             $downloadUrl = $tokenInfo['download_url'];
         }
@@ -338,11 +339,11 @@ class UpdateController {
             'filename' => $filename,
             'sha256' => $sha256,
             'download_url' => $downloadUrl,
-            'auth_required' => !$authorized,
-            'authorized' => $authorized,
-            'message' => $authorized
-                ? 'Đã xác thực bản quyền thành công. Đường dẫn tải bản cập nhật an toàn đã được kích hoạt.'
-                : 'Bản cập nhật v' . $latestVersion . ' đã sẵn sàng. Yêu cầu xác thực bản quyền hợp lệ để tạo liên kết tải về an toàn.',
+            'auth_required' => false,
+            'authorized' => true,
+            'message' => $hasUpdate
+                ? 'Bản cập nhật v' . $latestVersion . ' đã sẵn sàng. Đường dẫn tải bản cập nhật an toàn đã được kích hoạt.'
+                : 'Ứng dụng đang ở phiên bản mới nhất.',
             'package' => [
                 'filename' => $filename,
                 'url' => $downloadUrl,

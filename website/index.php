@@ -2398,8 +2398,8 @@ if (isset($_GET['registered'])) {
                                         <button type="button" 
                                                 class="btn btn-accent btn-lg" 
                                                 style="background:#ff7a00;border-color:#ff7a00;font-weight:700;text-align:center;box-shadow:0 0 20px rgba(255, 122, 0, 0.35)"
-                                                onclick="requestSecureDownload('AUTOEDIT', 'windows-x64')">
-                                            <span>🪟</span> <span>Tải Cho Windows (.exe - Khuyên dùng)</span>
+                                                onclick="requestSecureDownload('AUTOEDIT', 'windows-x64', 'portable')">
+                                            <span>🪟</span> <span>Tải Bản v2.0.1 (.zip - Khuyên dùng)</span>
                                         </button>
                                         <div style="font-size:11px;color:var(--muted-foreground);text-align:center">Bảo mật xác thực bản quyền • Tự động tương thích hệ điều hành</div>
                                     </div>
@@ -2414,12 +2414,15 @@ if (isset($_GET['registered'])) {
                                         </div>
                                         <p style="font-size:12px;color:var(--muted-foreground);margin-bottom:10px">Phiên bản v2.0.1: Tương thích chính xác CapCut Desktop 9.3.0.3970, tự động phân giải com.lveditor.draft, NVIDIA RTX Tensor & Intel/AMD 64-bit.</p>
                                         <div style="display:flex;gap:8px;flex-wrap:wrap">
-                                            <button type="button" class="btn btn-accent btn-sm" style="flex:1;text-align:center;background:#ff7a00;border-color:#ff7a00" onclick="requestSecureDownload('AUTOEDIT', 'windows-x64')">
-                                                ⚙️ Bộ cài đặt .exe (523 MB)
+                                            <button type="button" class="btn btn-accent btn-sm" style="flex:1;text-align:center;background:#ff7a00;border-color:#ff7a00" onclick="requestSecureDownload('AUTOEDIT', 'windows-x64', 'portable')">
+                                                📦 Bản v2.0.1 Trực Tiếp (.zip - 905 MB)
+                                            </button>
+                                            <button type="button" class="btn btn-outline btn-sm" style="text-align:center;border-color:#ff7a00;color:#ff9e42" onclick="requestSecureDownload('AUTOEDIT', 'windows-x64', 'installer')" title="Bộ cài đặt (523 MB - Tự động cập nhật v2.0.1 khi mở)">
+                                                ⚙️ Bộ cài .exe (523 MB)
                                             </button>
                                             <?php if ($user_info && in_array($user_info['role'] ?? '', ['admin', 'super_admin'], true)): ?>
-                                                <button type="button" class="btn btn-outline btn-sm" style="flex:1;text-align:center;border-color:#ff7a00;color:#ff9e42" onclick="requestSecureDownload('AUTOEDIT', 'windows-x64', 'customer_test')">
-                                                    🧪 Customer Test (.zip - 971 MB)
+                                                <button type="button" class="btn btn-outline btn-sm" style="text-align:center;border-color:#ff7a00;color:#ff9e42" onclick="requestSecureDownload('AUTOEDIT', 'windows-x64', 'customer_test')">
+                                                    🧪 Test (.zip - 971 MB)
                                                 </button>
                                             <?php endif; ?>
                                         </div>

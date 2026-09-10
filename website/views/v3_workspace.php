@@ -1127,13 +1127,16 @@ $primary_team = !empty($user_teams) ? $user_teams[0] : null;
                             Phần mềm Desktop độc lập điều phối và tự động hóa biên tập CapCut Desktop: Tạo Timeline, Keyframe Scale/Position mượt mà, Rãnh âm thanh &amp; Phụ đề XML tự động.
                         </p>
                         <div style="padding:12px;background:var(--v3-surface-2);border-radius:var(--v3-radius-sm);margin-bottom:16px;font-size:12px;color:var(--v3-text-muted)">
-                            <div>Hệ điều hành: <b>Windows 10/11 64-bit</b> &bull; Phiên bản: <b>v2.0.1</b> &bull; Dung lượng: <b>523 MB</b></div>
+                            <div>Hệ điều hành: <b>Windows 10/11 64-bit</b> &bull; Phiên bản: <b>v2.0.1 Stable</b></div>
                             <div style="margin-top:6px;color:#ff9e42">✨ <b>Tương thích chính xác CapCut 9.3.0.3970</b> &bull; Tự động phân giải com.lveditor.draft</div>
                         </div>
                         <div style="display:flex;gap:10px;flex-wrap:wrap">
-                            <button type="button" class="v3-btn v3-btn-primary" style="flex:1" onclick="requestSecureDownload('AUTOEDIT', 'windows-x64')">
+                            <button type="button" class="v3-btn v3-btn-primary" style="flex:1" onclick="requestSecureDownload('AUTOEDIT', 'windows-x64', 'portable')">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-                                <span>Tải Cho Windows (.exe)</span>
+                                <span>Tải Bản v2.0.1 Trực Tiếp (.zip - 905 MB)</span>
+                            </button>
+                            <button type="button" class="v3-btn v3-btn-outline" onclick="requestSecureDownload('AUTOEDIT', 'windows-x64', 'installer')" title="Bộ cài đặt (523 MB - Tự động cập nhật v2.0.1 khi mở)">
+                                Bộ Cài (.exe - 523 MB)
                             </button>
                             <button type="button" class="v3-btn v3-btn-secondary" onclick="requestSecureDownload('AUTOEDIT', 'macos')">
                                 macOS (.dmg)
