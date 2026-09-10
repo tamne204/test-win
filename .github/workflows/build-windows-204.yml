@@ -79,6 +79,8 @@ jobs:
           Write-Host "=================================================="
           Write-Host "TESTING FRESH PACKAGED SIDECAR EXECUTION DIRECTLY"
           Write-Host "=================================================="
+          $env:PYTHONIOENCODING = "utf-8"
+          $env:PYTHONUTF8 = "1"
           $env:AUTOEDIT_CORE_EXE = "apps/capcut-v2/packaging/dist/autoedit-core/autoedit-core.exe"
           python tests/test_packaged_windows_sidecar_rpc.py
 

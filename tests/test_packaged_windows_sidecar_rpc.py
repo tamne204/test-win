@@ -49,6 +49,8 @@ def main():
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             bufsize=1,
         )
         print("SIDECAR_PROCESS_START = PASS")
