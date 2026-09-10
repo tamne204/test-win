@@ -32,6 +32,7 @@ $router = new Router();
 
 // Auto-Update Check & Secure Streaming
 $router->get('/update/check', [UpdateController::class, 'check']);
+$router->post('/update/authorize', [UpdateController::class, 'authorize']);
 $router->get('/update/download', [UpdateController::class, 'download']);
 $router->get('/app/version', [UpdateController::class, 'check']);
 

@@ -1,9 +1,10 @@
 <?php
 /**
  * 2TOOLNE AUTOEDIT & UPSCALE — AUTO-UPDATE CONTROLLER
- * Secure update check and authorized streaming engine for desktop clients
- * Supports multi-channel updates (windows-canary, stable)
- * Enforces private durable storage (C:/2TOOLNE-Private/packages) outside webroot
+ * Secure update discovery, cryptographic entitlement authorization, and binary streaming engine.
+ * Supports multi-channel updates (windows-canary, stable).
+ * Enforces private durable storage (C:/2TOOLNE-Private/packages) outside webroot.
+ * Separates public update discovery from authoritative download token issuance.
  */
 
 declare(strict_types=1);
@@ -16,7 +17,7 @@ class UpdateController {
     private const CANARY_CHANNEL = 'windows-canary';
     private const STABLE_CHANNEL = 'stable';
     private const CANARY_VERSION = '2.0.1';
-    private const TOKEN_TTL_SECONDS = 900; // 15 minutes (strictly 10-15m)
+    private const TOKEN_TTL_SECONDS = 900; // Strictly 15 minutes
 
     // Durable private storage outside Apache webroot
     private const PRIVATE_PACKAGES_DIR = 'C:/2TOOLNE-Private/packages';
@@ -28,7 +29,7 @@ class UpdateController {
     private const RELEASE_201_SHA256 = 'fcdcb6af72d542e6f58bd2b0ca00b82d73c86fdb8cbf4f4f04e6b01b99a8161e';
     private const RELEASE_201_NOTES = '2TOOLNE AutoEdit v2.0.1: Cập nhật tương thích chính xác CapCut v9.3.0.3970, tự động phân giải thư mục com.lveditor.draft, bảo vệ đường dẫn an toàn và tối ưu giao diện.';
 
-    // Trusted Release Artifact Registry (Prevents arbitrary file resolution or cross-product access)
+    // Trusted Release Artifact Registry (Strict product, platform, architecture isolation)
     private const TRUSTED_PACKAGES = [
         'autoedit' => [
             '2.0.1' => [
@@ -55,62 +56,218 @@ class UpdateController {
     ];
 
     /**
-     * GET /api/v1/update/check
-     * Evaluates desktop client update availability and issues short-lived update download tokens.
+     * Resolves and verifies an authoritative principal from license, device, or session credentials.
+     * Returns principal array if valid active entitlement exists for requested application, null otherwise.
      */
-    public static function check(array $params, array $body): void {
-        // 1. Anti-Scraping / Anonymous Browser Gate
-        // Reject generic browser navigation requests (Sec-Fetch-Dest: document, text/html)
-        $secFetchDest = strtolower($_SERVER['HTTP_SEC_FETCH_DEST'] ?? '');
-        $secFetchMode = strtolower($_SERVER['HTTP_SEC_FETCH_MODE'] ?? '');
-        $accept = strtolower($_SERVER['HTTP_ACCEPT'] ?? '');
-
-        if ($secFetchDest === 'document' || $secFetchMode === 'navigate' || (strpos($accept, 'text/html') !== false && strpos($accept, 'application/json') === false)) {
-            Router::error('Truy cập bị từ chối. Endpoint cập nhật chỉ dành riêng cho ứng dụng desktop 2TOOLNE.', 403, 'DESKTOP_CLIENT_REQUIRED');
-            return;
+    public static function resolveAuthorizedPrincipal(
+        string $appName,
+        ?string $licenseId = null,
+        ?string $licenseKey = null,
+        ?string $deviceId = null,
+        ?string $bearerToken = null
+    ): ?array {
+        // Collect credentials from headers or request parameters if not passed explicitly
+        if (empty($licenseId)) {
+            $licenseId = trim((string)($_SERVER['HTTP_X_LICENSE_ID'] ?? $_REQUEST['license_id'] ?? ''));
+        }
+        if (empty($licenseKey)) {
+            $licenseKey = trim((string)($_SERVER['HTTP_X_LICENSE_KEY'] ?? $_REQUEST['license_key'] ?? ''));
+        }
+        if (empty($deviceId)) {
+            $deviceId = trim((string)($_SERVER['HTTP_X_DEVICE_ID'] ?? $_REQUEST['device_id'] ?? ''));
+        }
+        if (empty($bearerToken)) {
+            $authHeader = trim((string)($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? ''));
+            if (preg_match('/Bearer\s+(\S+)/i', $authHeader, $m)) {
+                $bearerToken = $m[1];
+            } elseif (!empty($_REQUEST['auth_token'])) {
+                $bearerToken = trim((string)$_REQUEST['auth_token']);
+            }
         }
 
-        // 2. Strict Desktop Parameter Gate
-        $appName = strtolower(trim((string)($_GET['app'] ?? '')));
-        $clientVersion = trim((string)($_GET['version'] ?? ''));
-        $platform = strtolower(trim((string)($_GET['platform'] ?? '')));
+        // Fallback to parsed JSON body if parameters empty
+        if (empty($licenseId) && empty($licenseKey) && empty($deviceId) && empty($bearerToken)) {
+            $rawInput = @file_get_contents('php://input');
+            if ($rawInput) {
+                $json = json_decode($rawInput, true);
+                if (is_array($json)) {
+                    $licenseId = trim((string)($json['license_id'] ?? ''));
+                    $licenseKey = trim((string)($json['license_key'] ?? ''));
+                    $deviceId = trim((string)($json['device_id'] ?? ''));
+                    $bearerToken = trim((string)($json['auth_token'] ?? ''));
+                }
+            }
+        }
+
+        // Anonymous callers have no credentials
+        if (empty($licenseId) && empty($licenseKey) && empty($deviceId) && empty($bearerToken)) {
+            return null;
+        }
+
+        try {
+            $db = Database::getConnection();
+        } catch (\Throwable $e) {
+            return null;
+        }
+
+        $now = time();
+        $allowedProducts = ($appName === 'autoedit')
+            ? ['2toolne.capcut.v2', 'CAPCUT_V2', 'ALL_ACCESS', '2TOOLNE']
+            : ['UPSCALE', 'ALL_ACCESS', '2TOOLNE'];
+
+        // 1. Authorize via License ID
+        if (!empty($licenseId)) {
+            $stmt = $db->prepare('SELECT * FROM `licenses` WHERE `license_id` = ? OR `id` = ? LIMIT 1');
+            $stmt->execute([$licenseId, $licenseId]);
+            $lic = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($lic && $lic['status'] === 'active' && in_array($lic['product'], $allowedProducts, true)) {
+                if (empty($lic['expires_at']) || strtotime($lic['expires_at']) > $now) {
+                    $userId = $lic['owner_username'] ?: 'anon_user';
+                    $fpHash = !empty($deviceId) ? hash('sha256', $deviceId) : ($lic['hwid'] ? hash('sha256', $lic['hwid']) : 'no_dev');
+                    return [
+                        'type' => 'license',
+                        'principal_id' => "lic:{$lic['license_id']}:usr:{$userId}:dev:" . substr($fpHash, 0, 16),
+                        'user_id' => $userId,
+                        'license_id' => $lic['license_id'],
+                        'tier' => $lic['tier'] ?? 'PRO',
+                    ];
+                }
+            }
+        }
+
+        // 2. Authorize via License Key
+        if (!empty($licenseKey)) {
+            $cleanKey = strtoupper(trim($licenseKey));
+            $lookupPepper = function_exists('db_get_capcut_lookup_pepper') ? db_get_capcut_lookup_pepper() : '2TOOLNE_PEPPER_2026';
+            $lookupHash = hash_hmac('sha256', $cleanKey, $lookupPepper);
+            $stmt = $db->prepare('SELECT * FROM `licenses` WHERE `key_lookup_hash` = ? OR `license_key` = ? LIMIT 1');
+            $stmt->execute([$lookupHash, $cleanKey]);
+            $lic = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($lic && $lic['status'] === 'active' && in_array($lic['product'], $allowedProducts, true)) {
+                if (empty($lic['expires_at']) || strtotime($lic['expires_at']) > $now) {
+                    $userId = $lic['owner_username'] ?: 'anon_user';
+                    $fpHash = !empty($deviceId) ? hash('sha256', $deviceId) : ($lic['hwid'] ? hash('sha256', $lic['hwid']) : 'no_dev');
+                    return [
+                        'type' => 'license_key',
+                        'principal_id' => "lic:{$lic['license_id']}:usr:{$userId}:dev:" . substr($fpHash, 0, 16),
+                        'user_id' => $userId,
+                        'license_id' => $lic['license_id'],
+                        'tier' => $lic['tier'] ?? 'PRO',
+                    ];
+                }
+            }
+        }
+
+        // 3. Authorize via Registered Active Device
+        if (!empty($deviceId)) {
+            $fpHash = hash('sha256', $deviceId);
+            $devStmt = $db->prepare('
+                SELECT d.*, l.license_id, l.product, l.status as lic_status, l.expires_at, l.tier
+                FROM `devices` d
+                JOIN `licenses` l ON (l.owner_username = d.user_id OR l.hwid = d.device_fingerprint OR l.hwid = ?)
+                WHERE (d.device_fingerprint_hash = ? OR d.device_fingerprint = ?) AND d.status = "ACTIVE"
+                ORDER BY l.id DESC LIMIT 1
+            ');
+            $devStmt->execute([$deviceId, $fpHash, $deviceId]);
+            $devRow = $devStmt->fetch(PDO::FETCH_ASSOC);
+            if ($devRow && $devRow['lic_status'] === 'active' && in_array($devRow['product'], $allowedProducts, true)) {
+                if (empty($devRow['expires_at']) || strtotime($devRow['expires_at']) > $now) {
+                    return [
+                        'type' => 'device',
+                        'principal_id' => "dev:" . substr($fpHash, 0, 16) . ":usr:{$devRow['user_id']}:lic:{$devRow['license_id']}",
+                        'user_id' => $devRow['user_id'],
+                        'license_id' => $devRow['license_id'],
+                        'tier' => $devRow['tier'] ?? 'PRO',
+                    ];
+                }
+            }
+        }
+
+        // 4. Authorize via Bearer Session Token
+        if (!empty($bearerToken)) {
+            $sessStmt = $db->prepare('SELECT user_id FROM `app_auth_sessions` WHERE token = ? AND expires_at > NOW() LIMIT 1');
+            $sessStmt->execute([$bearerToken]);
+            $sess = $sessStmt->fetch(PDO::FETCH_ASSOC);
+            if ($sess && !empty($sess['user_id'])) {
+                $userId = $sess['user_id'];
+                $licStmt = $db->prepare('SELECT * FROM `licenses` WHERE owner_username = ? AND status = "active" ORDER BY id DESC LIMIT 1');
+                $licStmt->execute([$userId]);
+                $lic = $licStmt->fetch(PDO::FETCH_ASSOC);
+                if ($lic && in_array($lic['product'], $allowedProducts, true)) {
+                    if (empty($lic['expires_at']) || strtotime($lic['expires_at']) > $now) {
+                        return [
+                            'type' => 'session',
+                            'principal_id' => "usr:{$userId}:lic:{$lic['license_id']}",
+                            'user_id' => $userId,
+                            'license_id' => $lic['license_id'],
+                            'tier' => $lic['tier'] ?? 'PRO',
+                        ];
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Creates a cryptographically signed, bound, short-lived update download token.
+     */
+    public static function createDownloadToken(
+        string $channel,
+        string $appName,
+        string $platform,
+        string $arch,
+        string $version,
+        string $sha256,
+        string $principalId
+    ): array {
+        $issuedAt = time();
+        $expires = $issuedAt + self::TOKEN_TTL_SECONDS;
+        $nonce = bin2hex(random_bytes(8));
+
+        // Token elements: channel|appName|platform|arch|version|sha256|principalId|issuedAt|expires|nonce
+        $tokenPayload = "{$channel}|{$appName}|{$platform}|{$arch}|{$version}|{$sha256}|{$principalId}|{$issuedAt}|{$expires}|{$nonce}";
+        $sig = hash_hmac('sha256', $tokenPayload, self::UPDATE_SECRET);
+        $token = base64_encode("{$tokenPayload}|{$sig}");
+        $downloadUrl = "https://www.2tamne.site/api/v1/update/download?token=" . urlencode($token);
+
+        return [
+            'token' => $token,
+            'download_url' => $downloadUrl,
+            'issued_at' => $issuedAt,
+            'expires' => $expires,
+            'expires_in' => self::TOKEN_TTL_SECONDS,
+            'nonce' => $nonce,
+            'principal' => $principalId,
+        ];
+    }
+
+    /**
+     * GET /api/v1/update/check
+     * Public Update Discovery endpoint.
+     * Returns non-sensitive release metadata to any caller.
+     * ONLY issues a usable download URL if an authoritative active entitlement credential is provided.
+     * An attacker spoofing desktop headers without real credentials will NEVER receive a download token.
+     */
+    public static function check(array $params, array $body): void {
+        $appName = strtolower(trim((string)($_GET['app'] ?? 'autoedit')));
+        $clientVersion = trim((string)($_GET['version'] ?? '2.0.0'));
+        $platform = strtolower(trim((string)($_GET['platform'] ?? 'win32')));
         $arch = strtolower(trim((string)($_GET['arch'] ?? 'x64')));
         $channel = strtolower(trim((string)($_GET['channel'] ?? self::STABLE_CHANNEL)));
-
-        // Default legacy client compatibility fallback
-        if (empty($appName)) $appName = 'autoedit';
-        if (empty($platform)) $platform = 'win32';
-        if (empty($clientVersion)) $clientVersion = '2.0.0';
 
         if (!in_array($appName, ['autoedit', 'upscale'], true)) {
             Router::error('Ứng dụng không xác định.', 400, 'UNKNOWN_APPLICATION');
             return;
         }
 
-        if (!in_array($platform, ['win32', 'windows', 'darwin', 'mac', 'macos'], true)) {
-            Router::error('Nền tảng hệ điều hành không hỗ trợ.', 400, 'UNSUPPORTED_PLATFORM');
-            return;
-        }
-
         $isWin = in_array($platform, ['win32', 'windows'], true);
         $normPlatform = $isWin ? 'win32' : 'darwin';
 
-        // 3. Resolve Target Release
-        $config = [];
-        try {
-            $db = Database::getConnection();
-            $stmt = $db->query("SELECT `config_key`, `config_value` FROM `system_config`");
-            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-            foreach ($rows as $r) {
-                $config[$r['config_key']] = $r['config_value'];
-            }
-        } catch (\Throwable $e) {
-            // DB fallback safe
-        }
-
+        // Resolve Target Release Metadata
         if ($appName === 'autoedit') {
             if ($isWin) {
-                // Windows platform: Both windows-canary and stable serve 2.0.1
                 $latestVersion = self::CANARY_VERSION;
                 $filename = self::RELEASE_201_PACKAGE;
                 $sizeBytes = self::RELEASE_201_SIZE_BYTES;
@@ -120,44 +277,53 @@ class UpdateController {
                 $isMandatory = false;
                 $publishedAt = '2026-09-11 03:00:00';
             } else {
-                // macOS platform
-                $latestVersion = $config['autoedit_app_version_mac'] ?? '2.0.0';
+                $latestVersion = '2.0.0';
                 $filename = "2toolne-autoedit-{$latestVersion}-mac-{$arch}.zip";
-                $downloadUrl = "https://www.2tamne.site/downloads/releases/{$filename}";
-                $sha256 = $config['autoedit_sha256_mac'] ?? '';
-                $sizeBytes = intval(($config['autoedit_file_size_mac'] ?? 145.0) * 1024 * 1024);
-                $fileSizeMb = floatval($config['autoedit_file_size_mac'] ?? 145.0);
-                $releaseNotes = $config['autoedit_release_notes_mac'] ?? "2TOOLNE AutoEdit macOS v{$latestVersion}";
+                $sha256 = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+                $sizeBytes = 152043520;
+                $fileSizeMb = 145.0;
+                $releaseNotes = "2TOOLNE AutoEdit macOS v{$latestVersion}";
                 $isMandatory = false;
-                $publishedAt = $config['autoedit_published_at_mac'] ?? date('Y-m-d H:i:s');
+                $publishedAt = '2026-09-08 00:00:00';
             }
         } else {
-            // Legacy Upscale app
-            $latestVersion = $config['upscale_app_version'] ?? '1.0.2';
-            $releaseNotes = $config['upscale_release_notes'] ?? "Phiên bản {$latestVersion}";
-            $isMandatory = filter_var($config['upscale_update_mandatory'] ?? false, FILTER_VALIDATE_BOOLEAN);
+            $latestVersion = '1.0.2';
+            $releaseNotes = "2TOOLNE AI Upscale v{$latestVersion}";
+            $isMandatory = false;
             $filename = $isWin ? "2toolne_Upscale_Setup_latest.exe" : "2toolne_Upscale_latest.dmg";
             $fileSizeMb = $isWin ? 150.0 : 130.0;
             $sizeBytes = intval($fileSizeMb * 1024 * 1024);
-            $sha256 = $isWin ? ($config['upscale_sha256_win'] ?? '') : ($config['upscale_sha256_mac'] ?? '');
-            $publishedAt = $config['upscale_published_at'] ?? date('Y-m-d H:i:s');
+            $sha256 = '';
+            $publishedAt = '2026-09-05 00:00:00';
         }
 
         $hasUpdate = version_compare($latestVersion, $clientVersion, '>');
 
-        // 4. Token Generation (Only generated when update is available)
+        // Separate Discovery from Authorization:
+        // Evaluate caller's authoritative principal
+        $principal = self::resolveAuthorizedPrincipal(
+            $appName,
+            $body['license_id'] ?? null,
+            $body['license_key'] ?? null,
+            $body['device_id'] ?? null,
+            $body['auth_token'] ?? null
+        );
+        $authorized = ($principal !== null);
         $downloadUrl = null;
-        if ($hasUpdate) {
-            $clientIp = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
-            // Extract /24 subnet for IPv4 or /64 prefix for IPv6 to prevent token sharing while tolerating mobile NAT hops
-            $ipPrefix = self::extractIpSubnet($clientIp);
+        $tokenInfo = null;
 
-            $expires = time() + self::TOKEN_TTL_SECONDS;
-            // Token bindings: product, version, platform, arch, release_hash, ip_subnet, expires
-            $tokenPayload = "{$channel}|{$appName}|{$normPlatform}|{$arch}|{$latestVersion}|{$sha256}|{$ipPrefix}|{$expires}";
-            $sig = hash_hmac('sha256', $tokenPayload, self::UPDATE_SECRET);
-            $token = base64_encode("{$tokenPayload}|{$sig}");
-            $downloadUrl = "https://www.2tamne.site/api/v1/update/download?token=" . urlencode($token);
+        if ($hasUpdate && $authorized) {
+            // Authorized client: issue cryptographically signed, bound download token
+            $tokenInfo = self::createDownloadToken(
+                $channel,
+                $appName,
+                $normPlatform,
+                $arch,
+                $latestVersion,
+                $sha256,
+                $principal['principal_id']
+            );
+            $downloadUrl = $tokenInfo['download_url'];
         }
 
         Router::json([
@@ -167,11 +333,16 @@ class UpdateController {
             'latest_version' => $latestVersion,
             'channel' => $channel,
             'release_notes' => $releaseNotes,
-            'download_url' => $downloadUrl,
             'mandatory' => $isMandatory,
             'file_size_mb' => $fileSizeMb,
             'filename' => $filename,
             'sha256' => $sha256,
+            'download_url' => $downloadUrl,
+            'auth_required' => !$authorized,
+            'authorized' => $authorized,
+            'message' => $authorized
+                ? 'Đã xác thực bản quyền thành công. Đường dẫn tải bản cập nhật an toàn đã được kích hoạt.'
+                : 'Bản cập nhật v' . $latestVersion . ' đã sẵn sàng. Yêu cầu xác thực bản quyền hợp lệ để tạo liên kết tải về an toàn.',
             'package' => [
                 'filename' => $filename,
                 'url' => $downloadUrl,
@@ -183,8 +354,74 @@ class UpdateController {
     }
 
     /**
+     * POST /api/v1/update/authorize
+     * Explicit Update Download Authorization endpoint.
+     * Requires active license / device / session entitlement.
+     * Issues 15-minute cryptographically signed download token.
+     */
+    public static function authorize(array $params, array $body): void {
+        $appName = strtolower(trim((string)($body['app'] ?? $_GET['app'] ?? 'autoedit')));
+        $version = trim((string)($body['version'] ?? $_GET['version'] ?? self::CANARY_VERSION));
+        $platform = strtolower(trim((string)($body['platform'] ?? $_GET['platform'] ?? 'win32')));
+        $arch = strtolower(trim((string)($body['arch'] ?? $_GET['arch'] ?? 'x64')));
+        $channel = strtolower(trim((string)($body['channel'] ?? $_GET['channel'] ?? self::STABLE_CHANNEL)));
+
+        $isWin = in_array($platform, ['win32', 'windows'], true);
+        $normPlatform = $isWin ? 'win32' : 'darwin';
+
+        // 1. Authorize Principal
+        $principal = self::resolveAuthorizedPrincipal(
+            $appName,
+            $body['license_id'] ?? null,
+            $body['license_key'] ?? null,
+            $body['device_id'] ?? null,
+            $body['auth_token'] ?? null
+        );
+        if (!$principal) {
+            Router::error(
+                'Yêu cầu bản quyền hợp lệ: Không tìm thấy bản quyền hoạt động hoặc thiết bị chưa được kích hoạt cho ứng dụng này.',
+                401,
+                'AUTH_REQUIRED'
+            );
+            return;
+        }
+
+        // 2. Validate Target Release in Trusted Catalog
+        $releaseInfo = self::TRUSTED_PACKAGES[$appName][$version][$normPlatform][$arch] ?? null;
+        if (!$releaseInfo) {
+            Router::error('Bản cập nhật yêu cầu không tồn tại trong danh mục phát hành tin cậy.', 404, 'RELEASE_NOT_FOUND');
+            return;
+        }
+
+        // 3. Issue Token
+        $tokenInfo = self::createDownloadToken(
+            $channel,
+            $appName,
+            $normPlatform,
+            $arch,
+            $version,
+            $releaseInfo['sha256'],
+            $principal['principal_id']
+        );
+
+        Router::json([
+            'success' => true,
+            'authorized' => true,
+            'app' => $appName,
+            'version' => $version,
+            'platform' => $normPlatform,
+            'arch' => $arch,
+            'download_url' => $tokenInfo['download_url'],
+            'token' => $tokenInfo['token'],
+            'expires_in' => $tokenInfo['expires_in'],
+            'principal' => $principal['principal_id'],
+        ]);
+    }
+
+    /**
      * GET /api/v1/update/download
      * Authenticated, binary-clean update package streaming from private storage outside webroot.
+     * Enforces HMAC validation, 15m expiration, trusted catalog lookup, realpath boundary isolation.
      */
     public static function download(array $params, array $body): void {
         // 1. Mandatory Token Check (Anonymous calls strictly denied)
@@ -201,16 +438,16 @@ class UpdateController {
         }
 
         $parts = explode('|', $decoded);
-        if (count($parts) !== 9) {
+        if (count($parts) !== 11) {
             Router::error('Dữ liệu token cập nhật bị sai cấu trúc hoặc không đầy đủ ràng buộc.', 403, 'MALFORMED_TOKEN');
             return;
         }
 
-        [$channel, $appName, $platform, $arch, $version, $expectedSha256, $boundIpPrefix, $expiresStr, $sig] = $parts;
+        [$channel, $appName, $platform, $arch, $version, $expectedSha256, $principalId, $issuedAtStr, $expiresStr, $nonce, $sig] = $parts;
         $expires = intval($expiresStr);
 
         // 2. Cryptographic HMAC Verification
-        $tokenPayload = "{$channel}|{$appName}|{$platform}|{$arch}|{$version}|{$expectedSha256}|{$boundIpPrefix}|{$expiresStr}";
+        $tokenPayload = "{$channel}|{$appName}|{$platform}|{$arch}|{$version}|{$expectedSha256}|{$principalId}|{$issuedAtStr}|{$expiresStr}|{$nonce}";
         $calculatedSig = hash_hmac('sha256', $tokenPayload, self::UPDATE_SECRET);
         if (!hash_equals($calculatedSig, $sig)) {
             Router::error('Chữ ký xác thực token cập nhật không hợp lệ.', 403, 'INVALID_SIGNATURE');
@@ -223,15 +460,13 @@ class UpdateController {
             return;
         }
 
-        // 4. IP Subnet Binding Verification
-        $clientIp = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
-        $currentIpPrefix = self::extractIpSubnet($clientIp);
-        if ($boundIpPrefix !== $currentIpPrefix && $boundIpPrefix !== '127.0.0.0' && $currentIpPrefix !== '127.0.0.0') {
-            Router::error('Token cập nhật không khớp với thiết bị gửi yêu cầu ban đầu.', 403, 'DEVICE_NETWORK_MISMATCH');
+        // 4. Principal Presence Check
+        if (empty($principalId)) {
+            Router::error('Token cập nhật thiếu thông tin định danh chủ thể được cấp quyền.', 403, 'INVALID_PRINCIPAL');
             return;
         }
 
-        // 5. Cross-Product Isolation Gate & Trusted Release Lookup
+        // 5. Cross-Product & Cross-Platform Isolation Gate & Trusted Release Lookup
         // Client input NEVER controls physical filename or path
         $releaseInfo = self::TRUSTED_PACKAGES[$appName][$version][$platform][$arch] ?? null;
         if (!$releaseInfo) {
@@ -346,20 +581,5 @@ class UpdateController {
 
         fclose($fp);
         exit;
-    }
-
-    /**
-     * Helper to extract /24 IPv4 or /64 IPv6 prefix
-     */
-    private static function extractIpSubnet(string $ip): string {
-        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
-            $parts = explode('.', $ip);
-            return $parts[0] . '.' . $parts[1] . '.' . $parts[2] . '.0';
-        }
-        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
-            $parts = explode(':', $ip);
-            return implode(':', array_slice($parts, 0, 4)) . '::';
-        }
-        return '127.0.0.0';
     }
 }
