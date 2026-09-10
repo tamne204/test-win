@@ -369,10 +369,10 @@ class DownloadEntitlementService {
                 $filename  = '2TOOLNE_Windows_Customer_Test_2.0.0-hardened.zip';
                 $sha256    = '812076c622b6a1eeebcac44a74d76ffedcd3bfa711d394a7a571ddfce86c19ac';
                 $sizeBytes = 971974552;
-            } elseif ($packageType === 'portable' || $packageType === 'zip' || $packageType === 'direct' || $packageType === 'v201') {
-                $filename  = '2toolne-autoedit-2.0.1-win-x64.zip';
-                $sha256    = 'fcdcb6af72d542e6f58bd2b0ca00b82d73c86fdb8cbf4f4f04e6b01b99a8161e';
-                $sizeBytes = 949148943;
+            } elseif ($packageType === 'portable' || $packageType === 'zip' || $packageType === 'direct' || $packageType === 'v204' || $packageType === 'v201') {
+                $filename  = '2toolne-autoedit-2.0.4-win-x64.zip';
+                $sha256    = 'd561055f02db95150e831d1039533a19315b37d8dbcaa437ea37e31899e01459';
+                $sizeBytes = 706037910;
             } elseif ($isMac) {
                 $filename  = '2toolne_AutoEdit_macOS_latest.dmg';
             } else {

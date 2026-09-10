@@ -24,9 +24,9 @@ class UpdateController {
 
     // 2.0.4 Authoritative Package Metadata (Single Source of Truth)
     private const RELEASE_204_PACKAGE = '2toolne-autoedit-2.0.4-win-x64.zip';
-    private const RELEASE_204_SIZE_BYTES = 706040262;
+    private const RELEASE_204_SIZE_BYTES = 706037910;
     private const RELEASE_204_SIZE_MB = 673.33;
-    private const RELEASE_204_SHA256 = 'f8fb43f2625f123dfe1e2617d14b5e4eee6163d3200e8b351b09645293144c86';
+    private const RELEASE_204_SHA256 = 'd561055f02db95150e831d1039533a19315b37d8dbcaa437ea37e31899e01459';
     private const RELEASE_204_NOTES = '2TOOLNE AutoEdit v2.0.4: Xây dựng mới hoàn toàn trên Windows Runner với Python 3.12 và PyInstaller gốc, loại bỏ triệt để lỗi CapCutDetector status, tương thích chính xác CapCut v9.3.0.3970.';
 
     // 2.0.3 Authoritative Package Metadata (Single Source of Truth)
