@@ -548,6 +548,63 @@ $user_tokens_tx = $current_user ? db_get_user_token_transactions($current_user, 
 $user_orders = $current_user ? array_filter($orders_db, fn($o) => strtolower($o['user'] ?? ($o['username'] ?? '')) === strtolower($current_user)) : [];
 $user_pending_orders = array_filter($user_orders, fn($o) => ($o['status'] ?? '') === 'pending');
 
+// ── V3 Workspace Additional Context Data ─────────────────────────────
+$user_teams = [];
+$user_team_members = [];
+$user_ai_keys = [];
+$active_license = null;
+
+if ($user_info && !empty($user_info['id'])) {
+    $uid_str = (string)$user_info['id'];
+    try {
+        $db = get_db();
+        $stmtT = $db->prepare("
+            SELECT t.*, tm.role as my_role, u_owner.username as owner_username, u_owner.fullname as owner_fullname
+            FROM teams t 
+            JOIN team_members tm ON t.id = tm.team_id 
+            LEFT JOIN users u_owner ON t.owner_user_id = u_owner.id
+            WHERE tm.user_id = ? AND tm.status = 'ACTIVE'
+            ORDER BY t.created_at DESC
+        ");
+        $stmtT->execute([$uid_str]);
+        $user_teams = $stmtT->fetchAll(PDO::FETCH_ASSOC);
+
+        if (!empty($user_teams)) {
+            $primary_tid = $user_teams[0]['id'];
+            $stmtM = $db->prepare("
+                SELECT tm.*, u.username, u.fullname, u.phone, u.role as user_global_role
+                FROM team_members tm
+                LEFT JOIN users u ON tm.user_id = u.id
+                WHERE tm.team_id = ? AND tm.status != 'REMOVED'
+                ORDER BY tm.joined_at ASC
+            ");
+            $stmtM->execute([$primary_tid]);
+            $user_team_members = $stmtM->fetchAll(PDO::FETCH_ASSOC);
+        }
+
+        $stmtK = $db->prepare("
+            SELECT k.*, cs.name as workspace_name
+            FROM ai_access_keys k
+            LEFT JOIN cloud_spaces cs ON k.workspace_id = cs.id
+            WHERE k.user_id = ?
+            ORDER BY k.created_at DESC
+        ");
+        $stmtK->execute([$uid_str]);
+        $user_ai_keys = $stmtK->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {}
+}
+
+if (!empty($user_info['keys'])) {
+    foreach ($user_info['keys'] as $k) {
+        $lic = $licenses_db[$k] ?? null;
+        if ($lic && ($lic['status'] ?? '') === 'active') {
+            $active_license = $lic;
+            $active_license['key'] = $k;
+            break;
+        }
+    }
+}
+
 if (isset($_GET['flash_out'])) {
     $msg_success = '👋 Bạn đã đăng xuất thành công. Hẹn gặp lại!';
 }
@@ -564,15 +621,21 @@ if (isset($_GET['registered'])) {
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>2TOOLNE — Commercial AI Software Suite &amp; Production Tools</title>
+    <title><?= $user_info ? '2TOOLNE — Bảng Điều Khiển &amp; Bản Quyền' : '2TOOLNE — AI Video Infrastructure &amp; Automation Pipeline (V3)' ?></title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/x-icon" href="favicon.ico">
     <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="globals.css?v=<?= filemtime(__DIR__ . '/globals.css') ?>">
+    <?php if ($user_info): ?>
+    <link rel="stylesheet" href="assets/css/v3-workspace.css?v=<?= filemtime(__DIR__ . '/assets/css/v3-workspace.css') ?>">
+    <?php endif; ?>
+    <?php if (!$user_info): ?>
+    <link rel="stylesheet" href="dist/assets/index-B62LYrWu.css">
+    <?php endif; ?>
     <style>
         /* ── Specific View Layout Adjustments ──────────────────────────────── */
         .site-nav {
@@ -631,7 +694,7 @@ if (isset($_GET['registered'])) {
 
         /* ── Hero Section ─────────────────────────────────────────────────── */
         .hero-section {
-            padding: 72px 0 48px;
+            padding: 56px 0 36px;
             text-align: center;
         }
         .hero-eyebrow {
@@ -653,9 +716,15 @@ if (isset($_GET['registered'])) {
             letter-spacing: -0.03em;
             margin-bottom: 16px;
             color: var(--foreground);
+            text-wrap: balance;
         }
         .hero-title span {
             background: linear-gradient(135deg, #fafafa 30%, #a1a1aa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        [data-theme="light"] .hero-title span {
+            background: linear-gradient(135deg, #111827 30%, #4B5563 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
@@ -665,6 +734,7 @@ if (isset($_GET['registered'])) {
             max-width: 640px;
             margin: 0 auto 32px;
             line-height: 1.6;
+            text-wrap: balance;
         }
         .hero-actions {
             display: flex;
@@ -678,8 +748,16 @@ if (isset($_GET['registered'])) {
             display: flex;
             justify-content: center;
             gap: 8px;
-            margin: 40px 0 32px;
+            margin: 28px 0 32px;
             flex-wrap: wrap;
+        }
+        .prod-tab-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13.5px;
+            font-weight: 600;
+            padding: 8px 16px;
         }
 
         /* ── Feature Grid ─────────────────────────────────────────────────── */
@@ -978,18 +1056,20 @@ if (isset($_GET['registered'])) {
                 color: #ffffff;
                 border-color: var(--primary);
                 font-weight: 600;
-                box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);
+                box-shadow: 0 2px 8px rgba(255, 122, 0, 0.35);
             }
             .hero-section {
-                padding: 44px 0 32px;
+                padding: 36px 0 24px;
             }
             .hero-title {
                 font-size: 28px;
                 line-height: 1.25;
+                text-wrap: balance;
             }
             .hero-desc {
                 font-size: 14px;
                 margin-bottom: 24px;
+                text-wrap: balance;
             }
             .hero-actions .btn {
                 width: 100%;
@@ -1428,9 +1508,12 @@ if (isset($_GET['registered'])) {
         }
     </style>
 </head>
-<body>
+<body class="<?= $user_info ? 'v3-workspace-body' : '' ?>">
 
-    <!-- ═══ HEADER / NAVBAR ═══ -->
+    <!-- ═══ 2TOOLNE WEB V3 AUTHENTICATED WORKSPACE ═══ -->
+    <?php if ($user_info): ?>
+        <?php require __DIR__ . '/views/v3_workspace.php'; ?>
+        <?php if (false): /* Legacy v2 dashboard layout bypassed in favor of V3 Workspace */ ?>
     <header class="site-nav">
         <div class="container nav-inner">
             <a href="index.php" class="nav-brand">
@@ -1450,7 +1533,7 @@ if (isset($_GET['registered'])) {
                 <?php else: ?>
                     <a href="#products" class="nav-item">Sản Phẩm</a>
                     <a href="#products" class="nav-item" onclick="switchProductTab('ptab-cloud', 'ptab-btn-cloud'); location.href='#products'">Cloud Lưu Trữ</a>
-                    <a href="#downloads" class="nav-item">Tải Về</a>
+                    <a href="#downloads" class="nav-item" onclick="openModal('modal-login'); return false;">Tải Về</a>
                     <a href="#pricing" class="nav-item">Bảng Giá</a>
                 <?php endif; ?>
                 <a href="https://zalo.me/0326649304" target="_blank" class="nav-item" style="color:var(--emerald)">Hỗ Trợ Zalo</a>
@@ -1522,7 +1605,7 @@ if (isset($_GET['registered'])) {
                     <nav class="mobile-nav-links">
                         <a href="#products" class="mobile-nav-link" onclick="toggleMobileMenu()">🚀 Sản Phẩm Phần Mềm</a>
                         <a href="#products" class="mobile-nav-link" onclick="toggleMobileMenu();switchProductTab('ptab-cloud', 'ptab-btn-cloud')">☁️ 2TOOLNE Cloud (Lưu Trữ)</a>
-                        <a href="#downloads" class="mobile-nav-link" onclick="toggleMobileMenu()">📥 Tải Về Bộ Cài Đặt</a>
+                        <a href="#downloads" class="mobile-nav-link" onclick="toggleMobileMenu();openModal('modal-login'); return false;">📥 Tải Về Bộ Cài Đặt</a>
                         <a href="#pricing" class="mobile-nav-link" onclick="toggleMobileMenu()">🏷️ Bảng Giá Dịch Vụ</a>
                         <a href="https://zalo.me/0326649304" target="_blank" class="mobile-nav-link" style="color:var(--emerald)">💬 Hỗ Trợ Zalo Kỹ Thuật</a>
                     </nav>
@@ -1544,7 +1627,6 @@ if (isset($_GET['registered'])) {
             <div class="alert alert-danger" style="margin-top:20px"><?= $msg_error ?></div>
         <?php endif; ?>
 
-        <?php if ($user_info): ?>
             <!-- ═══════════════════════════════════════════════════════════════
                  LOGGED-IN USER ACCOUNT PORTAL / DASHBOARD
                  ═══════════════════════════════════════════════════════════════ -->
@@ -1733,16 +1815,16 @@ if (isset($_GET['registered'])) {
                                                         <td>
                                                             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
                                                                 <?php if ($is_capcut): ?>
-                                                                    <a href="/downloads/2toolne_AutoEdit_macOS_latest.dmg" class="btn btn-emerald btn-xs" title="Tải 2toolne AutoEdit cho macOS (.dmg)">🍎 Mac</a>
-                                                                    <a href="/downloads/2toolne_AutoEdit_Setup_latest.exe" class="btn btn-accent btn-xs" title="Tải 2toolne AutoEdit cho Windows (.exe)">🪟 Win</a>
+                                                                    <button type="button" class="btn btn-emerald btn-xs" title="Tải 2TOOLNE AutoEdit cho macOS (.dmg)" onclick="requestSecureDownload('AUTOEDIT', 'macos')">🍎 Mac</button>
+                                                                    <button type="button" class="btn btn-accent btn-xs" title="Tải 2TOOLNE AutoEdit cho Windows (.exe)" onclick="requestSecureDownload('AUTOEDIT', 'windows-x64')">🪟 Win</button>
                                                                 <?php elseif ($is_2toolne): ?>
-                                                                    <a href="/downloads/2toolne_macOS_latest.zip" class="btn btn-emerald btn-xs" title="Tải 2toolne cho macOS">🍎 Mac</a>
-                                                                    <a href="/downloads/2toolne_Windows_latest.zip" class="btn btn-accent btn-xs" title="Tải 2toolne cho Windows">🪟 Win</a>
+                                                                    <button type="button" class="btn btn-emerald btn-xs" title="Tải cho macOS" onclick="requestSecureDownload('SLIDESHOW', 'macos')">🍎 Mac</button>
+                                                                    <button type="button" class="btn btn-accent btn-xs" title="Tải cho Windows" onclick="requestSecureDownload('SLIDESHOW', 'windows-x64')">🪟 Win</button>
                                                                 <?php elseif ($is_ext): ?>
-                                                                    <a href="/downloads/2tamne_Labs_Extension_latest.zip" class="btn btn-outline btn-xs" title="Tải Labs Extension">🧩 Extension</a>
+                                                                    <button type="button" class="btn btn-outline btn-xs" title="Tải Labs Extension" onclick="requestSecureDownload('EXTENSION', 'all')">🧩 Extension</button>
                                                                 <?php else: ?>
-                                                                    <a href="/downloads/SlideshowBuilder_macOS_v2.3.9.zip" class="btn btn-emerald btn-xs" title="Tải Slideshow AI cho macOS">🍎 Mac</a>
-                                                                    <a href="/downloads/SlideshowBuilder_Windows_v2.3.9.zip" class="btn btn-accent btn-xs" title="Tải Slideshow AI cho Windows">🪟 Win</a>
+                                                                    <button type="button" class="btn btn-emerald btn-xs" title="Tải Slideshow AI cho macOS" onclick="requestSecureDownload('SLIDESHOW', 'macos')">🍎 Mac</button>
+                                                                    <button type="button" class="btn btn-accent btn-xs" title="Tải Slideshow AI cho Windows" onclick="requestSecureDownload('SLIDESHOW', 'windows-x64')">🪟 Win</button>
                                                                 <?php endif; ?>
                                                                 <?php if ($hwid): ?>
                                                                     <button type="button" class="btn btn-outline btn-xs" style="color:var(--info);border-color:var(--info)" onclick="openResetHwidModal('<?= htmlspecialchars($k) ?>')">
@@ -1893,10 +1975,10 @@ if (isset($_GET['registered'])) {
                                 </div>
                                 <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
                                     <div style="display:flex;gap:6px">
-                                        <a href="/downloads/2toolne_Upscale_Setup_latest.exe?v=1.1.2" class="btn btn-accent btn-sm" title="Tải Cài đặt .exe cho Windows (149 MB)">🪟 Windows (.exe 149 MB)</a>
+                                        <button type="button" class="btn btn-accent btn-sm" title="Tải Cài đặt .exe cho Windows (149 MB)" onclick="requestSecureDownload('UPSCALE', 'windows-x64')">🪟 Windows (.exe 149 MB)</button>
                                     </div>
                                     <div style="display:flex;gap:6px">
-                                        <a href="/downloads/2toolne_Upscale_latest.dmg?v=1.1.2" class="btn btn-emerald btn-sm" title="Tải Gói .dmg cho Mac (125 MB)">🍏 Mac (.dmg 125 MB)</a>
+                                        <button type="button" class="btn btn-emerald btn-sm" title="Tải Gói .dmg cho Mac (125 MB)" onclick="requestSecureDownload('UPSCALE', 'macos')">🍏 Mac (.dmg 125 MB)</button>
                                     </div>
                                 </div>
                             </div>
@@ -2298,6 +2380,67 @@ if (isset($_GET['registered'])) {
 
                     <!-- TAB 1.5: DOWNLOADS (TRUNG TÂM TẢI PHẦN MỀM) -->
                     <div id="tab-downloads" class="tab-pane" style="display:none">
+                        <!-- 0. 2TOOLNE AUTOEDIT FOR CAPCUT V2 (FLAGSHIP DESKTOP SUITE) -->
+                        <div class="card" style="margin-bottom:24px;border-color:#ff7a00;background:linear-gradient(180deg, rgba(255, 122, 0, 0.08) 0%, var(--surface-1) 100%)">
+                            <div class="card-body">
+                                <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px;margin-bottom:16px">
+                                    <div style="flex:1;min-width:280px">
+                                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                                            <span class="badge" style="background:#ff7a00;color:#fff;font-weight:800">🔥 SẢN PHẨM CHÍNH THỨC 2026</span>
+                                            <span class="badge" style="background:rgba(255, 122, 0, 0.2);color:#ff9e42;border:1px solid rgba(255, 122, 0, 0.4)">v2.0.1 Stable</span>
+                                            <span class="badge badge-info">Tương thích chính xác CapCut 9.3.0.3970</span>
+                                        </div>
+                                        <h3 style="font-size:22px;margin:0 0 6px">2TOOLNE AutoEdit for CapCut (Native Desktop Suite)</h3>
+                                        <p class="text-muted" style="margin:0;font-size:13.5px">Phần mềm Desktop độc lập điều phối và tự động hóa biên tập CapCut Desktop: Tạo Timeline, Native Scale/Position Keyframes mượt mà, Rãnh âm thanh & Phụ đề XML tự động.</p>
+                                    </div>
+                                    <!-- SMART 1-CLICK DOWNLOAD BUTTON -->
+                                    <div style="display:flex;flex-direction:column;gap:8px;min-width:260px">
+                                        <button type="button" 
+                                                class="btn btn-accent btn-lg" 
+                                                style="background:#ff7a00;border-color:#ff7a00;font-weight:700;text-align:center;box-shadow:0 0 20px rgba(255, 122, 0, 0.35)"
+                                                onclick="requestSecureDownload('AUTOEDIT', 'windows-x64')">
+                                            <span>🪟</span> <span>Tải Cho Windows (.exe - Khuyên dùng)</span>
+                                        </button>
+                                        <div style="font-size:11px;color:var(--muted-foreground);text-align:center">Bảo mật xác thực bản quyền • Tự động tương thích hệ điều hành</div>
+                                    </div>
+                                </div>
+
+                                <!-- DOWNLOAD OPTIONS GRID -->
+                                <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:16px;border-top:1px solid rgba(255,255,255,0.08);padding-top:16px">
+                                    <!-- WINDOWS SUITE -->
+                                    <div class="os-option-box" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:var(--radius-sm);padding:12px">
+                                        <div style="display:flex;align-items:center;gap:6px;font-weight:700;color:var(--foreground);font-size:13px;margin-bottom:6px">
+                                            <span>🪟</span> Bản Dành Cho Windows (10/11 64-bit):
+                                        </div>
+                                        <p style="font-size:12px;color:var(--muted-foreground);margin-bottom:10px">Phiên bản v2.0.1: Tương thích chính xác CapCut Desktop 9.3.0.3970, tự động phân giải com.lveditor.draft, NVIDIA RTX Tensor & Intel/AMD 64-bit.</p>
+                                        <div style="display:flex;gap:8px;flex-wrap:wrap">
+                                            <button type="button" class="btn btn-accent btn-sm" style="flex:1;text-align:center;background:#ff7a00;border-color:#ff7a00" onclick="requestSecureDownload('AUTOEDIT', 'windows-x64')">
+                                                ⚙️ Bộ cài đặt .exe (523 MB)
+                                            </button>
+                                            <?php if ($user_info && in_array($user_info['role'] ?? '', ['admin', 'super_admin'], true)): ?>
+                                                <button type="button" class="btn btn-outline btn-sm" style="flex:1;text-align:center;border-color:#ff7a00;color:#ff9e42" onclick="requestSecureDownload('AUTOEDIT', 'windows-x64', 'customer_test')">
+                                                    🧪 Customer Test (.zip - 971 MB)
+                                                </button>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+
+                                    <!-- MACOS SUITE -->
+                                    <div class="os-option-box" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:var(--radius-sm);padding:12px">
+                                        <div style="display:flex;align-items:center;gap:6px;font-weight:700;color:var(--foreground);font-size:13px;margin-bottom:6px">
+                                            <span>🍏</span> Bản Dành Cho macOS (Monterey 12+):
+                                        </div>
+                                        <p style="font-size:12px;color:var(--muted-foreground);margin-bottom:10px">Universal Binary: Apple Silicon (M1/M2/M3/M4) & Intel Core.</p>
+                                        <div style="display:flex;gap:8px;flex-wrap:wrap">
+                                            <button type="button" class="btn btn-emerald btn-sm" style="flex:1;text-align:center" onclick="requestSecureDownload('AUTOEDIT', 'macos')">
+                                                🍏 Gói cài .dmg (macOS)
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- 1. SMART AUTO-DETECT OS: 2TOOLNE UPSCALE 4K -->
                         <div class="card" style="margin-bottom:24px;border-color:#facc15;background:linear-gradient(180deg, #221a05 0%, var(--surface-1) 100%)">
                             <div class="card-body">
@@ -2311,14 +2454,13 @@ if (isset($_GET['registered'])) {
                                         <p class="text-muted" style="margin:0;font-size:13.5px">Ứng dụng phóng to và phục chế ảnh 2K/4K siêu nét bằng AI on-device (Vulkan, DirectML, Apple Silicon Metal). Tiêu thụ theo số ảnh xuất hoàn tất (1 ảnh 2K = 1 lượt, 1 ảnh 4K = 2 lượt).</p>
                                     </div>
                                     <!-- PROMINENT SMART 1-CLICK BUTTON -->
-                                    <div class="smart-download-container" data-app-name="2toolne Upscale 4K" style="display:flex;flex-direction:column;gap:8px;min-width:260px">
-                                        <a href="/downloads/2toolne_Upscale_Setup_latest.exe?v=1.1.2" 
-                                           data-os-win="/downloads/2toolne_Upscale_Setup_latest.exe?v=1.1.2" 
-                                           data-os-mac="/downloads/2toolne_Upscale_latest.dmg?v=1.1.2" 
-                                           class="smart-download-btn btn btn-accent btn-lg" 
-                                           style="font-weight:700;text-align:center;box-shadow:0 0 20px rgba(250, 204, 21, 0.25)">
+                                    <div class="smart-download-container" data-app-name="2toolne Upscale 4K" data-product="UPSCALE" style="display:flex;flex-direction:column;gap:8px;min-width:260px">
+                                        <button type="button" 
+                                                class="smart-download-btn btn btn-accent btn-lg" 
+                                                style="font-weight:700;text-align:center;box-shadow:0 0 20px rgba(250, 204, 21, 0.25)"
+                                                onclick="requestSecureDownload('UPSCALE', 'windows-x64')">
                                             <span class="smart-download-icon">🪟</span> <span class="smart-download-text">Tải Cho Windows (.exe - 149 MB)</span>
-                                        </a>
+                                        </button>
                                         <div style="font-size:11px;color:var(--muted-foreground);text-align:center">Bản chính thức v1.1.2 • Tự động tương thích thiết bị</div>
                                     </div>
                                 </div>
@@ -2332,7 +2474,7 @@ if (isset($_GET['registered'])) {
                                         </div>
                                         <p style="font-size:12px;color:var(--muted-foreground);margin-bottom:10px">Tăng tốc phần cứng DirectML, Vulkan, NVIDIA RTX Tensor.</p>
                                         <div style="display:flex;gap:8px;flex-wrap:wrap">
-                                            <a href="/downloads/2toolne_Upscale_Setup_latest.exe?v=1.1.2" class="btn btn-accent btn-sm" style="flex:1;text-align:center">⚙️ Bộ cài .exe (149 MB - Khuyên dùng)</a>
+                                            <button type="button" class="btn btn-accent btn-sm" style="flex:1;text-align:center" onclick="requestSecureDownload('UPSCALE', 'windows-x64')">⚙️ Bộ cài .exe (149 MB - Khuyên dùng)</button>
                                         </div>
                                     </div>
 
@@ -2343,8 +2485,7 @@ if (isset($_GET['registered'])) {
                                         </div>
                                         <p style="font-size:12px;color:var(--muted-foreground);margin-bottom:10px">Universal Binary: Apple Silicon (M1/M2/M3/M4 Metal) & Intel Core.</p>
                                         <div style="display:flex;gap:8px;flex-wrap:wrap">
-                                            <a href="/downloads/2toolne_Upscale_macOS_latest.zip" class="btn btn-emerald btn-sm" style="flex:1;text-align:center">🍏 Tải .zip (Universal Mac)</a>
-                                            <a href="/downloads/2toolne_Upscale_latest.dmg?v=1.1.2" class="btn btn-outline btn-sm" style="flex:1;text-align:center">📦 Gói cài .dmg</a>
+                                            <button type="button" class="btn btn-emerald btn-sm" style="flex:1;text-align:center" onclick="requestSecureDownload('UPSCALE', 'macos')">🍏 Gói cài .dmg (Mac)</button>
                                         </div>
                                     </div>
                                 </div>
@@ -2369,14 +2510,13 @@ if (isset($_GET['registered'])) {
                                         <p class="text-muted" style="margin:0;font-size:13.5px">Hệ thống sản xuất phim tài liệu tự động 200–250 shots, Edge TTS, Căn chỉnh lời chính xác, Upscale 4K & Multi-Track DAW.</p>
                                     </div>
                                     <!-- PROMINENT SMART 1-CLICK BUTTON -->
-                                    <div class="smart-download-container" data-app-name="2toolne Studio" style="display:flex;flex-direction:column;gap:8px;min-width:260px">
-                                        <a href="/downloads/2toolne_Windows_latest.zip" 
-                                           data-os-win="/downloads/2toolne_Windows_latest.zip" 
-                                           data-os-mac="/downloads/2toolne_macOS_latest.zip" 
-                                           class="smart-download-btn btn btn-emerald btn-lg" 
-                                           style="font-weight:700;text-align:center;box-shadow:0 0 20px rgba(16, 185, 129, 0.3)">
+                                    <div class="smart-download-container" data-app-name="2toolne Studio" data-product="SLIDESHOW" style="display:flex;flex-direction:column;gap:8px;min-width:260px">
+                                        <button type="button" 
+                                                class="smart-download-btn btn btn-emerald btn-lg" 
+                                                style="font-weight:700;text-align:center;box-shadow:0 0 20px rgba(16, 185, 129, 0.3)"
+                                                onclick="requestSecureDownload('SLIDESHOW', 'windows-x64')">
                                             <span class="smart-download-icon">🪟</span> <span class="smart-download-text">Tải Cho Windows (.zip)</span>
-                                        </a>
+                                        </button>
                                         <div style="font-size:11px;color:var(--muted-foreground);text-align:center">Bản chính thức v1.1.2 RC • Tự động tương thích thiết bị</div>
                                     </div>
                                 </div>
@@ -2390,8 +2530,7 @@ if (isset($_GET['registered'])) {
                                         </div>
                                         <p style="font-size:12px;color:var(--muted-foreground);margin-bottom:10px">Tối ưu NVIDIA RTX / CUDA, Intel & AMD đa nhân.</p>
                                         <div style="display:flex;gap:8px;flex-wrap:wrap">
-                                            <a href="/downloads/2toolne_Windows_latest.zip" class="btn btn-accent btn-sm" style="flex:1;text-align:center">📥 Tải .zip (Portable 64-bit)</a>
-                                            <a href="/downloads/2toolne_Setup_latest.exe" class="btn btn-outline btn-sm" style="flex:1;text-align:center">⚙️ Bộ cài .exe (Setup)</a>
+                                            <button type="button" class="btn btn-accent btn-sm" style="flex:1;text-align:center" onclick="requestSecureDownload('SLIDESHOW', 'windows-x64')">📥 Tải .zip (Portable 64-bit)</button>
                                         </div>
                                     </div>
 
@@ -2402,8 +2541,7 @@ if (isset($_GET['registered'])) {
                                         </div>
                                         <p style="font-size:12px;color:var(--muted-foreground);margin-bottom:10px">Universal Binary: Apple Silicon (M1/M2/M3/M4) & Intel Core.</p>
                                         <div style="display:flex;gap:8px;flex-wrap:wrap">
-                                            <a href="/downloads/2toolne_macOS_latest.zip" class="btn btn-emerald btn-sm" style="flex:1;text-align:center">🍏 Tải .zip (Universal Mac)</a>
-                                            <a href="/downloads/2toolne_latest.dmg" class="btn btn-outline btn-sm" style="flex:1;text-align:center">📦 Gói cài .dmg</a>
+                                            <button type="button" class="btn btn-emerald btn-sm" style="flex:1;text-align:center" onclick="requestSecureDownload('SLIDESHOW', 'macos')">🍏 Tải .zip (Universal Mac)</button>
                                         </div>
                                     </div>
                                 </div>
@@ -2427,8 +2565,8 @@ if (isset($_GET['registered'])) {
                                         </div>
                                     </div>
                                     <div style="display:flex;gap:8px;flex-wrap:wrap">
-                                        <a href="/downloads/SlideshowBuilder_macOS_v2.3.9.zip" class="btn btn-emerald btn-sm" style="flex:1;text-align:center">🍎 Tải macOS (.zip)</a>
-                                        <a href="/downloads/SlideshowBuilder_Windows_v2.3.9.zip" class="btn btn-accent btn-sm" style="flex:1;text-align:center">🪟 Tải Windows (.zip)</a>
+                                        <button type="button" class="btn btn-emerald btn-sm" style="flex:1;text-align:center" onclick="requestSecureDownload('SLIDESHOW', 'macos')">🍎 Tải macOS (.zip)</button>
+                                        <button type="button" class="btn btn-accent btn-sm" style="flex:1;text-align:center" onclick="requestSecureDownload('SLIDESHOW', 'windows-x64')">🪟 Tải Windows (.zip)</button>
                                     </div>
                                 </div>
                             </div>
@@ -2449,7 +2587,7 @@ if (isset($_GET['registered'])) {
                                         </div>
                                     </div>
                                     <div>
-                                        <a href="/downloads/2tamne_Labs_Extension_latest.zip" class="btn btn-outline btn-sm" style="width:100%;text-align:center">📥 Tải Extension (.zip)</a>
+                                        <button type="button" class="btn btn-outline btn-sm" style="width:100%;text-align:center" onclick="requestSecureDownload('EXTENSION', 'all')">📥 Tải Extension (.zip)</button>
                                     </div>
                                 </div>
                             </div>
@@ -2553,7 +2691,7 @@ if (isset($_GET['registered'])) {
                                 <div class="pricing-grid" style="margin-bottom:0">
                                     <div class="pricing-card">
                                         <div>
-                                            <h4>2toolne (1 Tháng)</h4>
+                                            <h4>2TOOLNE Studio (1 Tháng)</h4>
                                             <div class="price-val" style="color:var(--emerald)">1.200.000đ</div>
                                             <div class="price-sub">Thời hạn: 30 ngày sử dụng</div>
                                             <ul class="price-checklist">
@@ -2562,13 +2700,13 @@ if (isset($_GET['registered'])) {
                                                 <li>✅ DAW Audio Ducking DSP</li>
                                             </ul>
                                         </div>
-                                        <button class="btn btn-outline" style="border-color:var(--emerald);color:var(--emerald)" onclick="openQrPayment('2toolne (1 Tháng)', '1.200.000đ', 30, 'VIP', '2TOOLNE')">⚡ Mua Gói 1 Tháng</button>
+                                        <button class="btn btn-outline" style="border-color:var(--emerald);color:var(--emerald)" onclick="openQrPayment('2TOOLNE Studio (1 Tháng)', '1.200.000đ', 30, 'VIP', '2TOOLNE')">⚡ Mua Gói 1 Tháng</button>
                                     </div>
 
                                     <div class="pricing-card featured">
                                         <span class="badge badge-active pricing-card-badge">TIẾT KIỆM 2 TRIỆU</span>
                                         <div>
-                                            <h4>2toolne (1 Năm VIP)</h4>
+                                            <h4>2TOOLNE Studio (1 Năm VIP)</h4>
                                             <div class="price-val" style="color:var(--emerald)">12.000.000đ</div>
                                             <div class="price-sub">Thời hạn: 365 ngày sử dụng</div>
                                             <ul class="price-checklist">
@@ -2577,12 +2715,12 @@ if (isset($_GET['registered'])) {
                                                 <li>✅ YouTube Uploader & Growth Radar</li>
                                             </ul>
                                         </div>
-                                        <button class="btn btn-emerald" onclick="openQrPayment('2toolne (1 Năm VIP)', '12.000.000đ', 365, 'VIP', '2TOOLNE')">⚡ Mua Gói 1 Năm (VIP)</button>
+                                        <button class="btn btn-emerald" onclick="openQrPayment('2TOOLNE Studio (1 Năm VIP)', '12.000.000đ', 365, 'VIP', '2TOOLNE')">⚡ Mua Gói 1 Năm (VIP)</button>
                                     </div>
 
                                     <div class="pricing-card">
-                                        <div>
-                                            <h4>2toolne (Vĩnh Viễn)</h4>
+                                         <div>
+                                            <h4>2TOOLNE Studio (Vĩnh Viễn)</h4>
                                             <div class="price-val" style="color:var(--emerald)">18.000.000đ</div>
                                             <div class="price-sub">Sở hữu trọn đời (Lifetime)</div>
                                             <ul class="price-checklist">
@@ -2591,7 +2729,7 @@ if (isset($_GET['registered'])) {
                                                 <li>👑 Hỗ trợ kỹ thuật 24/7 trực tiếp</li>
                                             </ul>
                                         </div>
-                                        <button class="btn btn-outline" style="border-color:var(--emerald);color:var(--emerald)" onclick="openQrPayment('2toolne (Vĩnh Viễn)', '18.000.000đ', 36500, 'LIFETIME', '2TOOLNE')">👑 Mua Gói Vĩnh Viễn</button>
+                                        <button class="btn btn-outline" style="border-color:var(--emerald);color:var(--emerald)" onclick="openQrPayment('2TOOLNE Studio (Vĩnh Viễn)', '18.000.000đ', 36500, 'LIFETIME', '2TOOLNE')">👑 Mua Gói Vĩnh Viễn</button>
                                     </div>
                                 </div>
                             </div>
@@ -2849,714 +2987,31 @@ if (isset($_GET['registered'])) {
                 </div>
             </div>
 
-        <?php else: ?>
-            <!-- ═══════════════════════════════════════════════════════════════
-                 PUBLIC LANDING PAGE (KHI CHƯA ĐĂNG NHẬP)
-                 ═══════════════════════════════════════════════════════════════ -->
-            <section class="hero-section">
-                <div class="hero-eyebrow">
-                    <span>✨</span> Commercial Video AI & Developer Tools Suite
-                </div>
-                <h1 class="hero-title">
-                    <span>Tự Động Hóa Sản Xuất Video</span><br>
-                    Chuẩn Mực & Hiệu Suất Cao
-                </h1>
-                <p class="hero-desc">
-                    Hệ sinh thái phần mềm đồ họa, xử lý video đa luồng và tiện ích AI dành cho nhà sáng tạo nội dung, xưởng sản xuất video tài liệu và kỹ sư công nghệ.
-                </p>
-                <div class="hero-actions">
-                    <button class="btn btn-emerald btn-lg" onclick="openModal('modal-register')">🚀 Nhận Key Dùng Thử 3 Ngày</button>
-                    <a href="#products" class="btn btn-outline btn-lg">Khám Phá Sản Phẩm</a>
-                </div>
-            </section>
-
-            <!-- PRODUCTS SECTION -->
-            <section id="products" style="padding:32px 0 64px">
-                <div style="text-align:center;margin-bottom:24px">
-                    <span class="badge badge-info" style="margin-bottom:8px">DANH MỤC CÔNG CỤ</span>
-                    <h2 style="font-size:28px">Lựa Chọn Phần Mềm Phù Hợp</h2>
-                </div>
-
-                <div class="prod-tab-bar">
-                    <button class="btn btn-emerald prod-tab-btn active" id="ptab-btn-2toolne" onclick="switchProductTab('ptab-2toolne', 'ptab-btn-2toolne')">
-                        🚀 2toolne (AI YouTube Studio)
-                    </button>
-                    <button class="btn btn-outline prod-tab-btn" id="ptab-btn-capcut" onclick="switchProductTab('ptab-capcut', 'ptab-btn-capcut')" style="border-color:#8b5cf6;color:#c084fc">
-                        🎬 2toolne AutoEdit (CapCut V2)
-                    </button>
-                    <button class="btn btn-outline prod-tab-btn" id="ptab-btn-token" onclick="switchProductTab('ptab-token', 'ptab-btn-token')">
-                        ✨ 2toolne Upscale 4K (AI)
-                    </button>
-                    <button class="btn btn-outline prod-tab-btn" id="ptab-btn-cloud" onclick="switchProductTab('ptab-cloud', 'ptab-btn-cloud')">
-                        ☁️ 2TOOLNE Cloud (Lưu Trữ)
-                    </button>
-                    <button class="btn btn-outline prod-tab-btn" id="ptab-btn-video" onclick="switchProductTab('ptab-video', 'ptab-btn-video')">
-                        🎬 Slideshow Builder AI
-                    </button>
-                    <button class="btn btn-outline prod-tab-btn" id="ptab-btn-extension" onclick="switchProductTab('ptab-extension', 'ptab-btn-extension')">
-                        🖼️ Google Labs Flow Extension
-                    </button>
-                </div>
-
-                <!-- PRODUCT 0: 2TOOLNE STUDIO -->
-                <div id="ptab-2toolne" class="prod-tab-content">
-                    <div class="feature-grid">
-                        <div class="feature-card">
-                            <div class="feature-icon">🎬</div>
-                            <div class="feature-title">200–250 Shots Auto Flow</div>
-                            <div class="feature-desc">Tự động điều phối kịch bản phim tài liệu dài thông qua DAG pipeline song song, loại bỏ hoàn toàn tắc nghẽn.</div>
-                        </div>
-                        <div class="feature-card">
-                            <div class="feature-icon">🎙️</div>
-                            <div class="feature-title">Edge TTS & Forced Alignment</div>
-                            <div class="feature-desc">Sinh giọng đọc phát thanh viên chất lượng cao và căn chỉnh phụ đề khớp từng mili-giây (Integer ms Ground Truth).</div>
-                        </div>
-                        <div class="feature-card">
-                            <div class="feature-icon">🎛️</div>
-                            <div class="feature-title">DAW Scrubber & Ducking DSP</div>
-                            <div class="feature-desc">Timeline 4 rãnh mượt mà, thuật toán tự động giảm âm lượng BGM (-18dB) khi có giọng đọc và xuất phụ đề Karaoke.</div>
-                        </div>
-                        <div class="feature-card">
-                            <div class="feature-icon">🔒</div>
-                            <div class="feature-title">Character Bank & Lock Guard</div>
-                            <div class="feature-desc">Ngân hàng nhân vật đồng nhất (char1, char2), bảo vệ prompt tự động trong chế độ safe_auto chống trôi hình ảnh.</div>
-                        </div>
-                        <div class="feature-card">
-                            <div class="feature-icon">📺</div>
-                            <div class="feature-title">YouTube Review & Resumable Upload</div>
-                            <div class="feature-desc">Cổng kiểm duyệt trước khi đăng (mặc định Private-First), hỗ trợ tải lên từng phần Resumable an toàn.</div>
-                        </div>
-                        <div class="feature-card">
-                            <div class="feature-icon">📊</div>
-                            <div class="feature-title">Growth Radar & Outlier Detector</div>
-                            <div class="feature-desc">Phân tích chỉ số tăng trưởng kênh YouTube, phát hiện chủ đề bùng nổ của đối thủ (&gt;2.5x) và gợi ý tối ưu.</div>
-                        </div>
-                    </div>
-
-                    <!-- DOWNLOAD BOX -->
-                    <div class="card" style="margin-bottom:36px;border-color:var(--emerald);background:linear-gradient(180deg, #09261e 0%, var(--surface-1) 100%)">
-                        <div class="card-body" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px">
-                            <div>
-                                <span class="badge badge-active" style="margin-bottom:8px">BẢN CHÍNH THỨC v1.1.2 (RELEASE CANDIDATE)</span>
-                                <h3 style="font-size:18px">Tải Bản Cài Đặt 2toolne Studio</h3>
-                                <p class="text-muted" style="margin-top:4px">Kiến trúc Electron 44 + React 19 + Python Media Worker — Độc lập và bảo mật.</p>
-                            </div>
-                            <div style="display:flex;gap:8px;flex-wrap:wrap">
-                                <a href="/downloads/2toolne_macOS_latest.zip" class="btn btn-emerald">🍎 Tải Cho macOS (.app)</a>
-                                <a href="/downloads/2toolne_Windows_latest.zip" class="btn btn-accent">🪟 Tải Cho Windows (.zip)</a>
-                                <button class="btn btn-outline" onclick="openModal('modal-register')">🎁 Dùng Thử 3 Ngày</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- PRICING -->
-                    <div class="pricing-grid">
-                        <div class="pricing-card">
-                            <div>
-                                <h4>Gói 1 Tháng</h4>
-                                <div class="price-val" style="color:var(--emerald)">1.200.000đ</div>
-                                <div class="price-sub">Thời hạn: 30 ngày sử dụng</div>
-                                <ul class="price-checklist">
-                                    <li>✅ 225-Shot Parallel Flow DAG</li>
-                                    <li>✅ Edge TTS + Căn Chỉnh Khớp Lời</li>
-                                    <li>✅ DAW Audio Ducking & Phụ Đề Karaoke</li>
-                                    <li>✅ Hỗ trợ Update trong suốt kỳ thuê</li>
-                                </ul>
-                            </div>
-                            <button class="btn btn-outline" onclick="openModal('modal-login')">⚡ Đăng Nhập Để Mua</button>
-                        </div>
-                        <div class="pricing-card featured">
-                            <span class="badge badge-active pricing-card-badge">KHUYÊN DÙNG VIP</span>
-                            <div>
-                                <h4>Gói 1 Năm (VIP)</h4>
-                                <div class="price-val" style="color:var(--emerald)">12.000.000đ</div>
-                                <div class="price-sub">Thời hạn: 365 ngày sử dụng</div>
-                                <ul class="price-checklist">
-                                    <li>✅ Toàn bộ quyền lợi gói tháng</li>
-                                    <li>✅ Hỗ trợ ưu tiên 1-1 từ chuyên viên 2TOOL</li>
-                                    <li>✅ YouTube Uploader & Growth Radar</li>
-                                    <li>✅ Đổi máy tính HWID linh hoạt</li>
-                                </ul>
-                            </div>
-                            <button class="btn btn-emerald" onclick="openModal('modal-login')">⚡ Đăng Nhập Để Mua</button>
-                        </div>
-                        <div class="pricing-card">
-                            <div>
-                                <h4>Gói Vĩnh Viễn</h4>
-                                <div class="price-val" style="color:var(--emerald)">18.000.000đ</div>
-                                <div class="price-sub">Sở hữu trọn đời (Lifetime)</div>
-                                <ul class="price-checklist">
-                                    <li>👑 <b>Cập nhật tính năng trọn đời</b></li>
-                                    <li>👑 Quyền lợi VIP cao cấp nhất</li>
-                                    <li>👑 Hỗ trợ kỹ thuật 24/7 từ 2TOOL Team</li>
-                                    <li>👑 Ưu tiên phát triển tính năng theo yêu cầu</li>
-                                </ul>
-                            </div>
-                            <button class="btn btn-outline" onclick="openModal('modal-login')">👑 Đăng Nhập Để Mua</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- PRODUCT: 2TOOLNE AUTOEDIT FOR CAPCUT (V2) -->
-                <div id="ptab-capcut" class="prod-tab-content" style="display:none">
-                    <div class="feature-grid">
-                        <div class="feature-card">
-                            <div class="feature-icon">🎬</div>
-                            <div class="feature-title">Native CapCut Timeline</div>
-                            <div class="feature-desc">Tự động cấu trúc bản nháp (draft_content.json) và đăng ký trực tiếp vào dự án CapCut Desktop không qua trung gian.</div>
-                        </div>
-                        <div class="feature-card">
-                            <div class="feature-icon">📐</div>
-                            <div class="feature-title">Native Scale & Position Keyframes</div>
-                            <div class="feature-desc">Điều phối keyframe mượt mà, chính xác đến từng microsecond, loại bỏ hoàn toàn hiện tượng rung lắc jitter.</div>
-                        </div>
-                        <div class="feature-card">
-                            <div class="feature-icon">🎵</div>
-                            <div class="feature-title">Âm Thanh & Phụ Đề XML Đồng Bộ</div>
-                            <div class="feature-desc">Hỗ trợ rãnh audio đa tầng, tự động đồng bộ phụ đề SRT tiếng Việt tương thích 100% phông chữ của CapCut.</div>
-                        </div>
-                        <div class="feature-card">
-                            <div class="feature-icon">🖥️</div>
-                            <div class="feature-title">100% Desktop Native</div>
-                            <div class="feature-desc">Không trình duyệt, không localhost, không chiếm port mạng. Ứng dụng Electron Desktop độc lập trên macOS và Windows.</div>
-                        </div>
-                        <div class="feature-card">
-                            <div class="feature-icon">🔒</div>
-                            <div class="feature-title">Bảo Mật Ed25519 & DPAPI / Keychain</div>
-                            <div class="feature-desc">Chứng chỉ bản quyền mã hóa cấp hệ điều hành, bảo vệ an toàn tuyệt đối và hỗ trợ sử dụng ngoại tuyến 72 giờ.</div>
-                        </div>
-                        <div class="feature-card">
-                            <div class="feature-icon">⚡</div>
-                            <div class="feature-title">Multi-Probe Tự Động Nhận Diện</div>
-                            <div class="feature-desc">Tự động phát hiện phiên bản và thư mục lưu trữ CapCut Desktop trên cả macOS Apple Silicon và Windows 10/11.</div>
-                        </div>
-                    </div>
-
-                    <!-- DOWNLOAD BOX FOR CAPCUT V2 -->
-                    <div class="card" style="margin-bottom:36px;border-color:#8b5cf6;background:linear-gradient(180deg, rgba(139, 92, 246, 0.1) 0%, var(--surface-1) 100%)">
-                        <div class="card-body" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px">
-                            <div>
-                                <span class="badge" style="background:#7c3aed;color:#fff;font-weight:800;margin-bottom:8px">BẢN CHÍNH THỨC v2.0.0 (RELEASE CANDIDATE)</span>
-                                <h3 style="font-size:18px">Tải Bộ Cài Đặt 2toolne AutoEdit for CapCut</h3>
-                                <p class="text-muted" style="margin-top:4px">Kiến trúc Desktop Electron + Python Native Sidecar độc lập — Hỗ trợ CapCut Desktop 9.3.0+.</p>
-                            </div>
-                            <div style="display:flex;gap:8px;flex-wrap:wrap">
-                                <a href="/downloads/2toolne_AutoEdit_macOS_latest.dmg" class="btn btn-emerald">🍏 Tải Cho macOS (.dmg)</a>
-                                <a href="/downloads/2toolne_AutoEdit_Setup_latest.exe" class="btn btn-accent">🪟 Tải Cho Windows (.exe)</a>
-                                <button class="btn btn-outline" onclick="switchMainTab('tab-buy-key')">⚡ Mua Bản Quyền</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="pricing-grid">
-                        <div class="pricing-card">
-                            <div>
-                                <h4>Gói 1 Tháng</h4>
-                                <div class="price-val" style="color:#c084fc">800.000đ</div>
-                                <div class="price-sub">Thời hạn: 30 ngày</div>
-                                <ul class="price-checklist">
-                                    <li>✅ Xuất bản nháp CapCut Desktop tự động</li>
-                                    <li>✅ Scale & Position keyframes mượt mà</li>
-                                    <li>✅ Đầy đủ audio & phụ đề tự động</li>
-                                </ul>
-                            </div>
-                            <button class="btn btn-outline" onclick="switchMainTab('tab-buy-key')">⚡ Mua Gói 1 Tháng</button>
-                        </div>
-                        <div class="pricing-card featured" style="border-color:#8b5cf6">
-                            <span class="badge pricing-card-badge" style="background:#7c3aed;color:#fff">TIẾT KIỆM 3.6 TRIỆU</span>
-                            <div>
-                                <h4>Gói 1 Năm (VIP)</h4>
-                                <div class="price-val" style="color:#c084fc">6.000.000đ</div>
-                                <div class="price-sub">Thời hạn: 365 ngày</div>
-                                <ul class="price-checklist">
-                                    <li>✅ Toàn bộ quyền lợi gói tháng</li>
-                                    <li>✅ Cập nhật mọi bản CapCut Desktop mới</li>
-                                    <li>✅ Hỗ trợ ưu tiên 1-1 từ kỹ thuật viên</li>
-                                    <li>✅ Hỗ trợ đổi máy linh hoạt</li>
-                                </ul>
-                            </div>
-                            <button class="btn btn-emerald" style="background:#7c3aed;border-color:#7c3aed" onclick="switchMainTab('tab-buy-key')">⚡ Mua Gói 1 Năm (VIP)</button>
-                        </div>
-                        <div class="pricing-card">
-                            <div>
-                                <h4>Gói Vĩnh Viễn</h4>
-                                <div class="price-val" style="color:#c084fc">10.000.000đ</div>
-                                <div class="price-sub">Sở hữu trọn đời (Lifetime)</div>
-                                <ul class="price-checklist">
-                                    <li>👑 <b>Sở hữu trọn đời vĩnh viễn</b></li>
-                                    <li>👑 Miễn phí cập nhật tính năng mới trọn đời</li>
-                                    <li>👑 Hỗ trợ kỹ thuật ưu tiên cao nhất 24/7</li>
-                                </ul>
-                            </div>
-                            <button class="btn btn-outline" onclick="switchMainTab('tab-buy-key')">👑 Mua Gói Vĩnh Viễn</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- PRODUCT 1: SLIDESHOW BUILDER -->
-                <div id="ptab-video" class="prod-tab-content" style="display:none">
-                    <div class="feature-grid">
-                        <div class="feature-card">
-                            <div class="feature-icon">🎥</div>
-                            <div class="feature-title">Cú Máy Ken Burns 4K</div>
-                            <div class="feature-desc">Sine Easing & Subpixel nội suy Bicubic, chuyển động mượt mà ở cả 1080p, 2K và 4K.</div>
-                        </div>
-                        <div class="feature-card">
-                            <div class="feature-icon">⚡</div>
-                            <div class="feature-title">Lồng Tiếng AI 0% RAM</div>
-                            <div class="feature-desc">Tích hợp Edge-TTS Microsoft Cloud và VoxCPM thế hệ mới, sinh giọng đọc phát thanh viên siêu tốc.</div>
-                        </div>
-                        <div class="feature-card">
-                            <div class="feature-icon">🔤</div>
-                            <div class="feature-title">Phụ Đề Pill & Font Noonnu</div>
-                            <div class="feature-desc">Tự động xuống dòng thông minh, căn chỉnh vị trí linh hoạt và tích hợp sẵn 5 font chữ cao cấp.</div>
-                        </div>
-                    </div>
-
-                    <!-- DOWNLOAD BOX FOR SLIDESHOW BUILDER -->
-                    <div class="card" style="margin-bottom:36px;border-color:var(--purple-500);background:linear-gradient(180deg, rgba(147, 51, 234, 0.1) 0%, var(--surface-1) 100%)">
-                        <div class="card-body" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px">
-                            <div>
-                                <span class="badge badge-purple" style="margin-bottom:8px">BẢN CHÍNH THỨC v2.3.9 (SUBPIXEL AFFINE ZERO-JITTER)</span>
-                                <h3 style="font-size:18px">Tải Bộ Cài Đặt Slideshow Builder AI (v2.3.9)</h3>
-                                <p class="text-muted" style="margin-top:4px">Động cơ chuyển động Subpixel Affine không rung lắc, siêu nét Lanczos4, hỗ trợ đầy đủ Python 3.10-3.13, tăng tốc GPU và phụ đề tự động.</p>
-                            </div>
-                            <div style="display:flex;gap:8px;flex-wrap:wrap">
-                                <a href="/downloads/SlideshowBuilder_macOS_v2.3.9.zip" class="btn btn-emerald">🍎 Tải Cho macOS (.zip)</a>
-                                <a href="/downloads/SlideshowBuilder_Windows_v2.3.9.zip" class="btn btn-accent">🪟 Tải Cho Windows (.zip)</a>
-                                <button class="btn btn-outline" onclick="openModal('modal-register')">🎁 Dùng Thử 3 Ngày</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="pricing-grid">
-                        <div class="pricing-card">
-                            <div>
-                                <h4>Gói 1 Tháng</h4>
-                                <div class="price-val">1.000.000đ</div>
-                                <div class="price-sub">Thời hạn: 30 ngày</div>
-                            </div>
-                            <button class="btn btn-outline" onclick="openModal('modal-login')">⚡ Đăng Nhập Để Mua</button>
-                        </div>
-                        <div class="pricing-card featured">
-                            <span class="badge badge-info pricing-card-badge">TIẾT KIỆM 2 TRIỆU</span>
-                            <div>
-                                <h4>Gói 1 Năm (VIP)</h4>
-                                <div class="price-val">10.000.000đ</div>
-                                <div class="price-sub">Thời hạn: 365 ngày</div>
-                            </div>
-                            <button class="btn btn-primary" onclick="openModal('modal-login')">⚡ Đăng Nhập Để Mua</button>
-                        </div>
-                        <div class="pricing-card">
-                            <div>
-                                <h4>Gói Vĩnh Viễn</h4>
-                                <div class="price-val">15.000.000đ</div>
-                                <div class="price-sub">Sở hữu trọn đời</div>
-                            </div>
-                            <button class="btn btn-outline" onclick="openModal('modal-login')">👑 Đăng Nhập Để Mua</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- PRODUCT 2: LABS EXTENSION -->
-                <div id="ptab-extension" class="prod-tab-content" style="display:none">
-                    <div class="feature-grid">
-                        <div class="feature-card">
-                            <div class="feature-icon">🎯</div>
-                            <div class="feature-title">Tự Động Chọn Chuẩn 2K / 4K</div>
-                            <div class="feature-desc">Tự động nhận diện nút tải xuống, lựa chọn độ phân giải nét cao nhất trên Google Labs.</div>
-                        </div>
-                        <div class="feature-card">
-                            <div class="feature-icon">🔢</div>
-                            <div class="feature-title">Đánh Số 001→xxx Chuẩn Xác</div>
-                            <div class="feature-desc">Thuật toán Bottom-Up đảm bảo thứ tự ảnh đầu tiên đến cuối cùng luôn liên tục và chính xác.</div>
-                        </div>
-                        <div class="feature-card">
-                            <div class="feature-icon">🗕</div>
-                            <div class="feature-title">Thu Nhỏ Gọn & Kéo Thả</div>
-                            <div class="feature-desc">Bảng điều khiển tự thu gọn khi chạy để tránh che khuất giao diện, kéo thả tự do trên màn hình.</div>
-                        </div>
-                    </div>
-
-                    <!-- DOWNLOAD BOX FOR LABS EXTENSION -->
-                    <div class="card" style="margin-bottom:36px;border-color:var(--info);background:linear-gradient(180deg, rgba(59, 130, 246, 0.1) 0%, var(--surface-1) 100%)">
-                        <div class="card-body" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px">
-                            <div>
-                                <span class="badge badge-info" style="margin-bottom:8px">EXTENSION CHROME & EDGE v1.5.0</span>
-                                <h3 style="font-size:18px">Tải Tiện Ích Google Labs Flow Auto-Downloader</h3>
-                                <p class="text-muted" style="margin-top:4px">Tải hàng loạt ảnh 2K/4K chỉ với 1 click, tự động đánh số 001→xxx.</p>
-                            </div>
-                            <div style="display:flex;gap:8px;flex-wrap:wrap">
-                                <a href="/downloads/2tamne_Labs_Extension_latest.zip" class="btn btn-outline">📥 Tải Extension (.zip)</a>
-                                <button class="btn btn-accent" onclick="openModal('modal-login')">⚡ Mua Key (100k)</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div style="max-width:480px;margin:0 auto">
-                        <div class="pricing-card featured" style="border-color:var(--info)">
-                            <span class="badge badge-info pricing-card-badge">HOT DEAL 100K</span>
-                            <div>
-                                <h4>Extension Google Labs 2K/4K</h4>
-                                <div class="price-val" style="color:var(--info)">100.000đ</div>
-                                <div class="price-sub">Sở hữu vĩnh viễn (Lifetime)</div>
-                                <ul class="price-checklist">
-                                    <li>👑 <b>Sở hữu trọn đời vĩnh viễn</b></li>
-                                    <li>👑 Tự động tải ảnh 2K/4K đánh số 001→xxx</li>
-                                    <li>👑 Khóa bản quyền 1 máy (Hỗ trợ đổi máy linh hoạt)</li>
-                                    <li>👑 Miễn phí mọi bản Update tương lai</li>
-                                </ul>
-                            </div>
-                            <button class="btn btn-accent" style="width:100%" onclick="openModal('modal-login')">⚡ Đăng Nhập Để Mua (100k)</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- PRODUCT 3: TOKEN UPSCALE 4K -->
-                <div id="ptab-token" class="prod-tab-content" style="display:none">
-                    <div class="feature-grid">
-                        <div class="feature-card">
-                            <div class="feature-icon">✨</div>
-                            <div class="feature-title">Upscale 2K / 4K Siêu Nét</div>
-                            <div class="feature-desc">Mô hình AI siêu phân giải chuyên sâu cho ảnh nhân vật, tranh phong cảnh và tư liệu tài liệu lịch sử.</div>
-                        </div>
-                        <div class="feature-card">
-                            <div class="feature-icon">🔒</div>
-                            <div class="feature-title">Cam Kết Hoàn Lượt 100%</div>
-                            <div class="feature-desc">Chỉ trừ khi ảnh đã hoàn tất. Tự động hoàn trả 100% lượt ảnh nếu phần mềm gặp sự cố gián đoạn mạng hay tắt ứng dụng.</div>
-                        </div>
-                        <div class="feature-card">
-                            <div class="feature-icon">🎁</div>
-                            <div class="feature-title">Tặng 50 Lượt Ảnh Miễn Phí</div>
-                            <div class="feature-desc">Đăng ký tài khoản nhận ngay 50 lượt trải nghiệm phóng to ảnh 2K/4K siêu nét hoàn toàn miễn phí.</div>
-                        </div>
-                    </div>
-
-                    <!-- DOWNLOAD BOX FOR UPSCALE APP -->
-                    <div class="card" style="margin-bottom:32px;border-color:#facc15;background:linear-gradient(180deg, rgba(250, 204, 21, 0.1) 0%, var(--surface-1) 100%)">
-                        <div class="card-body" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px">
-                            <div>
-                                <span class="badge" style="background:#facc15;color:#000;font-weight:800;margin-bottom:8px">BẢN CHÍNH THỨC v1.1.2 (ON-DEVICE AI ACCELERATION)</span>
-                                <h3 style="font-size:18px;margin:0 0 4px">Tải Bộ Cài Đặt 2toolne Upscale 4K</h3>
-                                <p class="text-muted" style="margin:0;font-size:13px">Tăng tốc phần cứng qua Vulkan / DirectML / Apple Silicon Metal — Chạy độc lập trên máy tính.</p>
-                            </div>
-                            <div style="display:flex;gap:8px;flex-wrap:wrap">
-                                <a href="/downloads/2toolne_Upscale_latest.dmg?v=1.1.2" class="btn btn-emerald">🍏 Tải Cho macOS (.dmg - 125 MB)</a>
-                                <a href="/downloads/2toolne_Upscale_Setup_latest.exe?v=1.1.2" class="btn btn-accent">🪟 Tải Cho Windows (.exe - 149 MB)</a>
-                                <button class="btn btn-outline" onclick="openModal('modal-register')">🎁 Nhận 50 Lượt Miễn Phí</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="pricing-grid">
-                        <!-- STARTER -->
-                        <div class="pricing-card">
-                            <div>
-                                <h4>Gói Starter (1.000 Lượt)</h4>
-                                <div class="price-val" style="color:#facc15">100.000đ</div>
-                                <div class="price-sub">100đ / lượt • Không hạn dùng</div>
-                                <ul class="price-checklist">
-                                    <li>🪙 1.000 Lượt (Tokens) Upscale 2K / 4K</li>
-                                    <li>🖼️ Tương đương 1.000 ảnh 2K hoặc 500 ảnh 4K</li>
-                                    <li>⚡ Lượt ảnh vĩnh viễn không bao giờ hết hạn</li>
-                                </ul>
-                            </div>
-                            <button class="btn btn-outline" onclick="openModal('modal-login')">⚡ Đăng Nhập Để Mua</button>
-                        </div>
-
-                        <!-- PRO -->
-                        <div class="pricing-card featured" style="border-color:#facc15">
-                            <span class="badge pricing-card-badge" style="background:#facc15;color:#000;font-weight:800">TẶNG 500 LƯỢT</span>
-                            <div>
-                                <h4>Gói Pro (3.500 Lượt)</h4>
-                                <div class="price-val" style="color:#facc15">250.000đ</div>
-                                <div class="price-sub">~71đ / lượt • Đã gồm 500 lượt tặng</div>
-                                <ul class="price-checklist">
-                                    <li>🪙 3.500 Lượt (Đã gồm 500 lượt thưởng)</li>
-                                    <li>🖼️ Tương đương 3.500 ảnh 2K hoặc 1.750 ảnh 4K</li>
-                                    <li>⚡ Tối ưu cho nhà sáng tạo nội dung YouTube</li>
-                                </ul>
-                            </div>
-                            <button class="btn btn-emerald" onclick="openModal('modal-login')">⚡ Đăng Nhập Để Mua</button>
-                        </div>
-
-                        <!-- STUDIO -->
-                        <div class="pricing-card">
-                            <div>
-                                <h4>Gói Studio (13.000 Lượt)</h4>
-                                <div class="price-val" style="color:#facc15">700.000đ</div>
-                                <div class="price-sub">~54đ / lượt • Tiết kiệm 45%</div>
-                                <ul class="price-checklist">
-                                    <li>🪙 13.000 Lượt (Tặng 3.000 lượt thưởng)</li>
-                                    <li>🖼️ Tương đương 13.000 ảnh 2K hoặc 6.500 ảnh 4K</li>
-                                    <li>👑 Ưu tiên tốc độ xử lý trên hàng đợi GPU</li>
-                                </ul>
-                            </div>
-                            <button class="btn btn-outline" onclick="openModal('modal-login')">⚡ Đăng Nhập Để Mua</button>
-                        </div>
-
-                        <!-- UNLIMITED -->
-                        <div class="pricing-card" style="border-color:var(--purple-500)">
-                            <div>
-                                <span class="badge badge-purple" style="margin-bottom:8px">KHÔNG GIỚI HẠN</span>
-                                <h4>Unlimited Studio (30 Ngày)</h4>
-                                <div class="price-val" style="color:var(--purple-400)">1.800.000đ</div>
-                                <div class="price-sub">Thời hạn: 30 ngày sử dụng</div>
-                                <ul class="price-checklist">
-                                    <li>👑 Không giới hạn ảnh 2K / 4K</li>
-                                    <li>🚀 Render liên tục không trừ token</li>
-                                    <li>⚡ Thích hợp cho studio quy mô lớn</li>
-                                </ul>
-                            </div>
-                            <button class="btn btn-primary" onclick="openModal('modal-login')">👑 Đăng Nhập Để Mua</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- PRODUCT 4: 2TOOLNE CLOUD STORAGE -->
-                <div id="ptab-cloud" class="prod-tab-content" style="display:none">
-                    <div class="feature-grid">
-                        <div class="feature-card">
-                            <div class="feature-icon">☁️</div>
-                            <div class="feature-title">Cụm Đám Mây 2TOOL Cloud Đa Kênh</div>
-                            <div class="feature-desc">Hệ thống lưu trữ đám mây tốc độ cao kết hợp hạ tầng đám mây đa kênh thành một kho lưu trữ an toàn, dung lượng lớn.</div>
-                        </div>
-                        <div class="feature-card">
-                            <div class="feature-icon">⚡</div>
-                            <div class="feature-title">Zero GPU Blocking Backup</div>
-                            <div class="feature-desc">Tự động sao lưu ảnh thành phẩm chạy ngầm từ Desktop App ngay khi xử lý xong, không làm chậm hay nghẽn GPU Upscale.</div>
-                        </div>
-                        <div class="feature-card">
-                            <div class="feature-icon">🔄</div>
-                            <div class="feature-title">Direct Resumable 4MB Chunks</div>
-                            <div class="feature-desc">Truyền luồng trực tiếp từ máy khách lên 2TOOL Cloud, tự động phục hồi và tiếp tục tải lên ngay khi có mạng trở lại.</div>
-                        </div>
-                    </div>
-
-                    <!-- CLOUD STORAGE CALLOUT -->
-                    <div class="card" style="margin-bottom:32px;border-color:#38bdf8;background:linear-gradient(180deg, rgba(56, 189, 248, 0.1) 0%, var(--surface-1) 100%)">
-                        <div class="card-body" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px">
-                            <div>
-                                <span class="badge" style="background:rgba(56,189,248,0.2);color:#38bdf8;border:1px solid rgba(56,189,248,0.4);font-weight:700;margin-bottom:8px">2TOOLNE CLOUD V2 — STORAGE POOL SYSTEM</span>
-                                <h3 style="font-size:18px;margin:0 0 4px">Kho Lưu Trữ Đám Mây Chuyên Nghiệp Cho Studio</h3>
-                                <p class="text-muted" style="margin:0;font-size:13px">Quản lý tệp tin trực quan, xem trước ảnh/video, chia sẻ không gian làm việc cho cả đội nhóm.</p>
-                            </div>
-                            <div style="display:flex;gap:8px;flex-wrap:wrap">
-                                <button class="btn btn-emerald" onclick="openModal('modal-login')">🚀 Đăng Nhập Quản Lý Tệp</button>
-                                <button class="btn btn-outline" onclick="openModal('modal-register')">🎁 Nhận 15GB Miễn Phí</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="pricing-grid">
-                        <div class="pricing-card">
-                            <div>
-                                <h4>Cloud Personal (50 GB)</h4>
-                                <div class="price-val" style="color:#38bdf8">50.000đ</div>
-                                <div class="price-sub">/ tháng • Không gian cá nhân</div>
-                                <ul class="price-checklist">
-                                    <li>☁️ 50 GB lưu trữ 2TOOL Cloud tốc độ cao</li>
-                                    <li>⚡ Tự động sao lưu từ 2TOOLNE Desktop App</li>
-                                    <li>🔗 Link tải trực tiếp & xem trước ảnh 4K</li>
-                                    <li>🛡️ Mã hóa & sao lưu an toàn tuyệt đối</li>
-                                </ul>
-                            </div>
-                            <button class="btn btn-outline" onclick="openModal('modal-login')">⚡ Đăng Nhập Để Mua</button>
-                        </div>
-
-                        <div class="pricing-card featured" style="border-color:#38bdf8">
-                            <span class="badge pricing-card-badge" style="background:#38bdf8;color:#000;font-weight:800">PHỔ BIẾN CHO STUDIO</span>
-                            <div>
-                                <h4>Cloud Team (200 GB)</h4>
-                                <div class="price-val" style="color:#38bdf8">150.000đ</div>
-                                <div class="price-sub">/ tháng • Dành cho đội nhóm</div>
-                                <ul class="price-checklist">
-                                    <li>☁️ 200 GB lưu trữ đám mây mở rộng</li>
-                                    <li>👥 Chia sẻ không gian cho tối đa 5 thành viên</li>
-                                    <li>⚡ Upload trực tiếp song song nhiều thiết bị</li>
-                                    <li>👑 Phân quyền Quản trị viên / Thành viên</li>
-                                </ul>
-                            </div>
-                            <button class="btn btn-emerald" style="background:#0284c7;border-color:#0284c7" onclick="openModal('modal-login')">⚡ Đăng Nhập Để Mua</button>
-                        </div>
-
-                        <div class="pricing-card">
-                            <div>
-                                <h4>Cloud Enterprise (1 TB)</h4>
-                                <div class="price-val" style="color:#38bdf8">500.000đ</div>
-                                <div class="price-sub">/ tháng • Dung lượng cực lớn</div>
-                                <ul class="price-checklist">
-                                    <li>☁️ 1.000 GB (1 TB) lưu trữ vĩnh viễn</li>
-                                    <li>👥 Không giới hạn thành viên trong Studio</li>
-                                    <li>🚀 Băng thông tải xuống ưu tiên tối đa</li>
-                                    <li>👑 Hỗ trợ kết nối kho lưu trữ riêng cho doanh nghiệp</li>
-                                </ul>
-                            </div>
-                            <button class="btn btn-outline" onclick="openModal('modal-login')">👑 Đăng Nhập Để Mua</button>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- DOWNLOADS SECTION -->
-            <section id="downloads" style="padding:48px 0 64px;border-top:1px solid var(--border)">
-                <div style="text-align:center;margin-bottom:32px">
-                    <span class="badge badge-primary" style="margin-bottom:8px">DOWNLOADS</span>
-                    <h2 style="font-size:28px">Tải Phần Mềm & Tiện Ích</h2>
-                    <p class="text-muted" style="margin-top:4px">Tương thích hoàn hảo trên cả Windows 10/11 và macOS Apple Silicon / Intel</p>
-                </div>
-
-                <!-- 1. SMART AUTO-DETECT 2TOOLNE UPSCALE 4K -->
-                <div class="card" style="margin-bottom:24px;border-color:#facc15;background:linear-gradient(180deg, #221a05 0%, var(--surface-1) 100%)">
-                    <div class="card-body">
-                        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px;margin-bottom:16px">
-                            <div style="flex:1;min-width:280px">
-                                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-                                    <span class="badge" style="background:#facc15;color:#000;font-weight:800">✨ AI SIÊU PHÂN GIẢI 2K & 4K</span>
-                                    <span class="os-detect-badge badge badge-info" style="font-weight:600">🔍 Đang nhận diện hệ điều hành...</span>
-                                </div>
-                                <h3 style="font-size:22px;margin:0 0 6px">2toolne Upscale 4K (AI Super-Resolution App)</h3>
-                                <p class="text-muted" style="margin:0;font-size:13.5px">Ứng dụng phóng to và tái tạo chi tiết hình ảnh 2K & 4K bằng mô hình AI on-device (Vulkan, DirectML, Apple Silicon). Chạy cục bộ siêu tốc, bảo mật tuyệt đối.</p>
-                            </div>
-                            <!-- PROMINENT SMART 1-CLICK BUTTON -->
-                            <div class="smart-download-container" data-app-name="2toolne Upscale 4K" style="display:flex;flex-direction:column;gap:8px;min-width:260px">
-                                <a href="/downloads/2toolne_Upscale_Setup_latest.exe?v=1.1.2" 
-                                   data-os-win="/downloads/2toolne_Upscale_Setup_latest.exe?v=1.1.2" 
-                                   data-os-mac="/downloads/2toolne_Upscale_latest.dmg?v=1.1.2" 
-                                   class="smart-download-btn btn btn-accent btn-lg" 
-                                   style="font-weight:700;text-align:center;box-shadow:0 0 20px rgba(250, 204, 21, 0.25)">
-                                    <span class="smart-download-icon">🪟</span> <span class="smart-download-text">Tải Cho Windows (.exe - 149 MB)</span>
-                                </a>
-                                <div style="font-size:11px;color:var(--muted-foreground);text-align:center">Tự động nhận diện cấu hình • Bản chuẩn v1.1.2 Stable</div>
-                            </div>
-                        </div>
-
-                        <!-- ALL DOWNLOAD OPTIONS -->
-                        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:16px;border-top:1px solid rgba(255,255,255,0.08);padding-top:16px">
-                            <!-- WINDOWS -->
-                            <div class="os-option-box os-box-windows" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:var(--radius-sm);padding:12px">
-                                <div style="display:flex;align-items:center;gap:6px;font-weight:700;color:var(--foreground);font-size:13px;margin-bottom:6px">
-                                    <span>🪟</span> Dành Cho Windows (10/11 64-bit):
-                                </div>
-                                <p style="font-size:12px;color:var(--muted-foreground);margin-bottom:10px">Tối ưu DirectML, Vulkan, NVIDIA CUDA / Tensor Cores.</p>
-                                <div style="display:flex;gap:8px;flex-wrap:wrap">
-                                    <a href="/downloads/2toolne_Upscale_Setup_latest.exe?v=1.1.2" class="btn btn-accent btn-sm" style="flex:1;text-align:center">⚙️ Bản cài đặt .exe (149 MB - Khuyên dùng)</a>
-                                </div>
-                            </div>
-
-                            <!-- MACOS -->
-                            <div class="os-option-box os-box-macos" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:var(--radius-sm);padding:12px">
-                                <div style="display:flex;align-items:center;gap:6px;font-weight:700;color:var(--foreground);font-size:13px;margin-bottom:6px">
-                                    <span>🍏</span> Dành Cho macOS (Monterey 12+):
-                                </div>
-                                <p style="font-size:12px;color:var(--muted-foreground);margin-bottom:10px">Universal: Apple Silicon (M1/M2/M3/M4 Metal) & Intel.</p>
-                                <div style="display:flex;gap:8px;flex-wrap:wrap">
-                                    <a href="/downloads/2toolne_Upscale_macOS_latest.zip" class="btn btn-emerald btn-sm" style="flex:1;text-align:center">🍏 Tải .zip (Universal Mac)</a>
-                                    <a href="/downloads/2toolne_Upscale_latest.dmg?v=1.1.2" class="btn btn-outline btn-sm" style="flex:1;text-align:center">📦 Gói cài .dmg</a>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 2. SMART AUTO-DETECT 2TOOLNE STUDIO -->
-                <div class="card" style="margin-bottom:24px;border-color:var(--emerald);background:linear-gradient(180deg, #09261e 0%, var(--surface-1) 100%)">
-                    <div class="card-body">
-                        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px;margin-bottom:16px">
-                            <div style="flex:1;min-width:280px">
-                                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-                                    <span class="badge badge-active">🚀 BẢN CHÍNH THỨC 2026</span>
-                                    <span class="os-detect-badge badge badge-info" style="font-weight:600">🔍 Đang nhận diện hệ điều hành...</span>
-                                </div>
-                                <h3 style="font-size:22px;margin:0 0 6px">2toolne Studio (AI YouTube Production Suite)</h3>
-                                <p class="text-muted" style="margin:0;font-size:13.5px">Hệ thống sản xuất phim tài liệu tự động 200–250 shots, Edge TTS, Căn chỉnh lời chính xác, Upscale 4K & Multi-Track DAW.</p>
-                            </div>
-                            <!-- PROMINENT SMART 1-CLICK BUTTON -->
-                            <div class="smart-download-container" data-app-name="2toolne Studio" style="display:flex;flex-direction:column;gap:8px;min-width:260px">
-                                <a href="/downloads/2toolne_Windows_latest.zip" 
-                                   data-os-win="/downloads/2toolne_Windows_latest.zip" 
-                                   data-os-mac="/downloads/2toolne_macOS_latest.zip" 
-                                   class="smart-download-btn btn btn-emerald btn-lg" 
-                                   style="font-weight:700;text-align:center;box-shadow:0 0 20px rgba(16, 185, 129, 0.3)">
-                                    <span class="smart-download-icon">🪟</span> <span class="smart-download-text">Tải Cho Windows (.zip)</span>
-                                </a>
-                                <div style="font-size:11px;color:var(--muted-foreground);text-align:center">Tự động nhận diện cấu hình • Bản chuẩn v1.1.2 RC</div>
-                            </div>
-                        </div>
-
-                        <!-- ALL DOWNLOAD OPTIONS -->
-                        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:16px;border-top:1px solid rgba(255,255,255,0.08);padding-top:16px">
-                            <!-- WINDOWS -->
-                            <div class="os-option-box os-box-windows" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:var(--radius-sm);padding:12px">
-                                <div style="display:flex;align-items:center;gap:6px;font-weight:700;color:var(--foreground);font-size:13px;margin-bottom:6px">
-                                    <span>🪟</span> Dành Cho Windows (10/11 64-bit):
-                                </div>
-                                <p style="font-size:12px;color:var(--muted-foreground);margin-bottom:10px">Tối ưu NVIDIA CUDA, RTX Tensor, Intel & AMD.</p>
-                                <div style="display:flex;gap:8px;flex-wrap:wrap">
-                                    <a href="/downloads/2toolne_Windows_latest.zip" class="btn btn-accent btn-sm" style="flex:1;text-align:center">📥 Tải .zip (Portable 64-bit)</a>
-                                    <a href="/downloads/2toolne_Setup_latest.exe" class="btn btn-outline btn-sm" style="flex:1;text-align:center">⚙️ Bản cài đặt .exe</a>
-                                </div>
-                            </div>
-
-                            <!-- MACOS -->
-                            <div class="os-option-box os-box-macos" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:var(--radius-sm);padding:12px">
-                                <div style="display:flex;align-items:center;gap:6px;font-weight:700;color:var(--foreground);font-size:13px;margin-bottom:6px">
-                                    <span>🍏</span> Dành Cho macOS (Monterey 12+):
-                                </div>
-                                <p style="font-size:12px;color:var(--muted-foreground);margin-bottom:10px">Universal: Apple Silicon (M1/M2/M3/M4) & Intel.</p>
-                                <div style="display:flex;gap:8px;flex-wrap:wrap">
-                                    <a href="/downloads/2toolne_macOS_latest.zip" class="btn btn-emerald btn-sm" style="flex:1;text-align:center">🍏 Tải .zip (Universal Mac)</a>
-                                    <a href="/downloads/2toolne_latest.dmg" class="btn btn-outline btn-sm" style="flex:1;text-align:center">📦 Gói cài .dmg</a>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 2. SLIDESHOW BUILDER & EXTENSION GRID -->
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
-                    <div class="card">
-                        <div class="card-body" style="display:flex;flex-direction:column;justify-content:space-between;height:100%">
-                            <div>
-                                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-                                    <span style="font-size:22px">🎬</span>
-                                    <div class="card-title" style="margin:0">Slideshow Builder AI (v2.3.9 Stable)</div>
-                                </div>
-                                <p class="text-muted" style="font-size:13px;margin:8px 0 16px">Động cơ Subpixel Affine Motion mượt mà 60 FPS không rung giật, phụ đề tự động Pill/Noonnu, lồng tiếng đa giọng đọc.</p>
-                                <div class="text-subtle" style="font-size:12px;margin-bottom:16px">Tương thích: Windows 10/11 & macOS Monterey+</div>
-                            </div>
-                            <div style="display:flex;gap:8px;flex-wrap:wrap">
-                                <a href="/downloads/SlideshowBuilder_macOS_v2.3.9.zip" class="btn btn-emerald btn-sm" style="flex:1;text-align:center">🍎 Tải macOS (.zip)</a>
-                                <a href="/downloads/SlideshowBuilder_Windows_v2.3.9.zip" class="btn btn-accent btn-sm" style="flex:1;text-align:center">🪟 Tải Windows (.zip)</a>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="card">
-                        <div class="card-body" style="display:flex;flex-direction:column;justify-content:space-between;height:100%">
-                            <div>
-                                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-                                    <span style="font-size:22px">🧩</span>
-                                    <div class="card-title" style="margin:0">Google Labs Flow Extension (v1.5.0)</div>
-                                </div>
-                                <p class="text-muted" style="font-size:13px;margin:8px 0 16px">Tiện ích tự động tải ảnh 2K/4K hàng loạt, tự động đánh số thứ tự chuẩn xác 001→xxx cho Chrome / Edge.</p>
-                                <div class="text-subtle" style="font-size:12px;margin-bottom:16px">Cài đặt trực tiếp qua Developer Mode trong 30s</div>
-                            </div>
-                            <a href="/downloads/2tamne_Labs_Extension_latest.zip" class="btn btn-outline" style="width:100%;text-align:center">📥 Tải Extension (.zip)</a>
-                        </div>
-                    </div>
-                </div>
-            </section>
-        <?php endif; ?>
     </main>
 
-    <!-- ═══ FOOTER ═══ -->
+    <!-- ═══ FOOTER (DASHBOARD) ═══ -->
     <footer style="border-top:1px solid var(--border);padding:32px 0;text-align:center;font-size:13px;color:var(--muted-foreground);margin-top:64px">
         <div class="container">
             <p>© 2026 <b>2tamne.site</b> — Commercial AI Software Suite. Mọi quyền được bảo lưu.</p>
-            <p style="margin-top:6px">Hotline & Zalo Kỹ Thuật Hỗ Trợ: <a href="https://zalo.me/0326649304" target="_blank" style="color:var(--emerald);font-weight:600">0326649304</a></p>
+            <p style="margin-top:6px">Hotline &amp; Zalo Kỹ Thuật: <a href="https://zalo.me/0326649304" target="_blank" style="color:var(--emerald);font-weight:600">0326649304</a> &bull; WhatsApp: <a href="https://wa.me/84326649304" target="_blank" style="color:#35C46A;font-weight:600">+84 326 649 304</a></p>
         </div>
     </footer>
+    <?php endif; /* End legacy bypassed block */ ?>
+    <?php else: ?>
+        <!-- FLASH ALERTS (GUEST) -->
+        <?php if ($msg_success): ?>
+            <div class="container" style="position:relative;z-index:90;padding-top:70px"><div class="alert alert-success" style="margin-top:20px"><?= $msg_success ?></div></div>
+        <?php endif; ?>
+        <?php if ($msg_error): ?>
+            <div class="container" style="position:relative;z-index:90;padding-top:70px"><div class="alert alert-danger" style="margin-top:20px"><?= $msg_error ?></div></div>
+        <?php endif; ?>
+
+        <!-- ═══════════════════════════════════════════════════════════════
+             2TOOLNE WEB V3 — 2.5D PRODUCT CINEMA EXPERIENCE
+             ═══════════════════════════════════════════════════════════════ -->
+        <div id="root"></div>
+        <script type="module" src="dist/assets/index-bojx5Pj4.js"></script>
+    <?php endif; ?>
 
     <!-- ═══ MODALS & DIALOGS ═══ -->
 
@@ -3855,6 +3310,33 @@ if (isset($_GET['registered'])) {
                         <button type="submit" class="btn btn-accent">Xác Nhận Đổi Thiết Bị</button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ MODAL: DOWNLOAD ENTITLEMENT REQUIRED ═══ -->
+    <div id="modal-download-entitlement" class="modal-backdrop">
+        <div class="modal-dialog" style="max-width:460px;background:#12131a;border:1px solid rgba(255,122,0,0.3);box-shadow:0 25px 60px rgba(0,0,0,0.85);border-radius:18px">
+            <div class="modal-header" style="border-bottom:1px solid rgba(255,255,255,0.08);padding:18px 20px">
+                <div class="modal-title" style="font-size:16px;font-weight:700;display:flex;align-items:center;gap:10px;color:#ff8f1f">
+                    <span>🛡️</span> <span>Xác Thực Quyền Tải Phần Mềm</span>
+                </div>
+                <button type="button" class="modal-close" onclick="closeModal('modal-download-entitlement')">&times;</button>
+            </div>
+            <div class="modal-body" style="padding:24px 20px;text-align:center">
+                <div style="font-size:48px;margin-bottom:12px">🔒</div>
+                <h4 id="entitlement-modal-title" style="margin:0 0 10px;font-size:16px;color:#fff">Cần Bản Quyền Hoặc Dùng Thử</h4>
+                <p id="entitlement-modal-msg" class="text-muted" style="font-size:13.5px;line-height:1.6;margin-bottom:24px">
+                    Bạn cần kích hoạt bản dùng thử 3 ngày hoặc sở hữu gói bản quyền để tải bộ cài đặt phần mềm này.
+                </p>
+                <div id="entitlement-modal-actions" style="display:flex;flex-direction:column;gap:10px">
+                    <button type="button" id="btn-claim-trial" class="btn btn-accent" style="width:100%;font-weight:700;background:#ff7a00;border-color:#ff7a00;padding:12px" onclick="handleClaimTrialFromModal()">
+                        ✨ Kích Hoạt Dùng Thử 3 Ngày (Miễn Phí)
+                    </button>
+                    <a href="#tab-buy-key" class="btn btn-outline" style="width:100%;padding:10px" onclick="closeModal('modal-download-entitlement'); switchMainTab('tab-buy-key');">
+                        💳 Mua Gói Bản Quyền Chính Thức
+                    </a>
+                </div>
             </div>
         </div>
     </div>
@@ -4295,10 +3777,13 @@ if (isset($_GET['registered'])) {
         }
 
         const TAB_BTN_MAP = {
+            'tab-overview': 'btn-tab-overview',
             'tab-my-keys': 'btn-tab-keys',
             'tab-orders-history': 'btn-tab-orders',
             'tab-wallet-view': 'btn-tab-wallet',
             'tab-cloud-storage': 'btn-tab-cloud',
+            'tab-team': 'btn-tab-team',
+            'tab-ai-connection': 'btn-tab-ai',
             'tab-downloads': 'btn-tab-downloads',
             'tab-buy-key': 'btn-tab-buy',
             'tab-features-view': 'btn-tab-features',
@@ -4410,16 +3895,130 @@ if (isset($_GET['registered'])) {
 
         function switchMainTab(tabId) {
             document.querySelectorAll('.tab-pane').forEach(el => el.style.display = 'none');
-            document.querySelectorAll('.dash-nav-btn').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.dash-nav-btn, .v3-nav-item').forEach(el => el.classList.remove('active'));
             const target = document.getElementById(tabId);
             if (target) target.style.display = 'block';
             if (TAB_BTN_MAP[tabId]) {
                 const b = document.getElementById(TAB_BTN_MAP[tabId]);
                 if (b) b.classList.add('active');
             }
+            const breadcrumbEl = document.getElementById('v3-breadcrumb-text');
+            const titleMap = {
+                'tab-overview': 'Trang Chủ',
+                'tab-my-keys': 'Bản Quyền',
+                'tab-orders-history': 'Lịch Sử Giao Dịch',
+                'tab-wallet-view': 'Ví & Token',
+                'tab-cloud-storage': 'Cloud Storage',
+                'tab-team': 'Đội Nhóm (Team)',
+                'tab-ai-connection': 'AI Connection',
+                'tab-downloads': 'Tải Phần Mềm',
+                'tab-buy-key': 'Mua Bản Quyền',
+                'tab-features-view': 'Tính Năng Mới',
+                'tab-bugs-view': 'Báo Lỗi',
+                'tab-settings': 'Cài Đặt'
+            };
+            if (breadcrumbEl && titleMap[tabId]) {
+                breadcrumbEl.textContent = titleMap[tabId];
+            }
             if (tabId === 'tab-cloud-storage') {
                 initCloudUI();
             }
+            const sidebar = document.getElementById('v3-app-sidebar');
+            if (sidebar && sidebar.classList.contains('mobile-open')) {
+                sidebar.classList.remove('mobile-open');
+            }
+        }
+
+        function openV3Modal(id) {
+            const m = document.getElementById(id);
+            if (m) m.style.display = 'flex';
+        }
+        function closeV3Modal(id) {
+            const m = document.getElementById(id);
+            if (m) m.style.display = 'none';
+        }
+        function toggleV3MobileSidebar() {
+            const sidebar = document.getElementById('v3-app-sidebar');
+            if (sidebar) {
+                sidebar.classList.toggle('mobile-open');
+            }
+        }
+        function openCreateAiKeyModal() {
+            openV3Modal('modal-v3-create-ai-key');
+        }
+        function submitCreateAiKey() {
+            const name = (document.getElementById('v3-new-aikey-name')?.value || '').trim();
+            const spaceId = document.getElementById('v3-new-aikey-space')?.value || '';
+            if (!name) {
+                alert('Vui lòng nhập tên gợi nhớ cho AI Key');
+                return;
+            }
+            if (!spaceId) {
+                alert('Vui lòng chọn Không gian làm việc');
+                return;
+            }
+            fetch('/api/v1/ai/keys', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ display_name: name, workspace_id: spaceId })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && data.key) {
+                    closeV3Modal('modal-v3-create-ai-key');
+                    const secretInput = document.getElementById('v3-revealed-secret-input');
+                    if (secretInput) {
+                        secretInput.value = typeof data.key === 'string' ? data.key : (data.key.key || data.key.secret || '');
+                    }
+                    openV3Modal('modal-v3-show-ai-secret');
+                } else {
+                    alert('Lỗi: ' + (data.error || data.message || 'Không thể tạo khóa'));
+                }
+            })
+            .catch(err => {
+                alert('Lỗi kết nối máy chủ khi tạo AI key');
+            });
+        }
+        function copyRevealedAiSecret() {
+            const input = document.getElementById('v3-revealed-secret-input');
+            if (!input) return;
+            navigator.clipboard.writeText(input.value).then(() => {
+                if (typeof showToast === 'function') {
+                    showToast('Đã sao chép AI Secret Key vào bộ nhớ tạm!', 'success');
+                } else {
+                    alert('Đã sao chép AI Secret Key!');
+                }
+            }).catch(() => {
+                input.select();
+                document.execCommand('copy');
+                if (typeof showToast === 'function') {
+                    showToast('Đã sao chép AI Secret Key!', 'success');
+                }
+            });
+        }
+        function revokeAiKey(keyId) {
+            if (!confirm('Bạn có chắc chắn muốn thu hồi AI Access Key này? Mọi ứng dụng đang kết nối bằng khóa này sẽ lập tức mất quyền truy cập!')) {
+                return;
+            }
+            fetch('/api/v1/ai/keys/' + encodeURIComponent(keyId) + '/revoke', {
+                method: 'POST'
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success || data.ok) {
+                    if (typeof showToast === 'function') {
+                        showToast('Đã thu hồi AI Access Key thành công!', 'success');
+                    } else {
+                        alert('Đã thu hồi AI Access Key!');
+                    }
+                    setTimeout(() => location.reload(), 800);
+                } else {
+                    alert('Lỗi: ' + (data.error || data.message || 'Không thể thu hồi khóa'));
+                }
+            })
+            .catch(() => {
+                alert('Lỗi kết nối khi thu hồi AI Key');
+            });
         }
 
         // ═══════════════════════════════════════════════════════════════════════════
@@ -5446,12 +5045,11 @@ if (isset($_GET['registered'])) {
                     const btn = c.querySelector('.smart-download-btn');
                     const icon = c.querySelector('.smart-download-icon');
                     const text = c.querySelector('.smart-download-text');
+                    const prod = c.getAttribute('data-product') || 'AUTOEDIT';
                     if (btn) {
-                        const macUrl = btn.getAttribute('data-os-mac') || '/downloads/2toolne_macOS_latest.zip';
-                        btn.href = macUrl;
+                        btn.onclick = () => requestSecureDownload(prod, 'macos');
                         btn.className = 'smart-download-btn btn btn-emerald btn-lg';
-                        const isDmg = macUrl.endsWith('.dmg');
-                        if (text) text.textContent = isDmg ? 'Tải Cho macOS (.dmg - 125 MB)' : 'Tải Cho macOS (.zip Universal)';
+                        if (text) text.textContent = 'Tải Cho macOS (Bản Chính Thức)';
                     }
                     if (icon) icon.textContent = '🍏';
                 });
@@ -5468,12 +5066,11 @@ if (isset($_GET['registered'])) {
                     const btn = c.querySelector('.smart-download-btn');
                     const icon = c.querySelector('.smart-download-icon');
                     const text = c.querySelector('.smart-download-text');
+                    const prod = c.getAttribute('data-product') || 'AUTOEDIT';
                     if (btn) {
-                        const winUrl = btn.getAttribute('data-os-win') || '/downloads/2toolne_Windows_latest.zip';
-                        btn.href = winUrl;
+                        btn.onclick = () => requestSecureDownload(prod, 'windows-x64');
                         btn.className = 'smart-download-btn btn btn-accent btn-lg';
-                        const isExe = winUrl.endsWith('.exe');
-                        if (text) text.textContent = isExe ? 'Tải Cho Windows (.exe - 149 MB)' : 'Tải Cho Windows (.zip 64-bit)';
+                        if (text) text.textContent = 'Tải Cho Windows (.exe Chính Thức)';
                     }
                     if (icon) icon.textContent = '🪟';
                 });
@@ -5485,6 +5082,148 @@ if (isset($_GET['registered'])) {
         }
 
         window.addEventListener('DOMContentLoaded', initSmartOSDetection);
+
+        // ═══════════════════════════════════════════════════════════════
+        // SECURE AUTHENTICATED SOFTWARE DOWNLOAD GATE (CLIENT ENGINE)
+        // ═══════════════════════════════════════════════════════════════
+        let currentEntitlementProduct = 'AUTOEDIT';
+        let currentEntitlementPlatform = 'windows-x64';
+
+        async function requestSecureDownload(product = 'AUTOEDIT', platform = 'windows-x64', packageType = 'installer') {
+            currentEntitlementProduct = product;
+            currentEntitlementPlatform = platform;
+
+            const btn = (typeof event !== 'undefined' && event && event.currentTarget) ? event.currentTarget : null;
+            let oldContent = '';
+            if (btn) {
+                oldContent = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '⏳ Đang xác thực...';
+            }
+
+            try {
+                const response = await fetch('/api/v1/downloads/request', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        product: product,
+                        platform: platform,
+                        package_type: packageType
+                    })
+                });
+
+                const res = await response.json();
+
+                if (response.ok && res.success && res.download_url) {
+                    if (btn) {
+                        btn.innerHTML = '✅ Bắt đầu tải...';
+                        setTimeout(() => {
+                            btn.innerHTML = oldContent;
+                            btn.disabled = false;
+                        }, 3500);
+                    }
+                    // Download via short-lived signed token URL
+                    window.location.href = res.download_url;
+                    return;
+                }
+
+                if (response.status === 401 || res.error === 'AUTH_REQUIRED') {
+                    if (typeof openModal === 'function') {
+                        openModal('modal-login');
+                    } else {
+                        alert(res.message || 'Vui lòng đăng nhập hoặc đăng ký tài khoản để tải phần mềm.');
+                    }
+                    return;
+                }
+
+                if (response.status === 403 || res.error === 'ENTITLEMENT_REQUIRED' || res.error === 'EXPIRED_TRIAL' || res.error === 'EXPIRED_LICENSE' || res.error === 'FORBIDDEN_INTERNAL_ONLY') {
+                    showDownloadEntitlementModal(res);
+                    return;
+                }
+
+                alert(res.message || 'Không thể tạo liên kết tải xuống. Vui lòng thử lại sau.');
+            } catch (err) {
+                console.error('Download gate error:', err);
+                alert('Lỗi kết nối máy chủ khi yêu cầu tải về. Vui lòng thử lại.');
+            } finally {
+                if (btn && btn.disabled) {
+                    btn.innerHTML = oldContent;
+                    btn.disabled = false;
+                }
+            }
+        }
+
+        function showDownloadEntitlementModal(res) {
+            const modal = document.getElementById('modal-download-entitlement');
+            if (!modal) {
+                alert(res.message || 'Bạn cần bản quyền hoặc kích hoạt dùng thử để tải phần mềm.');
+                return;
+            }
+            const titleEl = document.getElementById('entitlement-modal-title');
+            const msgEl = document.getElementById('entitlement-modal-msg');
+            const claimBtn = document.getElementById('btn-claim-trial');
+
+            if (titleEl) {
+                if (res.error === 'EXPIRED_TRIAL') {
+                    titleEl.textContent = 'Bản Dùng Thử Đã Hết Hạn';
+                } else if (res.error === 'EXPIRED_LICENSE') {
+                    titleEl.textContent = 'Gói Bản Quyền Đã Hết Hạn';
+                } else if (res.error === 'FORBIDDEN_INTERNAL_ONLY') {
+                    titleEl.textContent = 'Gói Kiểm Thử Nội Bộ';
+                } else {
+                    titleEl.textContent = 'Cần Bản Quyền Hoặc Dùng Thử';
+                }
+            }
+
+            if (msgEl) {
+                msgEl.textContent = res.message || 'Bạn cần kích hoạt bản dùng thử 3 ngày hoặc sở hữu bản quyền để tải phần mềm.';
+            }
+
+            if (claimBtn) {
+                claimBtn.style.display = (res.can_claim_trial && res.error === 'ENTITLEMENT_REQUIRED') ? 'block' : 'none';
+            }
+
+            openModal('modal-download-entitlement');
+        }
+
+        async function handleClaimTrialFromModal() {
+            const btn = document.getElementById('btn-claim-trial');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '⏳ Đang kích hoạt dùng thử...';
+            }
+
+            try {
+                const response = await fetch('/api/v1/downloads/claim-trial', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    }
+                });
+                const res = await response.json();
+
+                if (response.ok && res.success) {
+                    alert('🎉 ' + (res.message || 'Kích hoạt thành công bản dùng thử 3 ngày! Bắt đầu tải phần mềm...'));
+                    closeModal('modal-download-entitlement');
+                    requestSecureDownload(currentEntitlementProduct, currentEntitlementPlatform);
+                    setTimeout(() => { location.reload(); }, 2000);
+                } else {
+                    alert(res.message || 'Không thể kích hoạt bản dùng thử. Vui lòng liên hệ hỗ trợ hoặc mua bản quyền.');
+                }
+            } catch (err) {
+                console.error('Claim trial error:', err);
+                alert('Lỗi kết nối khi kích hoạt dùng thử.');
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '✨ Kích Hoạt Dùng Thử 3 Ngày (Miễn Phí)';
+                }
+            }
+        }
 
         // Auto-open tab from URL ?tab= parameter or #hash (PRG & Hash Router)
         (function() {
@@ -5523,6 +5262,9 @@ if (isset($_GET['registered'])) {
                 const el = document.getElementById(destId);
                 if (el) {
                     switchMainTab(destId);
+                } else if (t === 'downloads' || t === 'download' || t === 'tab-downloads') {
+                    // Guest fallback: open login/register modal
+                    openModal('modal-login');
                 } else if (t === 'cloud' || t === 'cloud-storage' || t === 'tab-cloud-storage') {
                     // Guest fallback: switch to public cloud product tab
                     switchProductTab('ptab-cloud', 'ptab-btn-cloud');

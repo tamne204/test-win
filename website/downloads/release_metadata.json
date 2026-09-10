@@ -1,27 +1,29 @@
 {
-  "version": "2.0.0",
-  "release_tag": "v2.0.0-hardened",
+  "version": "2.0.1",
+  "release_tag": "v2.0.1-stable",
   "build_target": "Windows 10/11 x64",
   "product": "2TOOLNE AutoEdit V2",
-  "published_at": "2026-09-10T00:30:00+07:00",
+  "authoritative_capcut_version": "9.3.0.3970",
+  "published_at": "2026-09-11T03:00:00+07:00",
   "packages": {
     "autoedit_installer": {
       "package_filename": "2TOOLNE-AutoEdit-Setup-2.0.0.exe",
       "latest_filename": "2TOOLNE-AutoEdit-Setup-latest.exe",
-      "download_url": "https://www.2tamne.site/downloads/2TOOLNE-AutoEdit-Setup-2.0.0.exe",
-      "latest_url": "https://www.2tamne.site/downloads/2TOOLNE-AutoEdit-Setup-latest.exe",
+      "download_url": "https://www.2tamne.site/api/v1/downloads/request",
+      "latest_url": "https://www.2tamne.site/api/v1/downloads/request",
       "sha256": "0d205a795fcf28732c3356687e92fe031a134ffb1183cf5e60ef61f6a0d9d2a6",
       "size_bytes": 523331420,
-      "size_mb": 499.09
+      "size_mb": 499.09,
+      "note": "Bộ cài đặt ban đầu (tự động cập nhật OTA lên v2.0.1 khi khởi chạy)"
     },
-    "autoedit_customer_test": {
-      "package_filename": "2TOOLNE_Windows_Customer_Test_2.0.0-hardened.zip",
-      "latest_filename": "2TOOLNE-AutoEdit-Customer-latest.zip",
-      "download_url": "https://www.2tamne.site/downloads/2TOOLNE_Windows_Customer_Test_2.0.0-hardened.zip",
-      "latest_url": "https://www.2tamne.site/downloads/2TOOLNE-AutoEdit-Customer-latest.zip",
-      "sha256": "812076c622b6a1eeebcac44a74d76ffedcd3bfa711d394a7a571ddfce86c19ac",
-      "size_bytes": 971974552,
-      "size_mb": 926.95
+    "autoedit_update_package": {
+      "package_filename": "2toolne-autoedit-2.0.1-win-x64.zip",
+      "latest_filename": "2toolne-autoedit-latest-win-x64.zip",
+      "download_url": "https://www.2tamne.site/api/v1/update/download",
+      "sha256": "fcdcb6af72d542e6f58bd2b0ca00b82d73c86fdb8cbf4f4f04e6b01b99a8161e",
+      "size_bytes": 949148943,
+      "size_mb": 905.18,
+      "compatibility": "Tương thích chính xác CapCut 9.3.0.3970 & Tự động phân giải com.lveditor.draft"
     }
   },
   "legacy_products": {
@@ -33,6 +35,6 @@
   "brand": {
     "name": "2TOOLNE AutoEdit",
     "theme": "Orange & Zinc Dark Premium",
-    "status": "OFFICIAL_PRODUCTION_RELEASE"
+    "status": "OFFICIAL_PRODUCTION_RELEASE_V2_0_1"
   }
 }
