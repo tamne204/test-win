@@ -16,11 +16,32 @@ class UpdateController {
     private const UPDATE_SECRET = '2TOOLNE_SECURE_UPDATE_SALT_2026';
     private const CANARY_CHANNEL = 'windows-canary';
     private const STABLE_CHANNEL = 'stable';
-    private const CANARY_VERSION = '2.0.1';
+    private const CANARY_VERSION = '2.0.4';
     private const TOKEN_TTL_SECONDS = 900; // Strictly 15 minutes
 
     // Durable private storage outside Apache webroot
     private const PRIVATE_PACKAGES_DIR = 'C:/2TOOLNE-Private/packages';
+
+    // 2.0.4 Authoritative Package Metadata (Single Source of Truth)
+    private const RELEASE_204_PACKAGE = '2toolne-autoedit-2.0.4-win-x64.zip';
+    private const RELEASE_204_SIZE_BYTES = 949532629;
+    private const RELEASE_204_SIZE_MB = 905.54;
+    private const RELEASE_204_SHA256 = 'e935ec07ca8338398fc677e4190c8115d040b475c2e72512355abfdd4e6f243c';
+    private const RELEASE_204_NOTES = '2TOOLNE AutoEdit v2.0.4: Khôi phục bootloader gốc nguyên bản ngăn chặn triệt để lỗi sidecar thoát sớm (code: 4294967295), tích hợp trình nạp ưu tiên base_library bytecode sạch, khắc phục triệt để lỗi CapCutDetector status, tương thích chính xác CapCut v9.3.0.3970.';
+
+    // 2.0.3 Authoritative Package Metadata (Single Source of Truth)
+    private const RELEASE_203_PACKAGE = '2toolne-autoedit-2.0.3-win-x64.zip';
+    private const RELEASE_203_SIZE_BYTES = 949360097;
+    private const RELEASE_203_SIZE_MB = 905.38;
+    private const RELEASE_203_SHA256 = 'c0ff382a3dbaae66181f25aa721a1993dfe32f9ff1a79ac7c71e9921b4ed2ab1';
+    private const RELEASE_203_NOTES = '2TOOLNE AutoEdit v2.0.3: Khắc phục triệt để lỗi CapCutDetector status bằng cách tái đóng gói PYZ bytecode trong autoedit-core.exe, tương thích chính xác CapCut v9.3.0.3970.';
+
+    // 2.0.2 Authoritative Package Metadata (Single Source of Truth)
+    private const RELEASE_202_PACKAGE = '2toolne-autoedit-2.0.2-win-x64.zip';
+    private const RELEASE_202_SIZE_BYTES = 949357789;
+    private const RELEASE_202_SIZE_MB = 905.38;
+    private const RELEASE_202_SHA256 = 'bc3c1af63f142b050c2861671d44f02ac037a8a6d604f5a37e14e971dd5b7f17';
+    private const RELEASE_202_NOTES = '2TOOLNE AutoEdit v2.0.2: Sửa lỗi tạo dự án (CapCutDetector status contract), đồng bộ sidecar bytecode trên Windows, tương thích chính xác CapCut v9.3.0.3970.';
 
     // 2.0.1 Authoritative Package Metadata (Single Source of Truth)
     private const RELEASE_201_PACKAGE = '2toolne-autoedit-2.0.1-win-x64.zip';
@@ -32,6 +53,36 @@ class UpdateController {
     // Trusted Release Artifact Registry (Strict product, platform, architecture isolation)
     private const TRUSTED_PACKAGES = [
         'autoedit' => [
+            '2.0.4' => [
+                'win32' => [
+                    'x64' => [
+                        'filename' => self::RELEASE_204_PACKAGE,
+                        'size_bytes' => self::RELEASE_204_SIZE_BYTES,
+                        'size_mb' => self::RELEASE_204_SIZE_MB,
+                        'sha256' => self::RELEASE_204_SHA256,
+                    ]
+                ]
+            ],
+            '2.0.3' => [
+                'win32' => [
+                    'x64' => [
+                        'filename' => self::RELEASE_203_PACKAGE,
+                        'size_bytes' => self::RELEASE_203_SIZE_BYTES,
+                        'size_mb' => self::RELEASE_203_SIZE_MB,
+                        'sha256' => self::RELEASE_203_SHA256,
+                    ]
+                ]
+            ],
+            '2.0.2' => [
+                'win32' => [
+                    'x64' => [
+                        'filename' => self::RELEASE_202_PACKAGE,
+                        'size_bytes' => self::RELEASE_202_SIZE_BYTES,
+                        'size_mb' => self::RELEASE_202_SIZE_MB,
+                        'sha256' => self::RELEASE_202_SHA256,
+                    ]
+                ]
+            ],
             '2.0.1' => [
                 'win32' => [
                     'x64' => [
@@ -269,13 +320,13 @@ class UpdateController {
         if ($appName === 'autoedit') {
             if ($isWin) {
                 $latestVersion = self::CANARY_VERSION;
-                $filename = self::RELEASE_201_PACKAGE;
-                $sizeBytes = self::RELEASE_201_SIZE_BYTES;
-                $fileSizeMb = self::RELEASE_201_SIZE_MB;
-                $sha256 = self::RELEASE_201_SHA256;
-                $releaseNotes = self::RELEASE_201_NOTES;
+                $filename = self::RELEASE_204_PACKAGE;
+                $sizeBytes = self::RELEASE_204_SIZE_BYTES;
+                $fileSizeMb = self::RELEASE_204_SIZE_MB;
+                $sha256 = self::RELEASE_204_SHA256;
+                $releaseNotes = self::RELEASE_204_NOTES;
                 $isMandatory = false;
-                $publishedAt = '2026-09-11 03:00:00';
+                $publishedAt = '2026-09-11 06:00:00';
             } else {
                 $latestVersion = '2.0.0';
                 $filename = "2toolne-autoedit-{$latestVersion}-mac-{$arch}.zip";

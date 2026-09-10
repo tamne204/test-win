@@ -66,6 +66,10 @@ def main():
     sys.stderr.write("==================================================\n")
     sys.stderr.write("2TOOLNE AUTOEDIT PYTHON SIDECAR STARTED\n")
     sys.stderr.write(f"PID: {os.getpid()} | Python: {sys.version}\n")
+    sys.stderr.write(f"SIDECAR_VERSION: 2.0.4\n")
+    sys.stderr.write("SIDECAR_BUILD_ID: 2TOOLNE-AUTOEDIT-2.0.4-WIN-X64\n")
+    sys.stderr.write("DETECTOR_MODULE: adapters.capcut.detector.CapCutDetector\n")
+    sys.stderr.write("DETECTOR_API_VERSION: 9.3.0.3970-verified-detect-only\n")
     sys.stderr.write("==================================================\n")
     sys.stderr.flush()
 

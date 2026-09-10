@@ -83,7 +83,7 @@ class AutoUpdateManager extends EventEmitter {
 
     // State: IDLE, CHECKING, UP_TO_DATE, UPDATE_AVAILABLE, DOWNLOADING, DOWNLOADED, INSTALL_READY, INSTALLING, ERROR
     this.state = 'IDLE';
-    this.currentVersion = options.currentVersion || (app && typeof app.getVersion === 'function' ? app.getVersion() : '2.0.1');
+    this.currentVersion = options.currentVersion || (app && typeof app.getVersion === 'function' ? app.getVersion() : '2.0.4');
     this.availableUpdate = null; // update manifest
     this.downloadProgress = null; // { percent, bytesPerSecond, transferred, total }
     this.downloadedPackagePath = null;

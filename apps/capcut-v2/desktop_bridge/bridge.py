@@ -516,7 +516,8 @@ class DesktopBridge:
         except Exception as exc:
             # Post-operation artifact reconciliation: Was project actually written to disk?
             potential_draft = None
-            target_root = override_draft_root or getattr(self.detector.status, "draft_root_path", None)
+            detection = self.detector.detect()
+            target_root = override_draft_root or detection.draft_root_path or CapCutDetector.get_draft_root()
             if target_root and os.path.isdir(target_root):
                 p_slug = (project_name or "").strip().replace(" ", "_")
                 for d in os.listdir(target_root):
@@ -538,7 +539,7 @@ class DesktopBridge:
                     "final_draft_dir": potential_draft,
                     "staging_dir": potential_draft,
                     "is_registered_in_capcut": True,
-                    "capcut_detected_version": getattr(self.detector.status, "detected_version", "9.4.0"),
+                    "capcut_detected_version": detection.detected_version or "9.3.0.3970",
                 }
             else:
                 raise exc
