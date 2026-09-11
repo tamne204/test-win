@@ -368,6 +368,7 @@ jobs:
 
       - name: 15. Upload Artifact
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: 2toolne-autoedit-windows-rc2-2.0.0
           path: 2toolne-autoedit-windows-rc2-2.0.0/
@@ -490,6 +491,7 @@ jobs:
 
       - name: 20. Upload Customer Hardened Test Package
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: 2TOOLNE_Windows_Customer_Test_2.0.0-hardened
           path: D:\CustomerDist\2TOOLNE_Windows_Customer_Test_2.0.0-hardened.zip
@@ -593,6 +595,7 @@ jobs:
 
       - name: 22. Upload Production NSIS Installer
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: 2TOOLNE-AutoEdit-Setup-2.0.0
           path: apps/capcut-v2/desktop/dist/*Setup*.exe
@@ -600,6 +603,7 @@ jobs:
 
       - name: 23. Upload Visual Rebrand Artifacts & Snapshots
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: 2TOOLNE-Visual-Rebrand-Snapshots
           path: reports/visual_rebrand/
