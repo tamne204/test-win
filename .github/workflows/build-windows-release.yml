@@ -1,14 +1,19 @@
-name: Build & Validate Windows Sidecar & Package 2.0.4 (windows-latest)
+name: Build & Deploy Windows Native Release (windows-latest)
 
 on:
   workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Release version to build and deploy (e.g. 2.0.4, 2.0.5)'
+        required: true
+        default: '2.0.4'
   push:
-    branches:
-      - main
+    tags:
+      - 'v2.*'
 
 jobs:
-  build-and-test-windows-204:
-    name: Build Fresh Sidecar & Validate 2.0.4 on Windows
+  build-and-deploy-windows:
+    name: Build Native Windows Package & Direct Server Deploy
     runs-on: windows-latest
 
     steps:
@@ -112,11 +117,12 @@ jobs:
             g++ -O3 -std=c++17 apps/capcut-v2/desktop/src/main/capcut_ui_probe/CapCutUiProbe.cpp -o $probeExe
           }
 
-      - name: 9. Build Electron Desktop Package & Assemble 2.0.4 Zip
+      - name: 9. Build Electron Desktop Package & Assemble Release ZIP
         shell: pwsh
         run: |
+          $ver = "${{ github.event.inputs.release_version || '2.0.4' }}"
           Write-Host "=================================================="
-          Write-Host "ASSEMBLING 2TOOLNE AUTOEDIT 2.0.4 WINDOWS PACKAGE"
+          Write-Host "ASSEMBLING 2TOOLNE AUTOEDIT $ver WINDOWS PACKAGE"
           Write-Host "=================================================="
           
           # Sync newly built sidecar to desktop resources
@@ -134,15 +140,15 @@ jobs:
           node apps/capcut-v2/desktop/scripts/verify_windows_package.js
           
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          $finalZip = "dist/2toolne-autoedit-2.0.4-win-x64.zip"
+          $finalZip = "dist/2toolne-autoedit-$ver-win-x64.zip"
           if (Test-Path $finalZip) { Remove-Item -Force $finalZip }
           Compress-Archive -Path "apps/capcut-v2/desktop/dist/win-unpacked/*" -DestinationPath $finalZip -Force
           
           $zipSize = (Get-Item $finalZip).Length
-          $zipHash = (Get-FileHash -Path $finalZip -Algorithm SHA256).Hash
+          $zipHash = (Get-FileHash -Path $finalZip -Algorithm SHA256).Hash.ToLower()
           
           Write-Host "=================================================="
-          Write-Host "2TOOLNE 2.0.4 WINDOWS PACKAGE CREATED!"
+          Write-Host "2TOOLNE $ver WINDOWS PACKAGE CREATED!"
           Write-Host "FILE: $finalZip"
           Write-Host "SIZE: $zipSize bytes"
           Write-Host "SHA256: $zipHash"
@@ -150,18 +156,19 @@ jobs:
           
           # Write manifest
           @{
-            UPDATE_PACKAGE = "2toolne-autoedit-2.0.4-win-x64.zip"
+            UPDATE_PACKAGE = "2toolne-autoedit-$ver-win-x64.zip"
             UPDATE_PACKAGE_SIZE = $zipSize
             UPDATE_PACKAGE_SHA256 = $zipHash
-            VERSION = "2.0.4"
+            VERSION = $ver
             GIT_COMMIT = $env:GITHUB_SHA
-          } | ConvertTo-Json | Out-File -FilePath "dist/manifest_204.json" -Encoding utf8
+          } | ConvertTo-Json | Out-File -FilePath "dist/manifest_$ver.json" -Encoding utf8
 
-      - name: 10. Deploy Package & Sidecar to Production Host via FTP
+      - name: 10. Deploy Package Direct to 2TOOLNE Production Server via FTP (Zero GitHub Artifacts)
         shell: pwsh
         run: |
+          $ver = "${{ github.event.inputs.release_version || '2.0.4' }}"
           Write-Host "=================================================="
-          Write-Host "DEPLOYING 2.0.4 WINDOWS PACKAGE DIRECTLY TO PRODUCTION SERVER"
+          Write-Host "DEPLOYING $ver WINDOWS PACKAGE DIRECTLY TO 2TOOLNE SERVER"
           Write-Host "=================================================="
           $ftpHost = "43.129.165.150"
           $ftpUser = "2tamne_site_code"
@@ -169,16 +176,17 @@ jobs:
           
           # 1. Upload autoedit-core.exe
           $coreExe = "apps/capcut-v2/packaging/dist/autoedit-core/autoedit-core.exe"
-          Write-Host "Uploading fresh autoedit-core.exe ($((Get-Item $coreExe).Length) bytes)..."
-          curl.exe -s -T $coreExe -u "${ftpUser}:${ftpPass}" "ftp://${ftpHost}:21/storage/packages/autoedit-core-204.exe"
+          Write-Host "Uploading autoedit-core-$ver.exe ($((Get-Item $coreExe).Length) bytes)..."
+          curl.exe -s -T $coreExe -u "${ftpUser}:${ftpPass}" "ftp://${ftpHost}:21/storage/packages/autoedit-core-${ver}.exe"
           
           # 2. Upload manifest
-          $manifest = "dist/manifest_204.json"
-          curl.exe -s -T $manifest -u "${ftpUser}:${ftpPass}" "ftp://${ftpHost}:21/storage/packages/manifest_204.json"
+          $manifest = "dist/manifest_$ver.json"
+          curl.exe -s -T $manifest -u "${ftpUser}:${ftpPass}" "ftp://${ftpHost}:21/storage/packages/manifest_${ver}.json"
           
-          # 3. Upload 2toolne-autoedit-2.0.4-win-x64.zip
-          $pkgZip = "dist/2toolne-autoedit-2.0.4-win-x64.zip"
-          Write-Host "Uploading 2toolne-autoedit-2.0.4-win-x64.zip ($((Get-Item $pkgZip).Length) bytes)..."
-          curl.exe -T $pkgZip -u "${ftpUser}:${ftpPass}" "ftp://${ftpHost}:21/storage/packages/2toolne-autoedit-2.0.4-win-x64.zip"
+          # 3. Upload release zip directly
+          $pkgZip = "dist/2toolne-autoedit-$ver-win-x64.zip"
+          Write-Host "Uploading 2toolne-autoedit-$ver-win-x64.zip ($((Get-Item $pkgZip).Length) bytes)..."
+          curl.exe -T $pkgZip -u "${ftpUser}:${ftpPass}" "ftp://${ftpHost}:21/storage/packages/2toolne-autoedit-${ver}-win-x64.zip"
           
-          Write-Host "Upload completed successfully!"
+          Write-Host "Direct upload to production server completed successfully!"
+          Write-Host "Zero GitHub Artifacts stored. Ephemeral runner will be discarded safely."
