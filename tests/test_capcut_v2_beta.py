@@ -490,28 +490,89 @@ def test_draft_validator_detects_non_monotonic_keyframes(tmp_path):
 # ==============================================================================
 
 def test_adapter_registry_routing():
-    """Verify Adapter Registry resolves 9.3 to CapCutVersionAdapter_9_3 and blocks untested."""
-    # 1. Verified versions
-    adapter_cls, status, msg = CapCutAdapterRegistry.resolve_adapter("9.3.0")
+    """Verify Adapter Registry resolves versions with explicit platform routing."""
+    # 1. Windows strict allowlist routing (exact 9.3.0.3970 only)
+    adapter_cls, status, msg = CapCutAdapterRegistry.resolve_adapter(
+        "9.3.0.3970",
+        platform_name="win32"
+    )
     assert adapter_cls is CapCutVersionAdapter_9_3
     assert status == STATUS_VERIFIED
 
-    adapter_cls, status, msg = CapCutAdapterRegistry.resolve_adapter("9.3.5")
+    adapter_cls, status, msg = CapCutAdapterRegistry.resolve_adapter(
+        "9.3.0",
+        platform_name="win32"
+    )
+    assert adapter_cls is None
+    assert status == STATUS_UNSUPPORTED
+
+    adapter_cls, status, msg = CapCutAdapterRegistry.resolve_adapter(
+        "9.3.5",
+        platform_name="win32"
+    )
+    assert adapter_cls is None
+    assert status == STATUS_UNSUPPORTED
+
+    adapter_cls, status, msg = CapCutAdapterRegistry.resolve_adapter(
+        "9.5.0",
+        allow_untested=True,
+        platform_name="win32"
+    )
+    assert adapter_cls is CapCutVersionAdapter_9_3
+    assert status == STATUS_UNTESTED
+
+    adapter_cls, status, msg = CapCutAdapterRegistry.resolve_adapter(
+        "9.5.0",
+        allow_untested=False,
+        platform_name="win32"
+    )
+    assert adapter_cls is None
+    assert status == STATUS_UNSUPPORTED
+
+    adapter_cls, status, msg = CapCutAdapterRegistry.resolve_adapter(
+        "5.2.0",
+        allow_untested=False,
+        platform_name="win32"
+    )
+    assert adapter_cls is None
+    assert status == STATUS_UNSUPPORTED
+
+    # 2. Non-Windows (macOS) explicit platform routing
+    adapter_cls, status, msg = CapCutAdapterRegistry.resolve_adapter(
+        "9.3.0",
+        platform_name="darwin"
+    )
     assert adapter_cls is CapCutVersionAdapter_9_3
     assert status == STATUS_VERIFIED
 
-    # 2. Untested version without override
-    adapter_cls, status, msg = CapCutAdapterRegistry.resolve_adapter("9.5.0", allow_untested=False)
+    adapter_cls, status, msg = CapCutAdapterRegistry.resolve_adapter(
+        "9.3.5",
+        platform_name="darwin"
+    )
+    assert adapter_cls is CapCutVersionAdapter_9_3
+    assert status == STATUS_VERIFIED
+
+    adapter_cls, status, msg = CapCutAdapterRegistry.resolve_adapter(
+        "9.5.0",
+        allow_untested=False,
+        platform_name="darwin"
+    )
     assert adapter_cls is None
     assert status == STATUS_UNTESTED
 
-    # 3. Untested version WITH override
-    adapter_cls, status, msg = CapCutAdapterRegistry.resolve_adapter("9.5.0", allow_untested=True)
+    adapter_cls, status, msg = CapCutAdapterRegistry.resolve_adapter(
+        "9.5.0",
+        allow_untested=True,
+        platform_name="darwin"
+    )
     assert adapter_cls is CapCutVersionAdapter_9_3
     assert status == STATUS_UNTESTED
 
-    # 4. Unsupported legacy version
-    adapter_cls, status, msg = CapCutAdapterRegistry.resolve_adapter("5.2.0", allow_untested=False)
+    adapter_cls, status, msg = CapCutAdapterRegistry.resolve_adapter(
+        "5.2.0",
+        allow_untested=False,
+        platform_name="darwin"
+    )
     assert adapter_cls is None
     assert status == STATUS_UNSUPPORTED
 
