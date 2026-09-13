@@ -96,17 +96,25 @@ foreach ($req in $requiredPaths) {
 Write-Host "`n[4/6] Executing Stdio JSON-RPC Ping on INSTALLED Core Binary ..." -ForegroundColor Yellow
 $sidecarScript = Join-Path $PSScriptRoot "Test-Sidecar.ps1"
 $installedPingLog = Join-Path $OutputDir "installed-sidecar-ping.json"
+$env:PING_OUTPUT_FILE = $installedPingLog
 
 & $sidecarScript -CorePath $installedCore -Iterations 5 -OutputDir $OutputDir
 if ($LASTEXITCODE -ne 0) {
   Write-Error "FAIL: Installed core failed stdio JSON-RPC PING test!"
   exit 1
 }
+if (-not (Test-Path $installedPingLog) -and (Test-Path (Join-Path $OutputDir "sidecar-ping.json"))) {
+  Copy-Item (Join-Path $OutputDir "sidecar-ping.json") $installedPingLog -Force
+}
 Write-Host "✓ INSTALLED CORE PING PASSED WITH ZERO ERRORS!" -ForegroundColor Green
 
 # 5. Installed Native Launcher Verify
 Write-Host "`n[5/6] Executing Installed Native Root Verifier (--verify-only) ..." -ForegroundColor Yellow
-$vProc = Start-Process -FilePath $installedLauncher -ArgumentList "--verify-only", "--resources-dir=$installedResources", "--headless" -PassThru -Wait
+$env:_2TOOLNE_HEADLESS_TEST = "1"
+$env:_2TOOLNE_RESOURCES_PATH = $installedResources
+$env:_2TOOLNE_MANIFEST_PATH = $installedManifest
+
+$vProc = Start-Process -FilePath $installedLauncher -ArgumentList "--verify-only", "--headless" -PassThru -Wait
 if ($vProc.ExitCode -ne 0) {
   Write-Error "FAIL: Installed launcher verification failed with exit code $($vProc.ExitCode)!"
   exit 1

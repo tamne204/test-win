@@ -51,6 +51,13 @@ if (!corePath) {
   }
 }
 
+function ensureDir(filePath) {
+  const dir = path.dirname(path.resolve(filePath));
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+}
+
 if (!corePath || !fs.existsSync(corePath)) {
   const failure = {
     ok: false,
@@ -60,6 +67,7 @@ if (!corePath || !fs.existsSync(corePath)) {
     runs: [],
   };
   console.error(`[SidecarPing][FATAL] ${failure.error}`);
+  ensureDir(outputFile);
   fs.writeFileSync(outputFile, JSON.stringify(failure, null, 2), 'utf8');
   process.exit(1);
 }
@@ -262,6 +270,7 @@ async function main() {
     runs: results,
   };
 
+  ensureDir(outputFile);
   fs.writeFileSync(outputFile, JSON.stringify(summary, null, 2), 'utf8');
 
   console.log('\n======================================================================');

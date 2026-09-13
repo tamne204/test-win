@@ -155,7 +155,7 @@ if (-not (Test-Path $nodeHarness)) {
   $nodeHarness = "tests/sidecar_ping.js"
 }
 
-$outputReport = Join-Path $OutputDir "sidecar-ping.json"
+$outputReport = if ($env:PING_OUTPUT_FILE) { $env:PING_OUTPUT_FILE } else { Join-Path $OutputDir "sidecar-ping.json" }
 
 $env:CORE_EXE_PATH = $CorePath
 $env:PING_ITERATIONS = $Iterations.ToString()

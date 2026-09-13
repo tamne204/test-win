@@ -148,15 +148,18 @@ jobs:
         shell: pwsh
         run: |
           $coreExe = $env:COMPILED_CORE_EXE
-          Write-Host "Benchmarking 5 direct cold starts on newly built Nuitka core: $coreExe"
-          $env:PING_OUTPUT_FILE = "windows-ci-report/direct-sidecar-ping.json"
+          $directPingFile = "windows-ci-report/direct-sidecar-ping.json"
+          $env:PING_OUTPUT_FILE = $directPingFile
           & scripts/Test-Sidecar.ps1 -CorePath $coreExe -Iterations 5 -TimeoutSec 30 -OutputDir windows-ci-report
           if ($LASTEXITCODE -ne 0) {
             Write-Error "FAIL: Direct Nuitka PING failed!"
             exit 1
           }
+          if (-not (Test-Path $directPingFile) -and (Test-Path "windows-ci-report/sidecar-ping.json")) {
+            Copy-Item "windows-ci-report/sidecar-ping.json" $directPingFile -Force
+          }
           
-          $directPing = Get-Content windows-ci-report/direct-sidecar-ping.json | ConvertFrom-Json
+          $directPing = Get-Content $directPingFile | ConvertFrom-Json
           Write-Host "Direct Nuitka PING Status : $($directPing.status)"
           Write-Host "Direct Nuitka Min Latency : $($directPing.min_ms) ms"
           Write-Host "Direct Nuitka Max Latency : $($directPing.max_ms) ms"
@@ -273,6 +276,9 @@ jobs:
             Write-Error "FAIL: Packaged Nuitka PING failed!"
             exit 1
           }
+          if (-not (Test-Path "windows-ci-report/packaged-sidecar-ping.json") -and (Test-Path "windows-ci-report/sidecar-ping.json")) {
+            Copy-Item "windows-ci-report/sidecar-ping.json" "windows-ci-report/packaged-sidecar-ping.json" -Force
+          }
           "PACKAGED_NUITKA_PING=PASS" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: 14. Execute Exact Electron-Style Spawn Test
@@ -343,6 +349,18 @@ jobs:
         run: |
           $packageDir = $env:PACKAGE_DIR
           $installerFile = (Resolve-Path -Path dist).Path + "\2TOOLNE-AutoEdit-Setup-2.0.5.exe"
+          
+          # Ensure makensis is in PATH
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) {
+            $nsisDefault = "C:\Program Files (x86)\NSIS"
+            if (Test-Path "$nsisDefault\makensis.exe") {
+              $env:PATH = "$nsisDefault;$env:PATH"
+            } elseif (Get-Command choco -ErrorAction SilentlyContinue) {
+              Write-Host "Installing NSIS via Chocolatey..."
+              choco install nsis -y --no-progress
+              $env:PATH = "$nsisDefault;$env:PATH"
+            }
+          }
           
           Write-Host "Building NSIS installer via makensis to: $installerFile ..."
           & makensis "/DOUTPUT_FILE=$installerFile" "/DPACKAGE_DIR=$packageDir" scripts/installer.nsi
@@ -424,10 +442,14 @@ jobs:
           "UPDATE_ZIP_CORE_HASH_MATCH=YES" | Out-File -FilePath $env:GITHUB_ENV -Append
           
           Write-Host "Testing PING against core extracted from update ZIP..."
+          $env:PING_OUTPUT_FILE = "windows-ci-report/update-zip-sidecar-ping.json"
           & scripts/Test-Sidecar.ps1 -CorePath $zipCore -Iterations 1 -TimeoutSec 30 -OutputDir windows-ci-report
           if ($LASTEXITCODE -ne 0) {
             Write-Error "FAIL: Update ZIP core PING failed!"
             exit 1
+          }
+          if (-not (Test-Path "windows-ci-report/update-zip-sidecar-ping.json") -and (Test-Path "windows-ci-report/sidecar-ping.json")) {
+            Copy-Item "windows-ci-report/sidecar-ping.json" "windows-ci-report/update-zip-sidecar-ping.json" -Force
           }
           "UPDATE_ZIP_CORE_PING=PASS" | Out-File -FilePath $env:GITHUB_ENV -Append
 
