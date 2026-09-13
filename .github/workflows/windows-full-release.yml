@@ -1,0 +1,107 @@
+name: Windows Full Source Build & Release Lab (windows-latest)
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_repo:
+        description: 'Canonical source repository (e.g. tamne204/ffmpeg-tool)'
+        required: false
+        default: 'tamne204/ffmpeg-tool'
+      source_ref:
+        description: 'Branch or tag to build'
+        required: false
+        default: 'main'
+
+jobs:
+  full-release-build:
+    name: Build From Source & Validate Windows Package
+    runs-on: windows-latest
+
+    steps:
+      - name: 1. Checkout CI Lab Harness
+        uses: actions/checkout@v4
+        with:
+          path: harness
+
+      - name: 2. Check Canonical Source Access
+        id: check-token
+        shell: pwsh
+        env:
+          SOURCE_TOKEN: ${{ secrets.SOURCE_REPO_TOKEN }}
+        run: |
+          if (-not $env:SOURCE_TOKEN) {
+            Write-Host "SOURCE_REPO_TOKEN secret is NOT configured."
+            Write-Host "SOURCE_BUILD=NOT_RUN"
+            "SOURCE_BUILD_STATUS=NOT_RUN" | Out-File -FilePath $env:GITHUB_ENV -Append
+          } else {
+            Write-Host "✓ SOURCE_REPO_TOKEN secret detected. Proceeding to cross-repo checkout."
+            "SOURCE_BUILD_STATUS=READY" | Out-File -FilePath $env:GITHUB_ENV -Append
+          }
+
+      - name: 3. Checkout Canonical Source Repository
+        if: env.SOURCE_BUILD_STATUS == 'READY'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.inputs.source_repo || 'tamne204/ffmpeg-tool' }}
+          ref: ${{ github.event.inputs.source_ref || 'main' }}
+          token: ${{ secrets.SOURCE_REPO_TOKEN }}
+          path: src
+
+      - name: 4. Setup Build Toolchains (Node 20, Python 3.12, Go 1.22)
+        if: env.SOURCE_BUILD_STATUS == 'READY'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 4b. Setup Python
+        if: env.SOURCE_BUILD_STATUS == 'READY'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 4c. Setup Go
+        if: env.SOURCE_BUILD_STATUS == 'READY'
+        uses: actions/setup-go@v5
+        with:
+          go-version: '>=1.22.0'
+
+      - name: 5. Build Sidecar & Native Root Launcher
+        if: env.SOURCE_BUILD_STATUS == 'READY'
+        shell: pwsh
+        run: |
+          cd src
+          python -m pip install --upgrade pip
+          python -m pip install "pyinstaller>=6.0" faster-whisper ctranslate2 soundfile numpy requests psutil cryptography pillow
+          
+          Write-Host "Building Python sidecar via PyInstaller on Windows runner..."
+          python apps/capcut-v2/packaging/build_sidecar.py
+          
+          Write-Host "Building Go Native Root Launcher..."
+          cd apps/capcut-v2/desktop/src/native_root
+          $env:GOOS = "windows"
+          $env:GOARCH = "amd64"
+          $env:CGO_ENABLED = "0"
+          go build -ldflags "-s -w -H=windowsgui" -o ../../dist/native_root/2TOOLNE` AutoEdit.exe .
+          cd ../../../../..
+
+      - name: 6. Build Electron NSIS Package
+        if: env.SOURCE_BUILD_STATUS == 'READY'
+        shell: pwsh
+        run: |
+          cd src/apps/capcut-v2/desktop
+          npm ci
+          npx electron-builder --win nsis --x64
+          cd ../../../..
+
+      - name: 7. Run CI Lab Test Battery on Fresh Build
+        if: env.SOURCE_BUILD_STATUS == 'READY'
+        shell: pwsh
+        run: |
+          $packageDir = "src/apps/capcut-v2/desktop/dist/win-unpacked"
+          & harness/scripts/Test-Package.ps1 -PackageDir $packageDir
+          
+          $coreExe = "$packageDir/resources/autoedit-core/win-x64/2toolne-core.exe"
+          if (-not (Test-Path $coreExe)) { $coreExe = "$packageDir/resources/autoedit-core/win-x64/autoedit-core.exe" }
+          & harness/scripts/Test-Sidecar.ps1 -CorePath $coreExe -Iterations 5
+          
+          & harness/scripts/Test-Integrity.ps1 -PackageDir $packageDir

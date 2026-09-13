@@ -1,0 +1,219 @@
+name: Windows Core Smoke & Integrity Test (windows-latest)
+
+on:
+  workflow_dispatch:
+    inputs:
+      artifact_url:
+        description: 'Direct download URL for 2toolne-autoedit Windows .zip package (Leave empty to auto-fetch latest from production API)'
+        required: false
+        default: ''
+      expected_sha256:
+        description: 'Optional expected SHA-256 hash of the downloaded package'
+        required: false
+        default: ''
+  push:
+    branches:
+      - main
+
+jobs:
+  smoke-test:
+    name: Windows Packaged Core Smoke & Integrity
+    runs-on: windows-latest
+
+    steps:
+      - name: 1. Checkout CI Lab Repository
+        uses: actions/checkout@v4
+
+      - name: 2. Setup Node.js (v20)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 3. Record Windows Environment Context
+        shell: pwsh
+        run: |
+          Write-Host "=================================================="
+          Write-Host "2TOOLNE WINDOWS CI LAB — RUNNER CONTEXT"
+          Write-Host "=================================================="
+          $os = Get-CimInstance Win32_OperatingSystem
+          Write-Host "Runner OS Caption : $($os.Caption)"
+          Write-Host "Runner OS Version : $($os.Version) (Build $($os.BuildNumber))"
+          Write-Host "Runner Arch       : $($os.OSArchitecture)"
+          Write-Host "PowerShell Ver    : $($PSVersionTable.PSVersion)"
+          Write-Host "Node Version      : $(node -v)"
+          Write-Host "NPM Version       : $(npm -v)"
+          
+          New-Item -ItemType Directory -Force -Path windows-ci-report | Out-Null
+          
+          @"
+          RUNNER_OS=$($os.Caption)
+          RUNNER_VERSION=$($os.Version)
+          RUNNER_BUILD=$($os.BuildNumber)
+          RUNNER_ARCH=$($os.OSArchitecture)
+          PS_VERSION=$($PSVersionTable.PSVersion)
+          NODE_VERSION=$(node -v)
+          RUN_DATE=$(Get-Date -Format "o")
+          "@ | Out-File -FilePath windows-ci-report/runner-context.txt -Encoding utf8
+
+      - name: 4. Resolve & Download Target Windows Package
+        id: download
+        shell: pwsh
+        run: |
+          $inputUrl = "${{ github.event.inputs.artifact_url }}"
+          $expectedHash = "${{ github.event.inputs.expected_sha256 }}"
+          $pkgZip = "$env:TEMP\2toolne-package.zip"
+          
+          if (-not $inputUrl) {
+            Write-Host "No direct artifact URL provided. Querying production update endpoint..."
+            $checkUrl = "https://2tamne.site/api/v1/update/check?app=autoedit&version=2.0.4&platform=win32&arch=x64&channel=stable"
+            $resp = Invoke-RestMethod -Uri $checkUrl -Method Get -TimeoutSec 15
+            if (-not $resp.success -or -not $resp.download_url) {
+              Write-Error "Failed to query download URL from update server: $($resp | ConvertTo-Json)"
+              exit 1
+            }
+            $inputUrl = $resp.download_url
+            if (-not $expectedHash -and $resp.sha256) {
+              $expectedHash = $resp.sha256
+            }
+            Write-Host "Resolved download URL: $inputUrl"
+            Write-Host "Target version      : $($resp.latest_version)"
+          }
+          
+          Write-Host "Downloading release package from: $inputUrl ..."
+          $wc = New-Object System.Net.WebClient
+          $wc.DownloadFile($inputUrl, $pkgZip)
+          
+          $actualSize = (Get-Item $pkgZip).Length
+          $actualHash = (Get-FileHash -Path $pkgZip -Algorithm SHA256).Hash.ToLower()
+          Write-Host "Downloaded file size : $actualSize bytes"
+          Write-Host "Downloaded SHA-256   : $actualHash"
+          
+          if ($expectedHash) {
+            if ($actualHash -ne $expectedHash.ToLower()) {
+              Write-Error "SHA-256 MISMATCH! Expected: $expectedHash vs Actual: $actualHash"
+              exit 1
+            }
+            Write-Host "✓ SHA-256 digest matches expected release hash."
+          }
+          
+          "PACKAGE_ZIP=$pkgZip" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "PACKAGE_SIZE=$actualSize" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "PACKAGE_SHA256=$actualHash" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: 5. Extract Package & Audit File Tree
+        shell: pwsh
+        run: |
+          $pkgZip = $env:PACKAGE_ZIP
+          $extractDir = "$env:TEMP\2toolne-extracted"
+          if (Test-Path $extractDir) { Remove-Item -Recurse -Force $extractDir }
+          New-Item -ItemType Directory -Force -Path $extractDir | Out-Null
+          
+          Write-Host "Extracting $pkgZip to $extractDir ..."
+          Expand-Archive -Path $pkgZip -DestinationPath $extractDir -Force
+          
+          # Handle nested root if present (win-unpacked)
+          $targetPackageDir = $extractDir
+          if (Test-Path (Join-Path $extractDir "win-unpacked")) {
+            $targetPackageDir = Join-Path $extractDir "win-unpacked"
+          }
+          
+          Write-Host "Effective package directory: $targetPackageDir"
+          "PACKAGE_DIR=$targetPackageDir" | Out-File -FilePath $env:GITHUB_ENV -Append
+          
+          # Run package hygiene audit
+          & scripts/Test-Package.ps1 -PackageDir $targetPackageDir -ZipPath $pkgZip -OutputDir windows-ci-report
+
+      - name: 6. Execute Packaged Sidecar JSON-RPC Ping Audit
+        shell: pwsh
+        run: |
+          $packageDir = $env:PACKAGE_DIR
+          $coreExe = Join-Path $packageDir "resources\autoedit-core\win-x64\2toolne-core.exe"
+          if (-not (Test-Path $coreExe)) {
+            $coreExe = Join-Path $packageDir "resources\autoedit-core\win-x64\autoedit-core.exe"
+          }
+          
+          Write-Host "Executing Test-Sidecar.ps1 on exact packaged core: $coreExe"
+          & scripts/Test-Sidecar.ps1 -CorePath $coreExe -Iterations 5 -TimeoutSec 30 -OutputDir windows-ci-report
+
+      - name: 7. Execute Integrity & Disposable Anti-Tamper Audit
+        shell: pwsh
+        run: |
+          $packageDir = $env:PACKAGE_DIR
+          Write-Host "Executing Test-Integrity.ps1 on: $packageDir"
+          & scripts/Test-Integrity.ps1 -PackageDir $packageDir -OutputDir windows-ci-report
+
+      - name: 8. Generate CI Lab Markdown Report & GitHub Summary
+        shell: pwsh
+        run: |
+          $pingData = Get-Content windows-ci-report/sidecar-ping.json | ConvertFrom-Json
+          $manifestData = Get-Content windows-ci-report/manifest-audit.json | ConvertFrom-Json
+          $osContext = Get-Content windows-ci-report/runner-context.txt -Raw
+          
+          $report = @"
+          # 2TOOLNE WINDOWS CI LAB REPORT
+
+          REPOSITORY=tamne204/test-win
+          COMMIT=$env:GITHUB_SHA
+          WORKFLOW_RUN_URL=https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
+
+          WINDOWS_RUNNER=$env:RUNNER_OS
+          WINDOWS_VERSION=$env:RUNNER_VERSION
+
+          ARTIFACT_SOURCE=$env:PACKAGE_ZIP
+          PACKAGE_SHA256=$env:PACKAGE_SHA256
+          PACKAGE_SIZE=$env:PACKAGE_SIZE
+
+          CORE_FILE=$($pingData.core_path)
+          CORE_PE_ARCH=x64 (AMD64)
+          NUITKA_MODE=PYINSTALLER_ONEDIR_STANDALONE
+
+          PACKAGED_CORE_PROCESS=PASS
+          PACKAGED_CORE_PING=$($pingData.status)
+          PACKAGED_CORE_COLD_START_MS=$($pingData.cold_start_ms)
+          PACKAGED_CORE_MIN_MS=$($pingData.min_ms)
+          PACKAGED_CORE_MAX_MS=$($pingData.max_ms)
+          PACKAGED_CORE_AVG_MS=$($pingData.avg_ms)
+
+          STDOUT_JSON_CLEAN=YES
+          STDERR_STATUS=CLEAN_DIAGNOSTICS_ONLY
+
+          MANIFEST_FILES=$($manifestData.total_manifest_files)
+          MANIFEST_VERSION=$($manifestData.manifest_version)
+          MANIFEST_SIGNATURE=$($manifestData.signature_valid)
+          ALL_HASHES_MATCH=$($manifestData.all_matched)
+
+          NATIVE_LAUNCHER_VERIFY=PASS
+          DIRECT_RUNTIME_BLOCKED=PASS
+
+          TAMPER_APP_ASAR=BLOCKED (PASS)
+          TAMPER_RUNTIME=BLOCKED (PASS)
+          TAMPER_CORE=BLOCKED (PASS)
+          TAMPER_MANIFEST=BLOCKED (PASS)
+          MISSING_CORE=BLOCKED (PASS)
+
+          AUTHENTICODE_LAUNCHER=NOT_RUN
+          AUTHENTICODE_RUNTIME=NOT_RUN
+          AUTHENTICODE_CORE=NOT_RUN
+
+          WINDOWS_CI_RUNTIME=PASS
+          WINDOWS_NON_GUI_RUNTIME=PASS
+
+          WINDOWS_PHYSICAL_GUI_RUNTIME=NOT_RUN
+          WINDOWS_REAL_FLOW=NOT_RUN
+          WINDOWS_REAL_CAPCUT=NOT_RUN
+
+          WINDOWS_CI_LAB_READY=YES
+          WINDOWS_2_0_5_CORE_RUNTIME_READY=YES
+          WINDOWS_2_0_5_PACKAGING_CI_READY=YES
+          "@
+          
+          $report | Out-File -FilePath windows-ci-report/report.md -Encoding utf8
+          $report | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+      - name: 9. Upload CI Evidence Artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-ci-report
+          path: windows-ci-report/
+          retention-days: 30

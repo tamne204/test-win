@@ -1,0 +1,77 @@
+name: Windows Package & Installer Audit (windows-latest)
+
+on:
+  workflow_dispatch:
+    inputs:
+      installer_url:
+        description: 'Direct download URL for 2TOOLNE-AutoEdit-Setup-2.0.5.exe'
+        required: false
+        default: 'https://2tamne.site/storage/packages/2TOOLNE-AutoEdit-Setup-2.0.5.exe'
+      package_zip_url:
+        description: 'Direct download URL for 2toolne-autoedit-2.0.5-win-x64.zip'
+        required: false
+        default: 'https://2tamne.site/storage/packages/2toolne-autoedit-2.0.5-win-x64.zip'
+
+jobs:
+  installer-audit:
+    name: Windows NSIS Installer & Silent Runtime Audit
+    runs-on: windows-latest
+
+    steps:
+      - name: 1. Checkout CI Lab Repository
+        uses: actions/checkout@v4
+
+      - name: 2. Setup Node.js (v20)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 3. Setup Reports Directory
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force -Path windows-package-report | Out-Null
+
+      - name: 4. Download Installer and Release ZIP
+        shell: pwsh
+        run: |
+          $instUrl = "${{ github.event.inputs.installer_url }}"
+          $zipUrl = "${{ github.event.inputs.package_zip_url }}"
+          
+          $instFile = "$env:TEMP\2TOOLNE-AutoEdit-Setup-2.0.5.exe"
+          $zipFile = "$env:TEMP\2toolne-autoedit-2.0.5-win-x64.zip"
+          
+          $wc = New-Object System.Net.WebClient
+          Write-Host "Downloading NSIS Installer from $instUrl ..."
+          $wc.DownloadFile($instUrl, $instFile)
+          
+          Write-Host "Downloading Release ZIP from $zipUrl ..."
+          $wc.DownloadFile($zipUrl, $zipFile)
+          
+          "INSTALLER_PATH=$instFile" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "ZIP_PATH=$zipFile" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: 5. Audit Package ZIP Tree & Hygiene
+        shell: pwsh
+        run: |
+          $zipPath = $env:ZIP_PATH
+          $extractDir = "$env:TEMP\zip-extracted"
+          if (Test-Path $extractDir) { Remove-Item -Recurse -Force $extractDir }
+          New-Item -ItemType Directory -Force -Path $extractDir | Out-Null
+          Expand-Archive -Path $zipPath -DestinationPath $extractDir -Force
+          
+          $effectiveDir = if (Test-Path (Join-Path $extractDir "win-unpacked")) { Join-Path $extractDir "win-unpacked" } else { $extractDir }
+          & scripts/Test-Package.ps1 -PackageDir $effectiveDir -ZipPath $zipPath -OutputDir windows-package-report
+
+      - name: 6. Execute NSIS Silent Install, Installed Core Ping & Uninstall
+        shell: pwsh
+        run: |
+          $instFile = $env:INSTALLER_PATH
+          $installDir = "$env:LOCALAPPDATA\Programs\2TOOLNE AutoEdit"
+          & scripts/Test-Installer.ps1 -InstallerPath $instFile -InstallDir $installDir -OutputDir windows-package-report
+
+      - name: 7. Upload Package Audit Evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-package-report
+          path: windows-package-report/
+          retention-days: 30
