@@ -124,7 +124,10 @@ async function runPhase4Tests() {
     const downloadMgr = new FlowDownloadManager({ tempDir: downloadDir });
     const adapter = new GoogleFlowAdapter({ downloadManager: downloadMgr, profileManager: profileMgr });
 
-    assert.strictEqual(adapter.getMode(), 'MANUAL', 'Default mode must be MANUAL');
+    assert.strictEqual(adapter.getMode(), 'AUTO', 'Default mode must be AUTO');
+
+    adapter.setMode('MANUAL');
+    assert.strictEqual(adapter.getMode(), 'MANUAL', 'Mode should transition to MANUAL');
 
     adapter.setMode('AUTO');
     assert.strictEqual(adapter.getMode(), 'AUTO', 'Mode should transition to AUTO');

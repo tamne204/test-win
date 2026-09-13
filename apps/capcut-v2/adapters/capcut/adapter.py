@@ -69,7 +69,16 @@ class CapCutAdapter:
         )
 
         # 3. Structural validation via CapCutDraftValidator
-        validation_errors = CapCutDraftValidator.validate_draft(target_dir)
+        cross_fade_enabled = bool(
+            getattr(edit_plan, "cross_fade_enabled", False)
+            or (edit_plan.metadata and edit_plan.metadata.get("cross_fade_enabled", False))
+        )
+        try:
+            validation_errors = CapCutDraftValidator.validate_draft(
+                target_dir, verify_file_dimensions=True, cross_fade_enabled=cross_fade_enabled
+            )
+        except TypeError:
+            validation_errors = CapCutDraftValidator.validate_draft(target_dir)
         if validation_errors:
             raise RuntimeError(
                 f"Generated CapCut draft failed structural validation: {'; '.join(validation_errors)}"

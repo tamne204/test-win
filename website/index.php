@@ -213,6 +213,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     'session'   => $p_auth['session'],
                     'challenge' => $p_auth['challenge'],
                     'port'      => $p_auth['port'],
+                    'state'     => $p_auth['state'] ?? '',
                 ]);
                 header("Location: index.php?" . $qs);
                 exit;
@@ -237,6 +238,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     'session'   => $p_auth['session'],
                     'challenge' => $p_auth['challenge'],
                     'port'      => $p_auth['port'],
+                    'state'     => $p_auth['state'] ?? '',
                 ]);
                 header("Location: index.php?" . $qs);
                 exit;
@@ -472,19 +474,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
     }
 
-    // 10. SEND TEAM INVITE
-    elseif ($act === 'send_team_invite' && $user_info) {
+    // 10. CREATE UNIVERSAL TEAM INVITE LINK
+    elseif ($act === 'create_team_invite_link' && $user_info) {
         $team_id = trim($_POST['team_id'] ?? '');
-        $target_u = trim($_POST['target_username'] ?? '');
+        $role = strtoupper(trim($_POST['offered_role'] ?? 'EDITOR'));
+        if (!in_array($role, ['ADMIN', 'EDITOR', 'VIEWER'], true)) $role = 'EDITOR';
+        $email = trim($_POST['recipient_email'] ?? '');
         $my_role = db_get_team_user_role($team_id, $user_info['id']);
         if (!in_array($my_role, ['OWNER', 'ADMIN'])) {
-            flash_redirect('error', '❌ Bạn không có quyền mời thành viên vào nhóm này!', 'cloud-storage');
+            flash_redirect('error', '❌ Bạn không có quyền mời thành viên vào nhóm này!', 'team');
         }
-        $res = db_invite_team_member($team_id, $target_u, $user_info['id']);
-        if (!empty($res['success'])) {
-            flash_redirect('success', "🎉 Đã gửi lời mời tham gia Team tới tài khoản <b>@{$target_u}</b> thành công!", 'cloud-storage');
-        } else {
-            flash_redirect('error', '❌ ' . ($res['error'] ?? 'Không thể gửi lời mời'), 'cloud-storage');
+        $rawToken = bin2hex(random_bytes(32));
+        $tokenHash = hash('sha256', $rawToken);
+        $expiresAt = date('Y-m-d H:i:s', time() + 7 * 86400);
+        $invId = 'inv_' . bin2hex(random_bytes(8));
+        try {
+            $stmt = get_db()->prepare("
+                INSERT INTO `team_invitations` (`id`, `team_id`, `invite_token_hash`, `offered_role`, `recipient_email`, `created_by_user_id`, `expires_at`, `created_at`)
+                VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+            ");
+            $stmt->execute([$invId, $team_id, $tokenHash, $role, !empty($email) ? $email : null, $user_info['id'], $expiresAt]);
+            $proto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            $host = $_SERVER['HTTP_HOST'] ?? '2tamne.site';
+            $inviteUrl = "{$proto}://{$host}/invite/#{$rawToken}";
+            flash_redirect('success', "🎉 Đã tạo liên kết mời thành công! Hãy sao chép liên kết này gửi cho thành viên:<br><div style='margin-top:8px;display:flex;gap:6px;'><input type='text' value='{$inviteUrl}' readonly class='v3-input' style='font-family:monospace;font-size:12px;flex:1;' onclick='this.select()'></div>", 'team');
+        } catch (Throwable $e) {
+            flash_redirect('error', '❌ Lỗi tạo liên kết mời: ' . $e->getMessage(), 'team');
+        }
+    }
+    elseif ($act === 'revoke_team_invitation' && $user_info) {
+        $team_id = trim($_POST['team_id'] ?? '');
+        $inv_id = trim($_POST['invitation_id'] ?? '');
+        $my_role = db_get_team_user_role($team_id, $user_info['id']);
+        if (!in_array($my_role, ['OWNER', 'ADMIN'])) {
+            flash_redirect('error', '❌ Bạn không có quyền thu hồi liên kết mời!', 'team');
+        }
+        try {
+            get_db()->prepare("UPDATE `team_invitations` SET `revoked_at` = NOW() WHERE `id` = ? AND `team_id` = ?")->execute([$inv_id, $team_id]);
+            flash_redirect('success', '✅ Đã thu hồi liên kết mời thành công!', 'team');
+        } catch (Throwable $e) {
+            flash_redirect('error', '❌ Lỗi khi thu hồi: ' . $e->getMessage(), 'team');
         }
     }
 
@@ -551,6 +580,7 @@ $user_pending_orders = array_filter($user_orders, fn($o) => ($o['status'] ?? '')
 // ── V3 Workspace Additional Context Data ─────────────────────────────
 $user_teams = [];
 $user_team_members = [];
+$user_team_invitations = [];
 $user_ai_keys = [];
 $active_license = null;
 
@@ -580,6 +610,16 @@ if ($user_info && !empty($user_info['id'])) {
             ");
             $stmtM->execute([$primary_tid]);
             $user_team_members = $stmtM->fetchAll(PDO::FETCH_ASSOC);
+
+            $stmtInv = $db->prepare("
+                SELECT ti.*, u.username as inviter_username, u.fullname as inviter_fullname
+                FROM team_invitations ti
+                LEFT JOIN users u ON ti.created_by_user_id = u.id
+                WHERE ti.team_id = ? AND ti.used_at IS NULL AND ti.revoked_at IS NULL AND ti.expires_at > NOW()
+                ORDER BY ti.created_at DESC
+            ");
+            $stmtInv->execute([$primary_tid]);
+            $user_team_invitations = $stmtInv->fetchAll(PDO::FETCH_ASSOC);
         }
 
         $stmtK = $db->prepare("
@@ -634,7 +674,7 @@ if (isset($_GET['registered'])) {
     <link rel="stylesheet" href="assets/css/v3-workspace.css?v=<?= filemtime(__DIR__ . '/assets/css/v3-workspace.css') ?>">
     <?php endif; ?>
     <?php if (!$user_info): ?>
-    <link rel="stylesheet" href="dist/assets/index-B62LYrWu.css">
+    <link rel="stylesheet" href="dist/assets/index-BqPpFI3C.css">
     <?php endif; ?>
     <style>
         /* ── Specific View Layout Adjustments ──────────────────────────────── */
@@ -2387,7 +2427,7 @@ if (isset($_GET['registered'])) {
                                     <div style="flex:1;min-width:280px">
                                         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
                                             <span class="badge" style="background:#ff7a00;color:#fff;font-weight:800">🔥 SẢN PHẨM CHÍNH THỨC 2026</span>
-                                            <span class="badge" style="background:rgba(255, 122, 0, 0.2);color:#ff9e42;border:1px solid rgba(255, 122, 0, 0.4)">v2.0.1 Stable</span>
+                                            <span class="badge" style="background:rgba(255, 122, 0, 0.2);color:#ff9e42;border:1px solid rgba(255, 122, 0, 0.4)">v2.1.1 Stable</span>
                                             <span class="badge badge-info">Tương thích chính xác CapCut 9.3.0.3970</span>
                                         </div>
                                         <h3 style="font-size:22px;margin:0 0 6px">2TOOLNE AutoEdit for CapCut (Native Desktop Suite)</h3>
@@ -2412,10 +2452,13 @@ if (isset($_GET['registered'])) {
                                         <div style="display:flex;align-items:center;gap:6px;font-weight:700;color:var(--foreground);font-size:13px;margin-bottom:6px">
                                             <span>🪟</span> Bản Dành Cho Windows (10/11 64-bit):
                                         </div>
-                                        <p style="font-size:12px;color:var(--muted-foreground);margin-bottom:10px">Phiên bản v2.0.1: Tương thích chính xác CapCut Desktop 9.3.0.3970, tự động phân giải com.lveditor.draft, NVIDIA RTX Tensor & Intel/AMD 64-bit.</p>
+                                        <p style="font-size:12px;color:var(--muted-foreground);margin-bottom:10px">Phiên bản v2.1.1: Tối ưu hóa bảo mật Native Root of Trust với khóa Ed25519 sản xuất, loại bỏ dev fallback khi đóng gói, xác thực Staged Launcher, tối ưu Media Grid tên tệp tin không decode thumbnail chống tràn RAM, Native Nuitka Onefile Engine, tương thích CapCut Desktop 9.3.0.3970.</p>
                                         <div style="display:flex;gap:8px;flex-wrap:wrap">
-                                            <button type="button" class="btn btn-accent btn-sm" style="flex:1;text-align:center;background:#ff7a00;border-color:#ff7a00" onclick="requestSecureDownload('AUTOEDIT', 'windows-x64')">
-                                                ⚙️ Bộ cài đặt .exe (523 MB)
+                                            <button type="button" class="btn btn-accent btn-sm" style="flex:1;text-align:center;background:#ff7a00;border-color:#ff7a00" onclick="requestSecureDownload('AUTOEDIT', 'windows-x64', 'installer')">
+                                                ⚙️ Bộ cài đặt .exe (v2.1.1)
+                                            </button>
+                                            <button type="button" class="btn btn-outline btn-sm" style="flex:1;text-align:center;border-color:#ff7a00;color:#ff9e42" onclick="requestSecureDownload('AUTOEDIT', 'windows-x64', 'portable')">
+                                                📦 Bản Portable .zip (v2.1.1)
                                             </button>
                                             <?php if ($user_info && in_array($user_info['role'] ?? '', ['admin', 'super_admin'], true)): ?>
                                                 <button type="button" class="btn btn-outline btn-sm" style="flex:1;text-align:center;border-color:#ff7a00;color:#ff9e42" onclick="requestSecureDownload('AUTOEDIT', 'windows-x64', 'customer_test')">
@@ -3010,7 +3053,7 @@ if (isset($_GET['registered'])) {
              2TOOLNE WEB V3 — 2.5D PRODUCT CINEMA EXPERIENCE
              ═══════════════════════════════════════════════════════════════ -->
         <div id="root"></div>
-        <script type="module" src="dist/assets/index-bojx5Pj4.js"></script>
+        <script type="module" src="dist/assets/index-CNdzPJK4.js"></script>
     <?php endif; ?>
 
     <!-- ═══ MODALS & DIALOGS ═══ -->
@@ -3782,6 +3825,7 @@ if (isset($_GET['registered'])) {
             'tab-orders-history': 'btn-tab-orders',
             'tab-wallet-view': 'btn-tab-wallet',
             'tab-cloud-storage': 'btn-tab-cloud',
+            'tab-tts-studio': 'btn-tab-tts',
             'tab-team': 'btn-tab-team',
             'tab-ai-connection': 'btn-tab-ai',
             'tab-downloads': 'btn-tab-downloads',
@@ -3909,6 +3953,7 @@ if (isset($_GET['registered'])) {
                 'tab-orders-history': 'Lịch Sử Giao Dịch',
                 'tab-wallet-view': 'Ví & Token',
                 'tab-cloud-storage': 'Cloud Storage',
+                'tab-tts-studio': 'Text-to-Speech & Voice Cloning',
                 'tab-team': 'Đội Nhóm (Team)',
                 'tab-ai-connection': 'AI Connection',
                 'tab-downloads': 'Tải Phần Mềm',
@@ -3922,6 +3967,9 @@ if (isset($_GET['registered'])) {
             }
             if (tabId === 'tab-cloud-storage') {
                 initCloudUI();
+            }
+            if (tabId === 'tab-tts-studio') {
+                initTtsStudio();
             }
             const sidebar = document.getElementById('v3-app-sidebar');
             if (sidebar && sidebar.classList.contains('mobile-open')) {
@@ -4019,6 +4067,640 @@ if (isset($_GET['registered'])) {
             .catch(() => {
                 alert('Lỗi kết nối khi thu hồi AI Key');
             });
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // 🧠 2TOOLNE LOCAL AI SKILL & DOCS INTERACTION
+        // ═══════════════════════════════════════════════════════════════════════════
+        function switchAiDocTab(tabName) {
+            const tabs = ['setup', 'schemas', 'prompts', 'tools', 'examples'];
+            tabs.forEach(t => {
+                const btn = document.getElementById('subtab-btn-' + t);
+                const panel = document.getElementById('subpanel-ai-' + t);
+                if (btn) btn.classList.toggle('active', t === tabName);
+                if (panel) panel.classList.toggle('active', t === tabName);
+            });
+        }
+
+        function copyAiSkillContent() {
+            const raw = document.getElementById('v3-raw-skill-content')?.value || '';
+            if (!raw) {
+                if (typeof showToast === 'function') showToast('Không tìm thấy nội dung SKILL.md', 'error');
+                else alert('Không tìm thấy nội dung SKILL.md');
+                return;
+            }
+            navigator.clipboard.writeText(raw).then(() => {
+                if (typeof showToast === 'function') {
+                    showToast('Đã sao chép toàn bộ nội dung SKILL.md vào bộ nhớ tạm!', 3500);
+                } else {
+                    alert('Đã sao chép toàn bộ SKILL.md!');
+                }
+            }).catch(() => {
+                const ta = document.createElement('textarea');
+                ta.value = raw;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                if (typeof showToast === 'function') {
+                    showToast('Đã sao chép toàn bộ nội dung SKILL.md vào bộ nhớ tạm!', 3500);
+                } else {
+                    alert('Đã sao chép toàn bộ SKILL.md!');
+                }
+            });
+        }
+
+        function copyAiPromptTemplate(templateId) {
+            const el = document.getElementById('ai-prompt-template-' + templateId);
+            if (!el) return;
+            const text = el.innerText || el.textContent || '';
+            navigator.clipboard.writeText(text).then(() => {
+                if (typeof showToast === 'function') {
+                    showToast('Đã sao chép câu lệnh mẫu ' + templateId + '!', 'success');
+                } else {
+                    alert('Đã sao chép câu lệnh mẫu ' + templateId + '!');
+                }
+            }).catch(() => {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                if (typeof showToast === 'function') {
+                    showToast('Đã sao chép câu lệnh mẫu ' + templateId + '!', 'success');
+                } else {
+                    alert('Đã sao chép câu lệnh mẫu ' + templateId + '!');
+                }
+            });
+        }
+
+        function openViewSkillModal() {
+            openV3Modal('modal-v3-view-skill');
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // 🎙️ 2TOOLNE TEXT-TO-SPEECH & VOICE CLONING STUDIO ENGINE
+        // ═══════════════════════════════════════════════════════════════════════════
+        let _ttsVoices = [];
+        let _ttsPollingInterval = null;
+        let _ttsIsSubmitting = false;
+
+        function initTtsStudio() {
+            updateTtsCharCount();
+            loadTtsVoices();
+            syncTtsSpacesAndFolders();
+            fetchTtsJobs(true);
+            startTtsQueuePolling();
+        }
+
+        function updateTtsCharCount() {
+            const el = document.getElementById('tts-input-text');
+            const countEl = document.getElementById('tts-char-count');
+            if (!el || !countEl) return;
+            const len = el.value.length;
+            countEl.textContent = len.toLocaleString() + ' / 10,000';
+            if (len > 10000) {
+                countEl.style.color = '#EF4444';
+                countEl.style.fontWeight = 'bold';
+            } else {
+                countEl.style.color = 'var(--v3-text-muted)';
+                countEl.style.fontWeight = 'normal';
+            }
+        }
+
+        function loadTtsVoices() {
+            const langSelect = document.getElementById('tts-language-select');
+            const currentLang = langSelect ? langSelect.value : 'en';
+
+            fetch('/api/v1/tts/voices')
+                .then(res => res.json())
+                .then(data => {
+                    if (data && data.success && Array.isArray(data.data)) {
+                        _ttsVoices = data.data;
+                    } else if (Array.isArray(data.presets)) {
+                        _ttsVoices = (data.presets || []).concat(data.custom || []);
+                    }
+                    renderTtsVoiceSelect(currentLang);
+                })
+                .catch(err => {
+                    console.error('Error loading TTS voices:', err);
+                });
+        }
+
+        function renderTtsVoiceSelect(lang) {
+            const sel = document.getElementById('tts-voice-select');
+            if (!sel) return;
+
+            const selectedVal = sel.value;
+            sel.innerHTML = '';
+
+            const matched = _ttsVoices.filter(v => {
+                if (v.status === 'COMING_SOON' || v.status === 'PLANNED') return false;
+                if (v.language === lang || v.primary_language === lang) return true;
+                if (Array.isArray(v.supported_languages) && v.supported_languages.includes(lang)) return true;
+                if (Array.isArray(v.supported_target_languages) && v.supported_target_languages.includes(lang)) return true;
+                return false;
+            });
+
+            const presets = matched.filter(v => v.type === 'preset' || v.is_preset);
+            const custom = matched.filter(v => v.type === 'cloned' || v.type === 'CUSTOM' || (!v.is_preset && v.type !== 'preset'));
+
+            if (presets.length > 0) {
+                const optGroup = document.createElement('optgroup');
+                optGroup.label = 'Giọng Mẫu Tiêu Chuẩn (Presets)';
+                presets.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.id;
+                    opt.textContent = `${p.name} (${(p.gender || 'Giọng AI')}) · ${p.engine || 'Qwen3-TTS'}`;
+                    optGroup.appendChild(opt);
+                });
+                sel.appendChild(optGroup);
+            }
+
+            if (custom.length > 0) {
+                const optGroup = document.createElement('optgroup');
+                optGroup.label = 'Giọng Của Tôi (My Cloned Voices)';
+                custom.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.id;
+                    opt.textContent = `🧬 ${c.name} (Cloned Voice)`;
+                    optGroup.appendChild(opt);
+                });
+                sel.appendChild(optGroup);
+            }
+
+            if (matched.length === 0) {
+                const opt = document.createElement('option');
+                opt.value = '';
+                opt.textContent = '-- Không có giọng cho ngôn ngữ này --';
+                sel.appendChild(opt);
+            }
+
+            if (selectedVal && Array.from(sel.options).some(o => o.value === selectedVal)) {
+                sel.value = selectedVal;
+            }
+        }
+
+        function onTtsLanguageChanged() {
+            const langSelect = document.getElementById('tts-language-select');
+            if (!langSelect) return;
+            const lang = langSelect.value;
+            const submitBtn = document.getElementById('btn-tts-submit');
+            if (lang === 'vi') {
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.style.opacity = '0.5';
+                    submitBtn.style.cursor = 'not-allowed';
+                    submitBtn.title = 'Đang phát triển (Coming Soon) - Chờ engine VoxCPM';
+                }
+            } else {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.style.opacity = '1';
+                    submitBtn.style.cursor = 'pointer';
+                    submitBtn.title = '';
+                }
+            }
+            renderTtsVoiceSelect(lang);
+        }
+
+        function onTtsFormatChanged() {
+            const fmt = document.getElementById('tts-format-select')?.value || 'wav';
+            const fnInput = document.getElementById('tts-output-filename');
+            if (fnInput && fnInput.value) {
+                const base = fnInput.value.replace(/\.(wav|mp3|m4a|ogg)$/i, '');
+                fnInput.value = base + '.' + fmt;
+            }
+        }
+
+        function syncTtsSpacesAndFolders() {
+            onTtsSpaceChanged();
+        }
+
+        function onTtsSpaceChanged() {
+            const spaceId = document.getElementById('tts-space-select')?.value;
+            const folderSelect = document.getElementById('tts-folder-select');
+            if (!folderSelect || !spaceId) return;
+
+            fetch('/api/v1/cloud/files?space_id=' + encodeURIComponent(spaceId) + '&parent_id=root&type=FOLDER')
+                .then(res => res.json())
+                .then(data => {
+                    const folders = data.folders || data.items || [];
+                    folderSelect.innerHTML = '<option value="">-- Thư mục gốc (Root) --</option>';
+                    folders.forEach(f => {
+                        const opt = document.createElement('option');
+                        opt.value = f.id;
+                        opt.textContent = '📁 ' + f.name;
+                        folderSelect.appendChild(opt);
+                    });
+                })
+                .catch(() => {});
+        }
+
+        function submitTtsJob() {
+            if (_ttsIsSubmitting) return;
+
+            const textInput = document.getElementById('tts-input-text');
+            const text = (textInput?.value || '').trim();
+            if (!text) {
+                alert('Vui lòng nhập văn bản kịch bản cần đọc!');
+                textInput?.focus();
+                return;
+            }
+            if (text.length > 10000) {
+                alert('Văn bản vượt quá giới hạn cho phép (tối đa 10,000 ký tự)!');
+                return;
+            }
+
+            const voiceId = document.getElementById('tts-voice-select')?.value;
+            if (!voiceId) {
+                alert('Vui lòng chọn một giọng đọc AI!');
+                return;
+            }
+
+            const language = document.getElementById('tts-language-select')?.value || 'en';
+            const speed = parseFloat(document.getElementById('tts-speed-slider')?.value || '1.0');
+            const format = document.getElementById('tts-format-select')?.value || 'wav';
+            let filename = (document.getElementById('tts-output-filename')?.value || '').trim();
+            if (!filename) {
+                filename = 'narration_' + Date.now().toString().slice(-6) + '.' + format;
+                if (document.getElementById('tts-output-filename')) {
+                    document.getElementById('tts-output-filename').value = filename;
+                }
+            }
+
+            const spaceId = document.getElementById('tts-space-select')?.value || null;
+            const folderId = document.getElementById('tts-folder-select')?.value || null;
+
+            const submitBtn = document.getElementById('btn-tts-submit');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span>Đang gửi tác vụ vào hàng đợi...</span>';
+            }
+            _ttsIsSubmitting = true;
+
+            fetch('/api/v1/tts/jobs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text: text,
+                    voice_id: voiceId,
+                    language: language,
+                    speed: speed,
+                    format: format,
+                    output_filename: filename,
+                    cloud_space_id: spaceId,
+                    folder_id: folderId
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data && (data.success || data.job)) {
+                    if (typeof showToast === 'function') {
+                        showToast('🎉 Đã gửi tác vụ TTS vào hàng đợi xử lý!', 'success');
+                    } else {
+                        alert('Đã gửi tác vụ TTS thành công!');
+                    }
+                    fetchTtsJobs(true);
+                    startTtsQueuePolling();
+                } else {
+                    alert('Lỗi tạo tác vụ TTS: ' + (data.error || data.message || 'Không xác định'));
+                }
+            })
+            .catch(err => {
+                console.error('Error submitting TTS job:', err);
+                alert('Lỗi kết nối máy chủ khi tạo tác vụ TTS.');
+            })
+            .finally(() => {
+                _ttsIsSubmitting = false;
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg><span>Tạo Giọng Đọc AI (Generate)</span>';
+                }
+            });
+        }
+
+        function fetchTtsJobs(manual = false) {
+            const container = document.getElementById('tts-queue-container');
+            const badge = document.getElementById('tts-active-badge');
+
+            fetch('/api/v1/tts/jobs?limit=25')
+                .then(res => res.json())
+                .then(data => {
+                    const jobs = (data && data.success && Array.isArray(data.jobs)) ? data.jobs : (Array.isArray(data.data) ? data.data : []);
+                    renderTtsQueue(jobs);
+
+                    const activeStatuses = ['QUEUED', 'CLAIMED', 'PREPARING', 'GENERATING', 'POST_PROCESSING', 'UPLOADING'];
+                    const activeJobs = jobs.filter(j => activeStatuses.includes(j.status));
+                    if (badge) {
+                        if (activeJobs.length > 0) {
+                            badge.style.display = 'inline-flex';
+                            badge.textContent = `${activeJobs.length} Đang xử lý`;
+                        } else {
+                            badge.style.display = 'none';
+                        }
+                    }
+                })
+                .catch(err => {
+                    if (manual && container) {
+                        container.innerHTML = '<div style="text-align:center;padding:24px;color:#EF4444;">Không thể tải danh sách hàng đợi. Kiểm tra kết nối mạng.</div>';
+                    }
+                });
+        }
+
+        function startTtsQueuePolling() {
+            if (_ttsPollingInterval) clearInterval(_ttsPollingInterval);
+            _ttsPollingInterval = setInterval(() => {
+                const pane = document.getElementById('tab-tts-studio');
+                if (pane && pane.style.display !== 'none') {
+                    fetchTtsJobs(false);
+                }
+            }, 3500);
+        }
+
+        function renderTtsQueue(jobs) {
+            const container = document.getElementById('tts-queue-container');
+            if (!container) return;
+
+            if (!jobs || jobs.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align:center;padding:36px 20px;color:var(--v3-text-muted);">
+                        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:10px;opacity:0.6;"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                        <div style="font-size:13.5px;font-weight:600;color:var(--v3-text-main);margin-bottom:4px;">Hàng đợi âm thanh đang trống</div>
+                        <div style="font-size:12px;">Nhập kịch bản ở trên và nhấn "Tạo Giọng Đọc AI" để xuất bản âm thanh trực tiếp lên Cloud.</div>
+                    </div>
+                `;
+                return;
+            }
+
+            const statusColors = {
+                COMPLETED: { bg: 'rgba(16, 185, 129, 0.15)', text: '#10B981', border: 'rgba(16, 185, 129, 0.3)', label: 'HOÀN THÀNH' },
+                GENERATING: { bg: 'rgba(59, 130, 246, 0.15)', text: '#60A5FA', border: 'rgba(59, 130, 246, 0.3)', label: 'ĐANG XỬ LÝ (AI)' },
+                UPLOADING: { bg: 'rgba(59, 130, 246, 0.15)', text: '#60A5FA', border: 'rgba(59, 130, 246, 0.3)', label: 'ĐANG UPLOAD CLOUD' },
+                CLAIMED: { bg: 'rgba(245, 158, 11, 0.15)', text: '#F59E0B', border: 'rgba(245, 158, 11, 0.3)', label: 'WORKER ĐÃ NHẬN' },
+                QUEUED: { bg: 'rgba(245, 158, 11, 0.15)', text: '#F59E0B', border: 'rgba(245, 158, 11, 0.3)', label: 'CHỜ XỬ LÝ' },
+                FAILED: { bg: 'rgba(239, 68, 68, 0.15)', text: '#EF4444', border: 'rgba(239, 68, 68, 0.3)', label: 'THẤT BẠI' },
+                CANCELLED: { bg: 'rgba(156, 163, 175, 0.15)', text: '#9CA3AF', border: 'rgba(156, 163, 175, 0.3)', label: 'ĐÃ HỦY' }
+            };
+
+            let html = '<div style="display:flex;flex-direction:column;gap:12px;">';
+
+            jobs.forEach(job => {
+                const sConf = statusColors[job.status] || { bg: 'rgba(255,255,255,0.05)', text: '#ccc', border: 'var(--v3-border)', label: job.status };
+                const textPreview = (job.text || '').length > 90 ? (job.text.substring(0, 90) + '...') : (job.text || '');
+                const createdAt = job.created_at ? new Date(job.created_at).toLocaleTimeString() + ' ' + new Date(job.created_at).toLocaleDateString() : '';
+                const isActive = ['QUEUED', 'CLAIMED', 'PREPARING', 'GENERATING', 'POST_PROCESSING', 'UPLOADING'].includes(job.status);
+                const voiceName = job.voice_name || job.voice_id || 'AI Voice';
+
+                html += `
+                    <div style="background:var(--v3-card-bg);border:1px solid var(--v3-border);border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                            <div style="display:flex;align-items:center;gap:10px;">
+                                <span style="display:inline-block;padding:3px 8px;font-size:11px;font-weight:700;border-radius:4px;background:${sConf.bg};color:${sConf.text};border:1px solid ${sConf.border};">
+                                    ${sConf.label}
+                                </span>
+                                <span style="font-size:13px;font-weight:700;color:var(--v3-text-main);">${escapeHtml(job.output_filename || 'narration.wav')}</span>
+                                <span style="font-size:11px;color:var(--v3-text-muted);font-family:monospace;">ID: ${job.id}</span>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:8px;">
+                                <span style="font-size:11.5px;color:var(--v3-text-muted);">${createdAt}</span>
+                                ${isActive ? `
+                                    <button type="button" class="v3-btn v3-btn-outline v3-btn-xs" style="color:#EF4444;border-color:rgba(239,68,68,0.4);" onclick="cancelTtsJob('${job.id}')">
+                                        Hủy
+                                    </button>
+                                ` : ''}
+                            </div>
+                        </div>
+
+                        <div style="font-size:12.5px;color:var(--v3-text-main);background:rgba(0,0,0,0.2);padding:8px 12px;border-radius:6px;border-left:3px solid var(--v3-primary);font-style:italic;">
+                            "${escapeHtml(textPreview)}"
+                        </div>
+
+                        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+                            <div style="display:flex;align-items:center;gap:10px;font-size:11.5px;color:var(--v3-text-muted);">
+                                <span>🎙️ <b>${escapeHtml(voiceName)}</b></span>
+                                <span>🌐 ${(job.language || 'en').toUpperCase()}</span>
+                                <span>⚡ ${(job.speed || 1.0).toFixed(2)}x</span>
+                                <span>💾 ${(job.format || 'wav').toUpperCase()}</span>
+                                ${job.duration_seconds ? `<span>⏱️ ${job.duration_seconds.toFixed(1)}s</span>` : ''}
+                            </div>
+
+                            ${job.status === 'COMPLETED' && job.cloud_file_id ? `
+                                <div style="display:flex;align-items:center;gap:10px;">
+                                    <audio controls preload="none" src="/api/v1/cloud/files/${job.cloud_file_id}/preview" style="height:32px;width:240px;"></audio>
+                                    <a href="/api/v1/cloud/files/${job.cloud_file_id}/download" class="v3-btn v3-btn-secondary v3-btn-xs" download style="text-decoration:none;display:inline-flex;align-items:center;gap:4px;">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                        <span>Tải Về</span>
+                                    </a>
+                                </div>
+                            ` : ''}
+
+                            ${isActive ? `
+                                <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#60A5FA;">
+                                    <div class="v3-spinner" style="width:14px;height:14px;border:2px solid rgba(96,165,250,0.3);border-top-color:#60A5FA;border-radius:50%;animation:spin 1s linear infinite;"></div>
+                                    <span>${job.progress ? (job.progress + '%') : 'Đang xử lý trong nền...'}</span>
+                                </div>
+                            ` : ''}
+
+                            ${job.status === 'FAILED' ? `
+                                <div style="font-size:12px;color:#EF4444;">
+                                    ⚠️ ${escapeHtml(job.error_message || 'Xảy ra lỗi trong quá trình xử lý audio')}
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function cancelTtsJob(jobId) {
+            if (!confirm('Bạn có chắc chắn muốn hủy tác vụ TTS này?')) return;
+            fetch('/api/v1/tts/jobs/' + encodeURIComponent(jobId) + '/cancel', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data && (data.success || data.ok)) {
+                        if (typeof showToast === 'function') showToast('Đã hủy tác vụ TTS!');
+                        fetchTtsJobs(true);
+                    } else {
+                        alert('Không thể hủy tác vụ: ' + (data.error || data.message || 'Lỗi không xác định'));
+                    }
+                })
+                .catch(() => alert('Lỗi kết nối khi hủy tác vụ'));
+        }
+
+        function openMyVoicesModal() {
+            openV3Modal('modal-v3-my-voices');
+            loadMyVoicesList();
+        }
+
+        function loadMyVoicesList() {
+            const listEl = document.getElementById('v3-my-voices-list');
+            if (!listEl) return;
+            listEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--v3-text-muted);">Đang đồng bộ danh sách giọng...</div>';
+
+            fetch('/api/v1/tts/voices')
+                .then(res => res.json())
+                .then(data => {
+                    const all = data.data || (data.presets || []).concat(data.custom || []);
+                    const customVoices = all.filter(v => v.type === 'cloned' || v.type === 'CUSTOM' || (!v.is_preset && v.type !== 'preset'));
+
+                    if (customVoices.length === 0) {
+                        listEl.innerHTML = `
+                            <div style="text-align:center;padding:32px 16px;color:var(--v3-text-muted);">
+                                <div style="font-size:13.5px;font-weight:600;color:var(--v3-text-main);margin-bottom:6px;">Bạn chưa nhân bản mẫu giọng nào</div>
+                                <div style="font-size:12px;margin-bottom:14px;">Tải lên một đoạn audio 5-30 giây để tạo bản sao giọng đọc AI của chính bạn hoặc nhân vật bạn muốn.</div>
+                                <button type="button" class="v3-btn v3-btn-primary v3-btn-sm" onclick="closeV3Modal('modal-v3-my-voices'); openCloneVoiceModal();">
+                                    + Nhân Bản Giọng Mới Ngay
+                                </button>
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    let html = '<div style="display:flex;flex-direction:column;gap:12px;">';
+                    customVoices.forEach(cv => {
+                        html += `
+                            <div style="background:rgba(255,255,255,0.03);border:1px solid var(--v3-border);border-radius:8px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+                                <div>
+                                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                                        <span style="font-size:14px;font-weight:700;color:var(--v3-text-main);">🧬 ${escapeHtml(cv.name)}</span>
+                                        <span class="v3-badge" style="font-size:10.5px;">${(cv.language || cv.primary_language || 'en').toUpperCase()}</span>
+                                    </div>
+                                    <div style="font-size:11.5px;color:var(--v3-text-muted);font-family:monospace;">ID: ${cv.id}</div>
+                                    ${cv.reference_text ? `<div style="font-size:11.5px;color:var(--v3-text-muted);font-style:italic;margin-top:4px;">"${escapeHtml(cv.reference_text)}"</div>` : ''}
+                                </div>
+                                <div style="display:flex;align-items:center;gap:10px;">
+                                    ${cv.reference_file_id ? `
+                                        <audio controls preload="none" src="/api/v1/cloud/files/${cv.reference_file_id}/preview" style="height:30px;width:180px;"></audio>
+                                    ` : ''}
+                                    <button type="button" class="v3-btn v3-btn-outline v3-btn-xs" style="color:#EF4444;border-color:rgba(239,68,68,0.4);" onclick="deleteMyVoice('${cv.id}', '${escapeHtml(cv.name)}')">
+                                        Xóa
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                    listEl.innerHTML = html;
+                })
+                .catch(() => {
+                    listEl.innerHTML = '<div style="text-align:center;padding:24px;color:#EF4444;">Không thể tải danh sách giọng.</div>';
+                });
+        }
+
+        function deleteMyVoice(voiceId, voiceName) {
+            if (!confirm(`Bạn có chắc muốn xóa mẫu giọng "${voiceName}"? Tác vụ này không thể hoàn tác.`)) return;
+            fetch('/api/v1/tts/voices/' + encodeURIComponent(voiceId), { method: 'DELETE' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data && (data.success || data.ok)) {
+                        if (typeof showToast === 'function') showToast('Đã xóa mẫu giọng!');
+                        loadMyVoicesList();
+                        loadTtsVoices();
+                    } else {
+                        alert('Không thể xóa giọng: ' + (data.error || data.message || 'Lỗi không xác định'));
+                    }
+                })
+                .catch(() => alert('Lỗi kết nối khi xóa giọng'));
+        }
+
+        function openCloneVoiceModal() {
+            if (document.getElementById('v3-clone-voice-name')) document.getElementById('v3-clone-voice-name').value = '';
+            if (document.getElementById('v3-clone-voice-file')) document.getElementById('v3-clone-voice-file').value = '';
+            if (document.getElementById('v3-clone-voice-ref-id')) document.getElementById('v3-clone-voice-ref-id').value = '';
+            if (document.getElementById('v3-clone-voice-text')) document.getElementById('v3-clone-voice-text').value = '';
+            if (document.getElementById('v3-clone-voice-consent')) document.getElementById('v3-clone-voice-consent').checked = false;
+            openV3Modal('modal-v3-clone-voice');
+        }
+
+        async function submitCloneVoice() {
+            const consent = document.getElementById('v3-clone-voice-consent')?.checked;
+            if (!consent) {
+                alert('Vui lòng tích xác nhận cam kết bản quyền mẫu giọng nói để tiếp tục!');
+                return;
+            }
+
+            const name = (document.getElementById('v3-clone-voice-name')?.value || '').trim();
+            if (!name) {
+                alert('Vui lòng nhập tên cho mẫu giọng clone!');
+                return;
+            }
+
+            const language = document.getElementById('v3-clone-voice-lang')?.value || 'vi';
+            const refText = (document.getElementById('v3-clone-voice-text')?.value || '').trim();
+            const directRefId = (document.getElementById('v3-clone-voice-ref-id')?.value || '').trim();
+            const fileInput = document.getElementById('v3-clone-voice-file');
+            const file = fileInput?.files?.[0];
+
+            let referenceFileId = directRefId;
+
+            const submitBtn = document.getElementById('btn-submit-clone-voice');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Đang xử lý mẫu giọng...';
+            }
+
+            try {
+                if (!referenceFileId) {
+                    if (!file) {
+                        alert('Vui lòng chọn tệp âm thanh mẫu hoặc nhập mã Cloud File ID!');
+                        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Khởi Tạo & Lưu Mẫu Giọng'; }
+                        return;
+                    }
+
+                    const fd = new FormData();
+                    fd.append('file', file);
+                    fd.append('app_id', 'TTS');
+                    fd.append('category', 'AUDIO');
+
+                    const uploadRes = await fetch('/api/v1/cloud/uploads', {
+                        method: 'POST',
+                        body: fd
+                    });
+                    const uploadData = await uploadRes.json();
+
+                    if (!uploadData || (!uploadData.file_id && !uploadData.id && !uploadData.file)) {
+                        throw new Error(uploadData?.error || uploadData?.message || 'Không thể tải tệp âm thanh lên Cloud');
+                    }
+                    referenceFileId = uploadData.file_id || uploadData.id || (uploadData.file ? uploadData.file.id : null);
+                }
+
+                const res = await fetch('/api/v1/tts/voices', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: name,
+                        language: language,
+                        reference_file_id: referenceFileId,
+                        reference_text: refText
+                    })
+                });
+                const voiceData = await res.json();
+
+                if (voiceData && (voiceData.success || voiceData.voice)) {
+                    if (typeof showToast === 'function') {
+                        showToast('🎉 Nhân bản giọng nói thành công!', 'success');
+                    } else {
+                        alert('Nhân bản giọng nói thành công!');
+                    }
+                    closeV3Modal('modal-v3-clone-voice');
+                    loadTtsVoices();
+                } else {
+                    alert('Lỗi tạo hồ sơ giọng: ' + (voiceData.error || voiceData.message || 'Không rõ nguyên nhân'));
+                }
+            } catch (err) {
+                console.error('Error creating clone voice:', err);
+                alert('Lỗi: ' + (err.message || 'Không thể kết nối máy chủ'));
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Khởi Tạo & Lưu Mẫu Giọng';
+                }
+            }
         }
 
         // ═══════════════════════════════════════════════════════════════════════════
@@ -5251,6 +5933,8 @@ if (isset($_GET['registered'])) {
                 'buy-key':         'tab-buy-key',
                 'pricing':         'tab-buy-key',
                 'products':        'tab-buy-key',
+                'team':            'tab-team',
+                'tab-team':        'tab-team',
                 'features':        'tab-features-view',
                 'bugs':            'tab-bugs-view',
                 'settings':        'tab-settings'

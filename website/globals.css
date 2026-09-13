@@ -49,6 +49,9 @@
   --info: #38BDF8;
   --info-bg: rgba(56, 189, 248, 0.12);
 
+  --emerald: #FF7A00;
+  --emerald-hover: #FF8F1F;
+
   --radius-xs: 4px;
   --radius-sm: 8px;
   --radius-md: 10px;
@@ -61,6 +64,98 @@
 
   --font-sans: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+}
+
+[data-theme="light"] {
+  --background: #F6F4F1;
+  --foreground: #14161A;
+
+  --bg-app: #F6F4F1;
+  --bg-sidebar: #EFECE7;
+  --surface-1: #FFFFFF;
+  --surface-2: #EDE9E3;
+  --surface-3: #E4DFD7;
+  --surface-hover: #E8E4DD;
+  --input-bg: #FFFFFF;
+
+  --border: #DDD8D1;
+  --border-default: #DDD8D1;
+  --border-subtle: #E8E4DD;
+  --border-strong: #CEC7BE;
+  --border-hover: #C2BBB0;
+
+  --brand-primary: #FF7A00;
+  --brand-primary-hover: #FF8F1F;
+  --brand-primary-active: #E66E00;
+  --brand-soft: rgba(255, 122, 0, 0.10);
+  --brand-secondary: #FF8F1F;
+
+  --emerald: #FF7A00;
+  --emerald-hover: #FF8F1F;
+
+  --primary: #FF7A00;
+  --primary-hover: #FF8F1F;
+  --primary-foreground: #FFFFFF;
+  --primary-subtle: rgba(255, 122, 0, 0.10);
+
+  --text-primary: #111827;
+  --text-secondary: #4B5563;
+  --text-muted: #6B7280;
+
+  --muted: #E4E6EB;
+  --muted-foreground: #6B7280;
+  --muted-subtle: #9CA3AF;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.10);
+  --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.12);
+}
+
+@media (prefers-color-scheme: light) {
+  [data-theme="system"] {
+    --background: #F4F5F7;
+    --foreground: #111827;
+
+    --bg-app: #F4F5F7;
+    --bg-sidebar: #ECEEF2;
+    --surface-1: #FFFFFF;
+    --surface-2: #F0F1F4;
+    --surface-3: #E4E6EB;
+    --surface-hover: #EAECEF;
+    --input-bg: #FFFFFF;
+
+    --border: #D7DAE2;
+    --border-default: #D7DAE2;
+    --border-subtle: #E3E5EB;
+    --border-strong: #C4C8D2;
+    --border-hover: #B8BCC8;
+
+    --brand-primary: #FF7A00;
+    --brand-primary-hover: #FF8F1F;
+    --brand-primary-active: #E66E00;
+    --brand-soft: rgba(255, 122, 0, 0.10);
+    --brand-secondary: #FF8F1F;
+
+    --emerald: #FF7A00;
+    --emerald-hover: #FF8F1F;
+
+    --primary: #FF7A00;
+    --primary-hover: #FF8F1F;
+    --primary-foreground: #FFFFFF;
+    --primary-subtle: rgba(255, 122, 0, 0.10);
+
+    --text-primary: #111827;
+    --text-secondary: #4B5563;
+    --text-muted: #6B7280;
+
+    --muted: #E4E6EB;
+    --muted-foreground: #6B7280;
+    --muted-subtle: #9CA3AF;
+
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+    --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.10);
+    --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.12);
+  }
 }
 
 * {
@@ -178,25 +273,29 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .btn-emerald {
-  background: var(--emerald);
+  background: var(--brand-primary);
   color: #ffffff;
   font-weight: 600;
-  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+  border: 1px solid var(--brand-primary);
+  box-shadow: 0 2px 8px rgba(255, 122, 0, 0.25);
+  border-radius: var(--radius-sm);
 }
 .btn-emerald:hover {
-  background: var(--emerald-hover);
+  background: var(--brand-primary-hover);
+  border-color: var(--brand-primary-hover);
+  color: #ffffff;
   transform: translateY(-1px);
 }
 
 .btn-outline, .btn-secondary {
   background: var(--surface-2);
   color: var(--foreground);
-  border-color: var(--border);
+  border: 1px solid var(--border);
 }
 .btn-outline:hover, .btn-secondary:hover {
   background: var(--surface-hover);
   border-color: var(--border-strong);
-  color: #ffffff;
+  color: var(--foreground);
 }
 .btn-outline.active, .btn-secondary.active {
   background: var(--primary) !important;
@@ -277,10 +376,16 @@ h1, h2, h3, h4, h5, h6 {
   border-color: rgba(239, 68, 68, 0.3);
 }
 
-.badge-info, .badge-primary {
-  background: rgba(59, 130, 246, 0.12);
-  color: #60a5fa;
-  border-color: rgba(59, 130, 246, 0.3);
+.badge-primary, .badge-brand {
+  background: rgba(255, 122, 0, 0.12);
+  color: #FF7A00;
+  border-color: rgba(255, 122, 0, 0.3);
+}
+
+.badge-info {
+  background: rgba(56, 189, 248, 0.12);
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.3);
 }
 
 .badge-purple {

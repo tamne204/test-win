@@ -16,6 +16,10 @@ class CloudQuotaManager {
         $this->db = $db ?: Database::getConnection();
     }
 
+    private function forUpdateClause(): string {
+        return ($this->db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite') ? '' : ' FOR UPDATE';
+    }
+
     /**
      * Get detailed quota and usage status for a Cloud Space
      */
@@ -78,9 +82,8 @@ class CloudQuotaManager {
             $stmt = $this->db->prepare("
                 SELECT effective_quota_bytes, used_bytes, reserved_bytes
                 FROM cloud_space_quotas
-                WHERE cloud_space_id = :space_id
-                FOR UPDATE
-            ");
+                WHERE cloud_space_id = :space_id" . $this->forUpdateClause()
+            );
             $stmt->execute([':space_id' => $spaceId]);
             $quota = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -101,9 +104,8 @@ class CloudQuotaManager {
             $saStmt = $this->db->prepare("
                 SELECT total_capacity_bytes, used_capacity_bytes, reserved_capacity_bytes, safety_reserve_percent
                 FROM storage_accounts
-                WHERE id = :acc_id AND status = 'ACTIVE'
-                FOR UPDATE
-            ");
+                WHERE id = :acc_id AND status = 'ACTIVE'" . $this->forUpdateClause()
+            );
             $saStmt->execute([':acc_id' => $storageAccountId]);
             $sa = $saStmt->fetch(PDO::FETCH_ASSOC);
 
@@ -186,9 +188,8 @@ class CloudQuotaManager {
             $stmt = $this->db->prepare("
                 SELECT cloud_space_id, storage_account_id, reserved_bytes, status
                 FROM cloud_upload_reservations
-                WHERE id = :id
-                FOR UPDATE
-            ");
+                WHERE id = :id" . $this->forUpdateClause()
+            );
             $stmt->execute([':id' => $reservationId]);
             $res = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -203,38 +204,39 @@ class CloudQuotaManager {
 
             $spaceId   = $res['cloud_space_id'];
             $accId     = $res['storage_account_id'];
-            $resBytes  = (int)$res['reserved_bytes'];
+            $reserved  = (int)$res['reserved_bytes'];
+            $diffBytes = $actualSizeBytes - $reserved;
 
-            // 1. Update cloud_space_quotas
+            // 1. Convert reserved to used on Cloud Space
             $updSpace = $this->db->prepare("
                 UPDATE cloud_space_quotas
-                SET reserved_bytes = GREATEST(0, CAST(reserved_bytes AS SIGNED) - :res_bytes),
-                    used_bytes     = used_bytes + :actual_bytes,
+                SET reserved_bytes = GREATEST(0, CAST(reserved_bytes AS SIGNED) - :reserved),
+                    used_bytes     = used_bytes + :actual,
                     updated_at     = NOW()
                 WHERE cloud_space_id = :space_id
             ");
             $updSpace->execute([
-                ':res_bytes'    => $resBytes,
-                ':actual_bytes' => $actualSizeBytes,
-                ':space_id'     => $spaceId,
+                ':reserved' => $reserved,
+                ':actual'   => $actualSizeBytes,
+                ':space_id' => $spaceId,
             ]);
 
-            // 2. Update storage_accounts
+            // 2. Convert reserved to used on Storage Account
             $updSa = $this->db->prepare("
                 UPDATE storage_accounts
-                SET reserved_capacity_bytes = GREATEST(0, CAST(reserved_capacity_bytes AS SIGNED) - :res_bytes),
-                    used_capacity_bytes     = used_capacity_bytes + :actual_bytes,
+                SET reserved_capacity_bytes = GREATEST(0, CAST(reserved_capacity_bytes AS SIGNED) - :reserved),
+                    used_capacity_bytes     = used_capacity_bytes + :actual,
                     active_file_count       = active_file_count + 1,
                     updated_at              = NOW()
                 WHERE id = :acc_id
             ");
             $updSa->execute([
-                ':res_bytes'    => $resBytes,
-                ':actual_bytes' => $actualSizeBytes,
-                ':acc_id'       => $accId,
+                ':reserved' => $reserved,
+                ':actual'   => $actualSizeBytes,
+                ':acc_id'   => $accId,
             ]);
 
-            // 3. Mark reservation COMMITTED
+            // 3. Mark reservation as COMMITTED
             $updRes = $this->db->prepare("
                 UPDATE cloud_upload_reservations
                 SET status = 'COMMITTED'
@@ -260,9 +262,8 @@ class CloudQuotaManager {
             $stmt = $this->db->prepare("
                 SELECT cloud_space_id, storage_account_id, reserved_bytes, status
                 FROM cloud_upload_reservations
-                WHERE id = :id
-                FOR UPDATE
-            ");
+                WHERE id = :id" . $this->forUpdateClause()
+            );
             $stmt->execute([':id' => $reservationId]);
             $res = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -347,9 +348,8 @@ class CloudQuotaManager {
             $stmt = $this->db->prepare("
                 SELECT base_quota_bytes, addon_quota_bytes, admin_adjustment_bytes, used_bytes
                 FROM cloud_space_quotas
-                WHERE cloud_space_id = :space_id
-                FOR UPDATE
-            ");
+                WHERE cloud_space_id = :space_id" . $this->forUpdateClause()
+            );
             $stmt->execute([':space_id' => $spaceId]);
             $quota = $stmt->fetch(PDO::FETCH_ASSOC);
 

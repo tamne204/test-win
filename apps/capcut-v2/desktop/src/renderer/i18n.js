@@ -46,11 +46,11 @@ const translations = {
     'sub.btn_start_autosub': '🎙️ BẮT ĐẦU TỰ ĐỘNG TẠO PHỤ ĐỀ (AutoSub)',
 
     // Queue View
-    'queue.title': 'Hàng Đợi Tạo Dự Án & Xuất Video',
-    'queue.sub': 'Quản lý hàng đợi tạo dự án và xuất video CapCut tự động theo thứ tự an toàn',
-    'queue.btn_resume': '▶️ Chạy Hàng Đợi',
-    'queue.btn_pause': '⏸️ Tạm Dừng',
-    'queue.btn_clear': '🧹 Xóa Đã Xong',
+    'queue.title': 'Hàng Đợi Xử Lý (Pipeline Queue V2)',
+    'queue.sub': 'Quản lý hàng đợi xử lý Pipeline AI và tạo dự án CapCut tự động theo thứ tự FIFO',
+    'queue.btn_resume': 'Chạy Hàng Đợi',
+    'queue.btn_pause': 'Tạm Dừng',
+    'queue.btn_clear': 'Xóa Đã Xong',
 
     // AI Upscale View
     'upscale.title': 'Phân Hệ 2TOOLNE AI Upscale 4K',
@@ -114,11 +114,11 @@ const translations = {
     'sub.btn_start_autosub': '🎙️ START AUTOSUB GENERATION',
 
     // Queue View
-    'queue.title': 'Render Queue & Video Automation',
-    'queue.sub': 'Manage unattended, sequential CapCut background render jobs safely',
-    'queue.btn_resume': '▶️ Resume Queue',
-    'queue.btn_pause': '⏸️ Pause Queue',
-    'queue.btn_clear': '🗑️ Clear Completed',
+    'queue.title': 'Pipeline Queue V2 (AI Workflow & CapCut)',
+    'queue.sub': 'Manage unattended, sequential AI video pipeline jobs safely',
+    'queue.btn_resume': 'Resume Queue',
+    'queue.btn_pause': 'Pause Queue',
+    'queue.btn_clear': 'Clear Completed',
 
     // AI Upscale View
     'upscale.title': '2TOOLNE AI Upscale 4K Engine',

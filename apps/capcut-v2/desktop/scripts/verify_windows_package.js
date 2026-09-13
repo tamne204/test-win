@@ -146,13 +146,19 @@ for (const mf of requiredModels) {
 console.log('\n--- 3. DIST / WIN-UNPACKED RESOURCES AUDIT ---');
 if (fs.existsSync(DIST_WIN)) {
   const distBinDir = path.join(DIST_WIN, 'resources', 'bin', 'win-x64');
-  const distCoreExe = path.join(DIST_WIN, 'resources', 'autoedit-core', 'autoedit-core.exe');
+  const distCoreCandidates = [
+    path.join(DIST_WIN, 'resources', 'autoedit-core', 'win-x64', 'autoedit-core.exe'),
+    path.join(DIST_WIN, 'resources', 'autoedit-core', 'win-x64', '2toolne-core.exe'),
+    path.join(DIST_WIN, 'resources', 'autoedit-core', 'autoedit-core.exe'),
+    path.join(DIST_WIN, 'resources', 'autoedit-core', '2toolne-core.exe'),
+  ];
+  const distCoreExe = distCoreCandidates.find(c => fs.existsSync(c)) || distCoreCandidates[0];
   const distEngineDir = path.join(DIST_WIN, 'resources', 'engine', 'win-x64');
 
   verifyPeBinary(path.join(distBinDir, 'ffmpeg.exe'), 'ffmpeg.exe (dist win-unpacked)');
   verifyPeBinary(path.join(distBinDir, 'ffprobe.exe'), 'ffprobe.exe (dist win-unpacked)');
   verifyPeBinary(path.join(distBinDir, 'CapCutUiProbe.exe'), 'CapCutUiProbe.exe (dist win-unpacked)');
-  verifyPeBinary(distCoreExe, 'autoedit-core.exe (dist win-unpacked)');
+  verifyPeBinary(distCoreExe, `${path.basename(distCoreExe)} (dist win-unpacked)`);
   auditDirectoryForCrossOsArtifacts(path.join(DIST_WIN, 'resources', 'autoedit-core'), 'dist/win-unpacked/resources/autoedit-core');
 
   if (fs.existsSync(distEngineDir)) {

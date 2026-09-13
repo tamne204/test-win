@@ -405,6 +405,7 @@ class DesktopBridge:
         script_text = params.get("script_text")
         motion_weights = params.get("motion_weights")
         aspect_ratio = params.get("aspect_ratio")
+        cross_fade_enabled = bool(params.get("cross_fade_enabled", False))
 
         preset = self.preset_manager.get_preset(preset_id)
         builder = TimelineBuilder(preset)
@@ -418,6 +419,7 @@ class DesktopBridge:
             script_text=script_text,
             motion_weights=motion_weights,
             aspect_ratio=aspect_ratio,
+            cross_fade_enabled=cross_fade_enabled,
         )
 
         val_errors = plan.validate(check_files_exist=True)
@@ -442,8 +444,8 @@ class DesktopBridge:
 
         images = params.get("images", [])
         audio_path = params.get("audio_path")
-        srt_source = params.get("srt_source")
-        timing_mode = params.get("timing_mode", TIMING_MODE_FIXED)
+        srt_source = params.get("srt_source") or params.get("srt_path")
+        timing_mode = params.get("timing_mode") or (TIMING_MODE_SRT_DRIVEN if srt_source else TIMING_MODE_FIXED)
         preset_id = params.get("preset_id", "normal")
         project_name = params.get("project_name", "2TOOLNE AutoEdit Project")
         custom_duration = params.get("custom_clip_duration_s")
@@ -453,6 +455,7 @@ class DesktopBridge:
         script_text = params.get("script_text")
         motion_weights = params.get("motion_weights")
         aspect_ratio = params.get("aspect_ratio")
+        cross_fade_enabled = bool(params.get("cross_fade_enabled", False))
 
         # Milestone 1: VALIDATING INPUT
         report("VALIDATING_INPUT", 0.15, "Kiểm tra tệp tin đầu vào...")
@@ -469,7 +472,7 @@ class DesktopBridge:
                 srt_source = align_res.srt_content
                 timing_mode = TIMING_MODE_SRT_DRIVEN
             except Exception as align_err:
-                print(f"Warning: Script alignment failed: {align_err}. Continuing with fixed timing.")
+                sys.stderr.write(f"Warning: Script alignment failed: {align_err}. Continuing with fixed timing.\n")
 
         # Milestone 2: BUILDING TIMELINE
         report("BUILDING_TIMELINE", 0.35, "Xây dựng dòng thời gian và bố cục chuyển động...")
@@ -485,6 +488,8 @@ class DesktopBridge:
             script_text=script_text,
             motion_weights=motion_weights,
             aspect_ratio=aspect_ratio,
+            scenes=params.get("scenes", []),
+            cross_fade_enabled=cross_fade_enabled,
         )
 
         # Milestone 3: VALIDATING EDIT PLAN

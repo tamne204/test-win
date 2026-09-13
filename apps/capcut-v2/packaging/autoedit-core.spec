@@ -1,4 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
+# [DEV_ONLY / DEPRECATED] PyInstaller specification file for development testing only.
+# Production Windows releases MUST use Nuitka onefile compilation via build_nuitka_core.py.
+# CORE_PRODUCTION_PACKAGER=NUITKA
+# PYINSTALLER_PRODUCTION_USAGE=0
 import os
 import sys
 SPEC_DIR = os.path.dirname(os.path.abspath(SPEC))

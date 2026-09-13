@@ -32,6 +32,17 @@ define('TOKEN_COST_4K', 2);
 // Google Drive OAuth 2.0 Configuration (Protected Server-Side Credentials)
 define('GOOGLE_DRIVE_CLIENT_ID', getenv('GOOGLE_DRIVE_CLIENT_ID') ?: '672703700939-vovbmvjtakmah8p1ge6c05etfos54uo2.apps.googleusercontent.com');
 define('GOOGLE_DRIVE_CLIENT_SECRET', getenv('GOOGLE_DRIVE_CLIENT_SECRET') ?: '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');
-define('GOOGLE_DRIVE_REDIRECT_URI', getenv('GOOGLE_DRIVE_REDIRECT_URI') ?: 'https://www.2tamne.site/api/v1/admin/cloud/google/callback');
+define('GOOGLE_DRIVE_REDIRECT_URI', getenv('GOOGLE_DRIVE_REDIRECT_URI') ?: 'https://2tamne.site/api/v1/admin/cloud/google/callback');
 define('GOOGLE_DRIVE_SCOPE', 'https://www.googleapis.com/auth/drive.file');
+
+// TTS & Voice Cloning Configuration
+define('TTS_ENABLED', getenv('TTS_ENABLED') !== 'false');
+define('TTS_BILLING_MODE', getenv('TTS_BILLING_MODE') ?: 'FREE');
+define('TTS_MAX_TEXT_LENGTH', (int)(getenv('TTS_MAX_TEXT_LENGTH') ?: 10000));
+define('TTS_MAX_ACTIVE_JOBS_PER_USER', (int)(getenv('TTS_MAX_ACTIVE_JOBS_PER_USER') ?: 5));
+define('TTS_MAX_RETRIES', (int)(getenv('TTS_MAX_RETRIES') ?: 3));
+define('TTS_WORKER_LEASE_SECONDS', (int)(getenv('TTS_WORKER_LEASE_SECONDS') ?: 90));
+define('TTS_WORKER_HEARTBEAT_SECONDS', (int)(getenv('TTS_WORKER_HEARTBEAT_SECONDS') ?: 30));
+define('TTS_DEFAULT_ENGINE', getenv('TTS_DEFAULT_ENGINE') ?: 'QWEN3_TTS');
+define('TTS_WORKER_SECRET', getenv('TTS_WORKER_SECRET') ?: '2toolne_tts_worker_secret_key_2026');
 

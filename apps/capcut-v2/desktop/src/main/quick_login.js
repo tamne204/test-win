@@ -8,6 +8,7 @@
 const http = require('http');
 const crypto = require('crypto');
 const url = require('url');
+const { AUTH_ENDPOINTS } = require('../common/endpoints');
 
 class QuickLoginManager {
   constructor() {
@@ -21,7 +22,7 @@ class QuickLoginManager {
 
   /**
    * Start the Browser Quick Login flow.
-   * @param {string} apiBaseUrl e.g. "https://www.2tamne.site"
+   * @param {string} [apiBaseUrl] Canonical origin, defaults to AUTH_ENDPOINTS.BASE_URL (https://2tamne.site)
    * @param {Function} openExternalFn e.g. shell.openExternal
    * @returns {Promise<{code: string, verifier: string}>}
    */
@@ -55,7 +56,9 @@ class QuickLoginManager {
 
         this.server.listen(0, '127.0.0.1', () => {
           const port = this.server.address().port;
-          const authUrl = `${apiBaseUrl}/index.php?app_auth=1&port=${port}&challenge=${encodeURIComponent(
+          const baseUrl = apiBaseUrl || AUTH_ENDPOINTS.BASE_URL;
+          const loginEndpoint = baseUrl ? `${baseUrl}/index.php?app_auth=1` : AUTH_ENDPOINTS.LOGIN_PAGE;
+          const authUrl = `${loginEndpoint}&port=${port}&challenge=${encodeURIComponent(
             this.activeChallenge
           )}&state=${encodeURIComponent(this.activeState)}`;
 
@@ -78,7 +81,7 @@ class QuickLoginManager {
   _handleHttpRequest(req, res) {
     try {
       const parsedUrl = new URL(req.url, `http://${req.headers.host || '127.0.0.1'}`);
-      if (parsedUrl.pathname !== '/callback') {
+      if (parsedUrl.pathname !== AUTH_ENDPOINTS.LOOPBACK_PATH) {
         res.writeHead(404, { 'Content-Type': 'text/plain' });
         res.end('Not Found');
         return;
@@ -152,8 +155,8 @@ class QuickLoginManager {
     if (!this.deferred || !this.activeState) return false;
     try {
       const parsedUrl = new URL(rawUrl);
-      const proto = parsedUrl.protocol;
-      if ((proto !== 'toolne:' && proto !== 'twotoolne:' && proto !== '2toolne:') || parsedUrl.hostname !== 'auth') return false;
+      const proto = parsedUrl.protocol.replace(/:$/, '');
+      if (!AUTH_ENDPOINTS.DEEP_LINK_SCHEMES.includes(proto) || parsedUrl.hostname !== 'auth') return false;
 
       const params = parsedUrl.searchParams;
       const state = params.get('state');

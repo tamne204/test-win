@@ -6,6 +6,7 @@ conflict detection, and rollback into CapCut Desktop's draft directory.
 from __future__ import annotations
 
 import os
+import sys
 import re
 import json
 import time
@@ -178,7 +179,7 @@ class CapCutProjectManager:
         project_id = str(uuid.uuid4()).upper()
         now_ts = int(time.time())
         project_slug = sanitize_windows_filename(edit_plan.project.name)
-        folder_name = f"2toolne_{now_ts}_{project_slug}"
+        folder_name = f"2toolne_{now_ts}_{uuid.uuid4().hex[:6]}_{project_slug}"
 
         # Setup structured workspace: projects_capcut/<project_id>/
         project_workspace = os.path.join(self.staging_base_dir, project_id)
@@ -261,7 +262,7 @@ class CapCutProjectManager:
                     raise SecurityError(f"Path traversal detected: Destination '{canonical_dest}' escapes '{canonical_root}'")
 
                 if os.path.exists(capcut_draft_dir):
-                    raise FileExistsError(f"Safety violation: Target draft path already exists: {capcut_draft_dir}")
+                    shutil.rmtree(capcut_draft_dir, ignore_errors=True)
 
                 manifest["status"] = STATUS_INSTALLING_DRAFT
                 self._write_manifest(manifest_path, manifest)
@@ -311,7 +312,7 @@ class CapCutProjectManager:
 
         except Exception as exc:
             # ROLLBACK TRIGGER
-            print(f"⚠️ [Rollback] {ERR_ROLLBACK} triggered: {exc}")
+            sys.stderr.write(f"⚠️ [Rollback] {ERR_ROLLBACK} triggered: {exc}\n")
             manifest["status"] = STATUS_ERROR
             manifest["error"] = str(exc)
             self._write_manifest(manifest_path, manifest)
@@ -320,17 +321,17 @@ class CapCutProjectManager:
             if installed_dir and os.path.exists(installed_dir):
                 try:
                     shutil.rmtree(installed_dir, ignore_errors=True)
-                    print(f"🧹 [Rollback] Removed incomplete draft: {installed_dir}")
+                    sys.stderr.write(f"🧹 [Rollback] Removed incomplete draft: {installed_dir}\n")
                 except Exception as e:
-                    print(f"Error removing incomplete draft during rollback: {e}")
+                    sys.stderr.write(f"Error removing incomplete draft during rollback: {e}\n")
 
             # 2. Restore root_meta_info.json from backup if touched
             if backup_meta_path and root_meta_path and os.path.exists(backup_meta_path):
                 try:
                     shutil.copy2(backup_meta_path, root_meta_path)
-                    print(f"🔄 [Rollback] Restored root_meta_info.json from backup: {backup_meta_path}")
+                    sys.stderr.write(f"🔄 [Rollback] Restored root_meta_info.json from backup: {backup_meta_path}\n")
                 except Exception as e:
-                    print(f"Error restoring root_meta_info backup: {e}")
+                    sys.stderr.write(f"Error restoring root_meta_info backup: {e}\n")
 
             raise exc
 
@@ -456,5 +457,5 @@ class CapCutProjectManager:
                     with open(target_path, "w", encoding="utf-8") as f:
                         f.write(content)
                 except Exception as e:
-                    print(f"Warning remapping {file_name}: {e}")
+                    sys.stderr.write(f"Warning remapping {file_name}: {e}\n")
 

@@ -16,6 +16,7 @@ const os = require('os');
 const https = require('https');
 const http = require('http');
 const { SidecarManager } = require('./sidecar');
+const { verifyApplicationIntegrity } = require('./integrity_guard');
 const { SecureStorage } = require('./secure_storage');
 const { FileImporter } = require('./file_importer');
 const { QuickLoginManager } = require('./quick_login');
@@ -27,14 +28,39 @@ const { FlowProfileManager } = require('./flow/flow_profile_manager');
 const { FlowDownloadManager } = require('./flow/flow_download_manager');
 const { GoogleFlowAdapter } = require('./flow/google_flow_adapter');
 const { FlowBrowserManager } = require('./flow/flow_browser_manager');
+const { GlobalPopoverManager } = require('./global_popover_manager');
+const { CrashDiagnosticsManager } = require('./crash_diagnostics');
+const { CANONICAL_ORIGIN, AUTH_ENDPOINTS } = require('../common/endpoints');
 
 let mainWindow = null;
 let flowBrowserManager = null;
+let globalPopoverManager = null;
 const sidecar = new SidecarManager();
-const secureStorage = new SecureStorage();
+
+// Milestone M3: Defer SecureStorage instantiation until app.whenReady()
+let _deferredSecureStorage = null;
+const secureStorage = new Proxy({}, {
+  get(target, prop) {
+    if (!_deferredSecureStorage) {
+      _deferredSecureStorage = new SecureStorage();
+    }
+    const val = _deferredSecureStorage[prop];
+    return typeof val === 'function' ? val.bind(_deferredSecureStorage) : val;
+  },
+  set(target, prop, value) {
+    if (!_deferredSecureStorage) {
+      _deferredSecureStorage = new SecureStorage();
+    }
+    _deferredSecureStorage[prop] = value;
+    return true;
+  }
+});
+
 const fileImporter = new FileImporter();
+const crashDiagnostics = new CrashDiagnosticsManager();
 const quickLoginManager = new QuickLoginManager();
-const cloudClient = new CloudClient({ apiBase: process.env.AUTOEDIT_API_BASE || 'https://www.2tamne.site', secureStorage });
+const API_BASE = CANONICAL_ORIGIN;
+const cloudClient = new CloudClient({ apiBase: API_BASE, secureStorage });
 const workspaceManager = new WorkspaceManager({ cloudClient, secureStorage });
 
 const flowProfileManager = new FlowProfileManager();
@@ -50,38 +76,180 @@ googleFlowAdapter.on('mode-changed', (data) => {
   }
 });
 
+googleFlowAdapter.on('activity-event', (event) => {
+  const targetJobId = event.pipeline_job_id || pipelineQueue.activeJobId;
+  if (targetJobId) {
+    pipelineQueue.recordFlowActivity(targetJobId, event);
+  }
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('flow:activity-event', event);
+  }
+});
+
 const pipelineQueue = new PipelineQueueV2({
   storageDir: path.join(os.homedir(), '.2toolne', 'pipeline_jobs'),
   sidecar,
+  cloudClient,
+  flowProfileManager,
   customExecutor: {
-    generateCharacterRef: async (job, char) => {
+    ensureFlowProject: async (job) => {
+      const rawAccountId = job.options?.flow_account_id || job.flow_account_id;
+      const resolvedProf = flowProfileManager.resolveProfile(rawAccountId);
+      if (!resolvedProf) {
+        throw new Error(`FLOW_PROFILE_NOT_FOUND: Không tìm thấy hồ sơ Google Flow: ${rawAccountId || 'N/A'}`);
+      }
+      const targetAccountId = resolvedProf.id;
+      if (job.options && job.options.flow_account_id !== targetAccountId) {
+        job.options.flow_account_id = targetAccountId;
+        job.flow_account_id = targetAccountId;
+        pipelineQueue._saveJob(job);
+      }
       const activeProf = flowProfileManager.getActiveProfile();
+      if (targetAccountId && flowBrowserManager && targetAccountId !== activeProf?.id) {
+        flowBrowserManager.switchProfile(targetAccountId);
+      }
+
+      if (googleFlowAdapter) {
+        googleFlowAdapter.setMode(job.options?.flow_operating_mode || 'AUTO');
+      }
+
+      const res = await googleFlowAdapter.ensureProject({
+        pipeline_job_id: job.id,
+        bundle_id: job.manifest?.bundle_id || job.bundle_name || job.id,
+        bundle_name: job.bundle_name || job.project_name,
+        project_name: job.project_name || job.bundle_name,
+        flow_profile_id: targetAccountId,
+        flow_project_id: job.flow_project_id || job.options?.flow_project_id,
+      });
+
+      if (res && res.flow_project_id) {
+        job.flow_project_id = res.flow_project_id;
+        job.flow_project_url = res.flow_project_url;
+        job.flow_project_name = res.flow_project_name;
+        job.flow_project_created_at = res.created_at || job.flow_project_created_at || new Date().toISOString();
+        if (job.options) {
+          job.options.flow_project_id = res.flow_project_id;
+          job.options.flow_project_url = res.flow_project_url;
+          job.options.flow_project_name = res.flow_project_name;
+        }
+        pipelineQueue._saveJob(job);
+      }
+      return res;
+    },
+    generateCharacterRef: async (job, char) => {
+      const rawAccountId = job.options?.flow_account_id || job.flow_account_id;
+      const resolvedProf = flowProfileManager.resolveProfile(rawAccountId);
+      if (!resolvedProf) {
+        throw new Error(`FLOW_PROFILE_NOT_FOUND: Không tìm thấy hồ sơ Google Flow: ${rawAccountId || 'N/A'}`);
+      }
+      const targetAccountId = resolvedProf.id;
+      if (job.options && job.options.flow_account_id !== targetAccountId) {
+        job.options.flow_account_id = targetAccountId;
+        job.flow_account_id = targetAccountId;
+        pipelineQueue._saveJob(job);
+      }
+      const activeProf = flowProfileManager.getActiveProfile();
+      if (targetAccountId && flowBrowserManager && targetAccountId !== activeProf?.id) {
+        flowBrowserManager.switchProfile(targetAccountId);
+      }
+
+      if (googleFlowAdapter) {
+        googleFlowAdapter.setMode('AUTO');
+      }
+      if (flowBrowserManager) {
+        flowBrowserManager.sendOverlayEvent('set-automation-state', { mode: 'AUTO', executionState: 'ACTIVE' });
+      }
+
+      // Preserve character prompt (Section 1)
+      const promptText = (char.prompt && char.prompt.trim()) ? char.prompt.trim() : (char.description || char.name);
       const task = {
         pipeline_job_id: job.id,
         scene_id: 'REF',
         generation_type: 'character_ref',
         character_id: char.id,
-        prompt: char.prompt || char.name,
+        prompt: promptText,
         target_dir: path.join(job.bundle_dir, 'refs', char.id),
         slug: char.name,
-        flow_account_id: job.flow_account_id || (activeProf ? activeProf.id : 'flowacc_default'),
+        flow_account_id: targetAccountId,
+        flow_project_id: job.flow_project_id || job.options?.flow_project_id,
+        flow_operating_mode: job.options?.flow_operating_mode || 'AUTO',
+        operating_mode: job.options?.flow_operating_mode || 'AUTO',
       };
       const result = await googleFlowAdapter.generateCharacterReference(task);
       char.reference_image_path = result.path;
+      char.ref_image_path = result.path;
       char.status = 'READY';
       return result;
     },
     generateImage: async (job, scene) => {
+      const rawAccountId = job.options?.flow_account_id || job.flow_account_id;
+      const resolvedProf = flowProfileManager.resolveProfile(rawAccountId);
+      if (!resolvedProf) {
+        throw new Error(`FLOW_PROFILE_NOT_FOUND: Không tìm thấy hồ sơ Google Flow: ${rawAccountId || 'N/A'}`);
+      }
+      const targetAccountId = resolvedProf.id;
+      if (job.options && job.options.flow_account_id !== targetAccountId) {
+        job.options.flow_account_id = targetAccountId;
+        job.flow_account_id = targetAccountId;
+        pipelineQueue._saveJob(job);
+      }
       const activeProf = flowProfileManager.getActiveProfile();
+      if (targetAccountId && flowBrowserManager && targetAccountId !== activeProf?.id) {
+        flowBrowserManager.switchProfile(targetAccountId);
+      }
+
+      if (googleFlowAdapter) {
+        googleFlowAdapter.setMode('AUTO');
+      }
+      if (flowBrowserManager) {
+        flowBrowserManager.sendOverlayEvent('set-automation-state', { mode: 'AUTO', executionState: 'ACTIVE' });
+        flowBrowserManager.sendOverlayEvent('set-task-state', {
+          task: {
+            scene_idx: Number(scene.scene_id) || (job.scenes?.indexOf(scene) + 1) || 1,
+            total_scenes: job.scenes?.length || 1,
+            scene_desc: scene.prompt || `Cảnh ${scene.scene_id}`,
+            progress: 15,
+          }
+        });
+      }
+
+      // Canonical aspect ratio (Section 1)
+      const resolvedAspect = scene.image_aspect_ratio || scene.aspect_ratio || job.aspect_ratio || '16:9';
+
+      // Resolve character references (Section 2)
+      const charIds = scene.character_ids || [];
+      const resolvedRefs = [];
+      for (const cid of charIds) {
+        const found = (job.characters || []).find(c => c.id === cid);
+        if (!found) {
+          throw new Error(`FLOW_CHARACTER_ERROR: Scene ${scene.scene_id} yêu cầu nhân vật '${cid}' nhưng không tồn tại.`);
+        }
+        if (found.status !== 'APPROVED') {
+          throw new Error(`FLOW_CHARACTER_ERROR: Scene ${scene.scene_id} yêu cầu nhân vật '${found.name || cid}' nhưng chưa được duyệt (status: ${found.status}).`);
+        }
+        const refPath = found.reference_image_path || found.ref_image_path;
+        if (!refPath || !fs.existsSync(refPath)) {
+          throw new Error(`FLOW_CHARACTER_ERROR: Scene ${scene.scene_id} yêu cầu nhân vật '${found.name || cid}' nhưng tệp ảnh tham chiếu không tồn tại: ${refPath}`);
+        }
+        resolvedRefs.push(refPath);
+      }
+
       const task = {
         pipeline_job_id: job.id,
         scene_id: scene.scene_id,
         generation_type: 'image',
         prompt: scene.image_prompt || scene.prompt,
-        aspect_ratio: scene.image_aspect_ratio || job.options.aspect_ratio || '16:9',
+        aspect_ratio: resolvedAspect,
         target_dir: path.join(job.bundle_dir, 'generated', 'images'),
         slug: scene.slug,
-        flow_account_id: job.flow_account_id || (activeProf ? activeProf.id : 'flowacc_default'),
+        flow_account_id: targetAccountId,
+        flow_project_id: job.flow_project_id || job.options?.flow_project_id,
+        reference_files: resolvedRefs,
+        image_model: job.options?.image_model || job.options?.model || 'AUTO',
+        flow_download_resolution: job.options?.flow_download_resolution || job.options?.image_resolution || '1080p',
+        flow_plan_tier: job.options?.flow_plan_tier || 'UNKNOWN',
+        flow_operating_mode: job.options?.flow_operating_mode || 'AUTO',
+        operating_mode: job.options?.flow_operating_mode || 'AUTO',
       };
       const result = await googleFlowAdapter.generateImage(task);
       scene.image_path = result.path;
@@ -89,44 +257,242 @@ const pipelineQueue = new PipelineQueueV2({
       return result;
     },
     generateVideo: async (job, scene) => {
+      const rawAccountId = job.options?.flow_account_id || job.flow_account_id;
+      const resolvedProf = flowProfileManager.resolveProfile(rawAccountId);
+      if (!resolvedProf) {
+        throw new Error(`FLOW_PROFILE_NOT_FOUND: Không tìm thấy hồ sơ Google Flow: ${rawAccountId || 'N/A'}`);
+      }
+      const targetAccountId = resolvedProf.id;
+      if (job.options && job.options.flow_account_id !== targetAccountId) {
+        job.options.flow_account_id = targetAccountId;
+        job.flow_account_id = targetAccountId;
+        pipelineQueue._saveJob(job);
+      }
       const activeProf = flowProfileManager.getActiveProfile();
+      if (targetAccountId && flowBrowserManager && targetAccountId !== activeProf?.id) {
+        flowBrowserManager.switchProfile(targetAccountId);
+      }
+
+      if (googleFlowAdapter) {
+        googleFlowAdapter.setMode('AUTO');
+      }
+      if (flowBrowserManager) {
+        flowBrowserManager.sendOverlayEvent('set-automation-state', { mode: 'AUTO', executionState: 'ACTIVE' });
+        flowBrowserManager.sendOverlayEvent('set-task-state', {
+          task: {
+            scene_idx: Number(scene.scene_id) || (job.scenes?.indexOf(scene) + 1) || 1,
+            total_scenes: job.scenes?.length || 1,
+            scene_desc: scene.video_prompt || scene.prompt || `Cảnh ${scene.scene_id}`,
+            progress: 50,
+          }
+        });
+      }
+
+      // Canonical aspect ratio (Section 1)
+      const resolvedAspect = scene.video_aspect_ratio || scene.aspect_ratio || job.aspect_ratio || '16:9';
+
       const task = {
         pipeline_job_id: job.id,
         scene_id: scene.scene_id,
         generation_type: 'video',
         prompt: scene.video_prompt || scene.prompt,
-        aspect_ratio: scene.video_aspect_ratio || job.options.aspect_ratio || '16:9',
+        aspect_ratio: resolvedAspect,
         target_dir: path.join(job.bundle_dir, 'generated', 'videos'),
         slug: scene.slug,
-        flow_account_id: job.flow_account_id || (activeProf ? activeProf.id : 'flowacc_default'),
+        flow_account_id: targetAccountId,
+        flow_project_id: job.flow_project_id || job.options?.flow_project_id,
         reference_files: [scene.image_path].filter(Boolean),
+        flow_operating_mode: job.options?.flow_operating_mode || 'AUTO',
+        operating_mode: job.options?.flow_operating_mode || 'AUTO',
       };
       const result = await googleFlowAdapter.generateVideo(task);
       scene.video_path = result.path;
       scene.video_status = 'READY';
       return result;
     },
+    upscaleImage: async (job, scene, outputPath, upscaleMode) => {
+      const inputPath = scene.image_path;
+      if (!inputPath || !fs.existsSync(inputPath)) {
+        throw new Error(`Tệp ảnh cảnh ${scene.scene_id} không tồn tại: ${inputPath}`);
+      }
+      fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+      const is4K = upscaleMode === '4K';
+      const scale = is4K ? 4 : 2;
+
+      const binResolver = require('./bin_resolver');
+      const realEsrganResolved = binResolver.resolveRealEsrgan ? binResolver.resolveRealEsrgan() : { path: null };
+
+      if (realEsrganResolved.path && fs.existsSync(realEsrganResolved.path)) {
+        await new Promise((resolve, reject) => {
+          const args = ['-i', inputPath, '-o', outputPath, '-s', String(scale), '-f', 'png'];
+          if (realEsrganResolved.modelsDir && fs.existsSync(realEsrganResolved.modelsDir)) {
+            args.push('-m', realEsrganResolved.modelsDir);
+          }
+          const proc = spawn(realEsrganResolved.path, args, { windowsHide: true });
+          let stderr = '';
+          proc.stderr?.on('data', d => { stderr += d.toString(); });
+          proc.on('close', code => (code === 0 && fs.existsSync(outputPath) ? resolve() : reject(new Error(`Real-ESRGAN exited with code ${code}: ${stderr}`))));
+          proc.on('error', reject);
+        });
+      } else if (process.platform === 'darwin') {
+        const targetDim = is4K ? 3840 : 2560;
+        await new Promise((resolve, reject) => {
+          const sipsProc = spawn('sips', ['-s', 'format', 'png', '-Z', String(targetDim), inputPath, '--out', outputPath], { windowsHide: true });
+          let stderr = '';
+          sipsProc.stderr?.on('data', d => { stderr += d.toString(); });
+          sipsProc.on('close', c => (c === 0 && fs.existsSync(outputPath) ? resolve() : reject(new Error(`Sips failed: ${stderr || c}`))));
+          sipsProc.on('error', reject);
+        });
+      } else {
+        fs.copyFileSync(inputPath, outputPath);
+      }
+
+      return { path: outputPath, ok: true };
+    },
+    syncCloud: async (job) => {
+      if (!cloudClient) return;
+      let spaceId = job.options?.cloud_space_id || job.cloud_space_id;
+      if (!spaceId) {
+        try {
+          const spacesRes = await cloudClient.getSpaces();
+          const list = spacesRes?.spaces || spacesRes?.data || [];
+          if (list.length > 0) {
+            spaceId = list[0].id;
+          }
+        } catch (_) {}
+      }
+      if (!spaceId) {
+        spaceId = 'cs_pers_74b8e67a3e32a2b6';
+      }
+
+      console.log(`[PipelineQueueV2] Cloud sync initiated for job ${job.id} to space ${spaceId}`);
+
+      const projFolderName = `Project_${job.project_name || job.id}`;
+      let folderId = null;
+      try {
+        const fRes = await cloudClient.createFolder(spaceId, projFolderName, null);
+        folderId = fRes?.folder?.id || fRes?.data?.folder?.id || fRes?.id || null;
+      } catch (fErr) {
+        console.warn('[syncCloud] Folder create notice:', fErr.message);
+      }
+
+      const draftPath = job.capcut_draft_path;
+      let uploadedFileId = null;
+      if (draftPath && fs.existsSync(draftPath)) {
+        const infoPath = fs.existsSync(path.join(draftPath, 'draft_info.json'))
+          ? path.join(draftPath, 'draft_info.json')
+          : path.join(draftPath, 'draft_content.json');
+        if (fs.existsSync(infoPath)) {
+          const upRes = await cloudClient.uploadFile(infoPath, spaceId, folderId);
+          if (upRes && upRes.ok) {
+            uploadedFileId = upRes.file?.id || upRes.data?.id || `cf_proj_${job.id}`;
+          }
+        }
+      }
+
+      const cloudProjId = folderId || uploadedFileId || `cproj_${job.id}`;
+      job.cloud_project_id = cloudProjId;
+      job.cloud_sync_status = 'COMPLETED';
+      console.log(`[PipelineQueueV2] Cloud sync completed. Cloud Project ID: ${cloudProjId}`);
+      return { ok: true, cloud_project_id: cloudProjId };
+    },
+    generateTtsAudio: async (job, ttsParams) => {
+      const payload = {
+        text: ttsParams.text,
+        voice_id: ttsParams.voice_id,
+        language: ttsParams.language,
+        output_format: ttsParams.output_format || ttsParams.format || 'wav',
+        settings: ttsParams.settings || {
+          speed: typeof ttsParams.speed === 'number' ? ttsParams.speed : 1.0,
+        },
+        idempotency_key: ttsParams.idempotency_key,
+      };
+      if (ttsParams.cloud_space_id || job.cloud_space_id) {
+        payload.cloud_space_id = ttsParams.cloud_space_id || job.cloud_space_id;
+      }
+      if (ttsParams.folder_id || job.folder_id) {
+        payload.folder_id = ttsParams.folder_id || job.folder_id;
+      }
+      const res = await cloudClient.request('/api/v1/tts/jobs', {
+        method: 'POST',
+        body: payload,
+      });
+      return res?.job || res?.data?.job || res;
+    },
+    getTtsJob: async (job, ttsJobId) => {
+      const res = await cloudClient.request(`/api/v1/tts/jobs/${encodeURIComponent(ttsJobId)}`);
+      return res?.job || res?.data?.job || res;
+    },
+    cancelTtsAudio: async (job, ttsJobId) => {
+      return await cloudClient.request(`/api/v1/tts/jobs/${encodeURIComponent(ttsJobId)}/cancel`, {
+        method: 'POST',
+      });
+    },
+    cacheCloudAudio: async (job, cloudFileId, filename) => {
+      return await cloudClient.cacheAndGetPath({ id: cloudFileId, name: filename });
+    },
   },
 });
 
 pipelineQueue.on('job:progress', (data) => {
+  if (flowBrowserManager) {
+    flowBrowserManager.handlePipelineJobProgress(data);
+  }
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('pipeline:job-progress', data);
   }
 });
 pipelineQueue.on('job:state_changed', (data) => {
+  if (flowBrowserManager) {
+    flowBrowserManager.handlePipelineJobState(data);
+  }
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('pipeline:state-changed', data);
   }
 });
 pipelineQueue.on('job:character_approval_required', (data) => {
+  if (flowBrowserManager) {
+    flowBrowserManager.sendOverlayEvent('set-runner-state', {
+      executionState: 'PAUSED',
+      characterPending: {
+        count: data.characters?.length || 1,
+        characters: data.characters || [],
+      },
+    });
+  }
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('pipeline:character-approval-required', data);
   }
 });
 pipelineQueue.on('job:completed', (data) => {
+  if (flowBrowserManager) {
+    flowBrowserManager.sendOverlayEvent('set-realtime-status', {
+      message: `✓ Hoàn tất ${data.project_name || 'tác vụ'}`,
+      type: 'success',
+      autoHideMs: 3500,
+    });
+    flowBrowserManager.sendOverlayEvent('set-runner-state', {
+      executionState: 'COMPLETE',
+      statusText: 'Hoàn tất tác vụ',
+    });
+    setTimeout(() => {
+      if (flowBrowserManager) flowBrowserManager.rehydrateOverlayState();
+    }, 2200);
+  }
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('pipeline:completed', data);
+  }
+});
+pipelineQueue.on('job:render_handoff', async (data) => {
+  try {
+    if (sidecar) {
+      await sidecar.send('ENQUEUE_RENDER', {
+        project_name: data.project_name,
+        draft_path: data.draft_path,
+      });
+    }
+  } catch (err) {
+    console.warn('[PipelineQueueV2] Auto handoff to Render Queue / Queue B failed:', err.message);
   }
 });
 pipelineQueue.on('job:failed', (data) => {
@@ -134,25 +500,56 @@ pipelineQueue.on('job:failed', (data) => {
     mainWindow.webContents.send('pipeline:failed', data);
   }
 });
+pipelineQueue.on('job:flow_activity', (data) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('pipeline:flow-activity', data);
+  }
+});
 
 const { AutoUpdateManager } = require('./updater/auto_update_manager');
 const autoUpdateManager = new AutoUpdateManager({
-  apiBase: process.env.AUTOEDIT_API_BASE || 'https://www.2tamne.site',
+  apiBase: API_BASE,
   pipelineQueue,
 });
 
-// Register toolne:// and twotoolne:// deep link protocol client (RFC 3986 requires leading ASCII letter)
-if (process.defaultApp) {
-  if (process.argv.length >= 2) {
-    app.setAsDefaultProtocolClient('toolne', process.execPath, [path.resolve(process.argv[1])]);
-    app.setAsDefaultProtocolClient('twotoolne', process.execPath, [path.resolve(process.argv[1])]);
+// Register deep link protocol clients ('toolne', '2toolne', 'twotoolne')
+const PROTOCOL_SCHEMES = AUTH_ENDPOINTS.DEEP_LINK_SCHEMES;
+PROTOCOL_SCHEMES.forEach((scheme) => {
+  if (process.defaultApp) {
+    if (process.argv.length >= 2) {
+      app.setAsDefaultProtocolClient(scheme, process.execPath, [path.resolve(process.argv[1])]);
+    }
+  } else {
+    app.setAsDefaultProtocolClient(scheme);
   }
-} else {
-  app.setAsDefaultProtocolClient('toolne');
-  app.setAsDefaultProtocolClient('twotoolne');
-}
+});
 
-const API_BASE = process.env.AUTOEDIT_API_BASE || 'https://www.2tamne.site';
+// Deep link handling for macOS
+app.on('open-url', (event, urlStr) => {
+  event.preventDefault();
+  console.log('[App] Received open-url:', urlStr);
+  quickLoginManager.handleCustomProtocol(urlStr);
+});
+
+// Deep link handling for Windows (second-instance)
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', (event, argv) => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+    const deepLinkUrl = argv.find((arg) =>
+      PROTOCOL_SCHEMES.some((scheme) => typeof arg === 'string' && arg.startsWith(`${scheme}://`))
+    );
+    if (deepLinkUrl) {
+      console.log('[App] Received second-instance deep-link:', deepLinkUrl);
+      quickLoginManager.handleCustomProtocol(deepLinkUrl);
+    }
+  });
+}
 
 function postJson(endpoint, data) {
   return new Promise((resolve, reject) => {
@@ -182,7 +579,7 @@ function postJson(endpoint, data) {
                 resolve(parsed);
               } else {
                 const err = new Error(parsed.message || parsed.error || `Lỗi máy chủ (${res.statusCode})`);
-                err.code = parsed.error_code || 'SERVER_ERROR';
+                err.code = parsed.error_code || parsed.code || 'SERVER_ERROR';
                 reject(err);
               }
             } catch (e) {
@@ -193,12 +590,16 @@ function postJson(endpoint, data) {
       );
 
       req.on('error', (err) => {
-        reject(new Error(`Không thể kết nối đến máy chủ xác thực: ${err.message}`));
+        const networkErr = new Error(`Không thể kết nối đến máy chủ xác thực: ${err.message}`);
+        networkErr.code = 'NETWORK_ERROR';
+        reject(networkErr);
       });
 
       req.on('timeout', () => {
         req.destroy();
-        reject(new Error('Hết thời gian kết nối tới máy chủ (Timeout).'));
+        const timeoutErr = new Error('Hết thời gian kết nối tới máy chủ (Timeout).');
+        timeoutErr.code = 'NETWORK_ERROR';
+        reject(timeoutErr);
       });
 
       req.write(postData);
@@ -258,15 +659,37 @@ function getJson(endpoint, token = null) {
   });
 }
 
+function getBrandedWindowIcon() {
+  if (process.platform === 'darwin') {
+    return undefined; // macOS manages dock icon natively via .app bundle
+  }
+  const candidates = [
+    path.join(__dirname, '../renderer/assets/icon.png'), // Packaged inside app.asar
+    path.join(process.resourcesPath || '', 'assets', 'icon.ico'),
+    path.join(process.resourcesPath || '', 'assets', 'icon.png'),
+    path.join(__dirname, '../../assets/icon.ico'), // Dev mode
+    path.join(__dirname, '../../assets/icon.png'), // Dev mode
+  ];
+  for (const candidate of candidates) {
+    try {
+      if (candidate && fs.existsSync(candidate)) {
+        return candidate;
+      }
+    } catch (_) {}
+  }
+  return undefined;
+}
+
 async function createWindow() {
+  const windowIcon = getBrandedWindowIcon();
   mainWindow = new BrowserWindow({
     width: 1240,
     height: 840,
     minWidth: 980,
     minHeight: 700,
     title: '2TOOLNE AutoEdit',
-    backgroundColor: '#0F1012',
-    icon: path.join(__dirname, '../../assets/icon.png'),
+    backgroundColor: '#0E0F11',
+    icon: windowIcon,
     show: false,
     webPreferences: {
       contextIsolation: true,
@@ -277,13 +700,15 @@ async function createWindow() {
     },
   });
 
+  crashDiagnostics.attach(mainWindow);
+
   // Content Security Policy (Section 35)
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': [
-          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: file:; connect-src 'self' https://www.2tamne.site;",
+          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: file:; connect-src 'self' https://2tamne.site https://www.2tamne.site;",
         ],
       },
     });
@@ -307,10 +732,31 @@ async function createWindow() {
         profileManager: flowProfileManager,
         downloadManager: flowDownloadManager,
         flowAdapter: googleFlowAdapter,
+        pipelineQueue,
       });
+    }
+    if (!globalPopoverManager) {
+      globalPopoverManager = new GlobalPopoverManager({
+        mainWindow,
+        flowBrowserManager,
+      });
+      globalPopoverManager.setActiveInstance();
+      flowBrowserManager.globalPopoverManager = globalPopoverManager;
     }
     autoUpdateManager.setMainWindow(mainWindow);
     autoUpdateManager.setJobProviders({ pipelineQueue, flowBrowserManager });
+
+    const notifyFlowWindowResized = () => {
+      if (flowBrowserManager && flowBrowserManager.isVisible && mainWindow && !mainWindow.isDestroyed()) {
+        if (mainWindow.webContents && !mainWindow.webContents.isDestroyed()) {
+          mainWindow.webContents.send('flow:window-resized');
+        }
+      }
+    };
+    mainWindow.on('resize', notifyFlowWindowResized);
+    mainWindow.on('maximize', notifyFlowWindowResized);
+    mainWindow.on('unmaximize', notifyFlowWindowResized);
+    mainWindow.on('restore', notifyFlowWindowResized);
   });
 
   mainWindow.webContents.on('did-finish-load', async () => {
@@ -353,6 +799,51 @@ async function createWindow() {
   sidecar.onNotification((event, data) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('autoedit:event', { event, data });
+    }
+  });
+
+  let isExplicitlyQuitting = false;
+  app.on('before-quit', () => {
+    isExplicitlyQuitting = true;
+  });
+
+  mainWindow.on('close', (e) => {
+    if (isExplicitlyQuitting) return;
+
+    // Check if there are active runnable/processing jobs in pipelineQueue
+    const hasActiveJob = pipelineQueue && (
+      pipelineQueue.isProcessing ||
+      pipelineQueue.activeJobId ||
+      Array.from(pipelineQueue.jobs.values()).some(j =>
+        !['PROJECT_READY', 'CANCELLED', 'FAILED'].includes(j.state)
+      )
+    );
+
+    if (hasActiveJob) {
+      e.preventDefault();
+      const choice = dialog.showMessageBoxSync(mainWindow, {
+        type: 'warning',
+        title: 'Thoát ứng dụng 2TOOLNE',
+        message: '2TOOLNE đang có tác vụ đang xử lý.\nNếu thoát, tác vụ hiện tại sẽ dừng và được khôi phục từ checkpoint khi mở lại.',
+        buttons: ['Tiếp tục chạy', 'Thoát ứng dụng'],
+        defaultId: 0,
+        cancelId: 0,
+      });
+
+      if (choice === 1) {
+        // User confirmed quit: persist checkpoint for active jobs
+        if (pipelineQueue && pipelineQueue.activeJobId) {
+          const activeJob = pipelineQueue.jobs.get(pipelineQueue.activeJobId);
+          if (activeJob) {
+            pipelineQueue._saveJob(activeJob);
+          }
+        }
+        isExplicitlyQuitting = true;
+        app.quit();
+      }
+    } else {
+      isExplicitlyQuitting = true;
+      app.quit();
     }
   });
 
@@ -536,7 +1027,9 @@ async function runAiConnectionTrace(win) {
     // Verify subsequent API access using revoked key returns 401 or 403
     const revokedCheckKey = process.env.TEST_REVOKED_KEY || '2tl_ai_51f4ffd2_REVOKED_KEY_VERIFICATION_TEST';
     const postRevokeStatus = await new Promise((resolve) => {
-      const req = https.request('https://www.2tamne.site/api/v1/ai/fs/list', {
+      const targetUrl = new URL('/api/v1/ai/fs/list', API_BASE);
+      const clientMod = targetUrl.protocol === 'https:' ? https : http;
+      const req = clientMod.request(targetUrl, {
         headers: { 'Authorization': 'Bearer ' + revokedCheckKey }
       }, (res) => {
         resolve(res.statusCode);
@@ -1112,6 +1605,50 @@ ipcMain.handle('shell:open-folder', async (_, folderPath) => {
   }
 });
 
+ipcMain.handle('shell:open-project-folder', async (_, { projectId, projectData, draftDir } = {}) => {
+  try {
+    let targetDir = null;
+    if (projectData?.projectDir && fs.existsSync(projectData.projectDir)) {
+      targetDir = projectData.projectDir;
+    } else if (projectData?.bundleDir && fs.existsSync(projectData.bundleDir)) {
+      targetDir = projectData.bundleDir;
+    } else if (projectData?.workspaceDir && fs.existsSync(projectData.workspaceDir)) {
+      targetDir = projectData.workspaceDir;
+    } else {
+      if (projectId) {
+        const wsDir = path.join(storeDataDir, 'workspace', projectId);
+        if (fs.existsSync(wsDir)) targetDir = wsDir;
+      }
+      if (!targetDir && projectId) {
+        const repoDir = path.resolve(__dirname, '../../../../projects_capcut', projectId);
+        if (fs.existsSync(repoDir)) targetDir = repoDir;
+      }
+      if (!targetDir && projectData?.studioData?.mediaList?.length > 0) {
+        const first = projectData.studioData.mediaList[0];
+        const mPath = typeof first === 'string' ? first : first?.path;
+        if (mPath && fs.existsSync(mPath)) {
+          targetDir = path.dirname(mPath);
+        }
+      }
+      if (!targetDir) {
+        targetDir = path.join(storeDataDir, 'workspace', projectId || 'default_project');
+        if (!fs.existsSync(targetDir)) {
+          fs.mkdirSync(targetDir, { recursive: true });
+        }
+      }
+    }
+
+    if (targetDir && fs.existsSync(targetDir)) {
+      await shell.openPath(targetDir);
+      return { ok: true, path: targetDir };
+    }
+    return { ok: false, error: 'Directory not found: ' + targetDir };
+  } catch (err) {
+    console.error('[shell:open-project-folder] Error:', err);
+    return { ok: false, error: err.message };
+  }
+});
+
 // -----------------------------------------------------------------------------
 // Commercial License Management (Phase 4)
 // -----------------------------------------------------------------------------
@@ -1411,7 +1948,7 @@ ipcMain.handle('auth:start-quick-login', async () => {
         console.warn('[QuickLogin] Post-login sync warning:', wsErr.message);
       }
 
-      return { ok: true, user: res.user, token: res.token };
+      return { ok: true, user: res.user };
     } else {
       return { ok: false, error: res?.message || 'Xác thực tài khoản không thành công.' };
     }
@@ -1438,7 +1975,6 @@ ipcMain.handle('auth:get-state', async () => {
       account: {
         authenticated: !!(token && user),
         user: user || null,
-        token: token || null,
       },
       license: {
         valid: !!(licenseStatus?.active || licenseStatus?.authorized),
@@ -1477,7 +2013,7 @@ ipcMain.handle('auth:login', async (_, { email, password }) => {
       } catch (wsErr) {
         console.warn('[Login] Post-login sync warning:', wsErr.message);
       }
-      return { ok: true, user: res.user, token: res.token };
+      return { ok: true, user: res.user };
     } else if (res && res.success) {
       secureStorage.setItem('auth_token', res.access_token || res.token || 'logged_in');
       secureStorage.setItem('auth_user', res.user || { email: email.trim() });
@@ -1515,6 +2051,7 @@ ipcMain.handle('auth:logout', async () => {
     updated_at: null,
     loading: false,
     error: null,
+    error_code: null,
   };
   broadcastWalletState();
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -1527,7 +2064,7 @@ ipcMain.handle('auth:get-user', async () => {
   const token = secureStorage.getItem('auth_token');
   const user = secureStorage.getItem('auth_user');
   if (token && user) {
-    return { ok: true, user, token };
+    return { ok: true, user };
   }
   return { ok: false, user: null };
 });
@@ -1671,6 +2208,56 @@ ipcMain.handle('cloud:revoke-share', async (_, { shareId } = {}) => {
 });
 
 // -----------------------------------------------------------------------------
+// Text-to-Speech & Voice Cloning IPC Handlers (Phase 7 & 8)
+// -----------------------------------------------------------------------------
+
+ipcMain.handle('tts:list-voices', async (_, { lang } = {}) => {
+  const query = lang ? `?language=${encodeURIComponent(lang)}` : '';
+  return await cloudClient.request(`/api/v1/tts/voices${query}`);
+});
+
+ipcMain.handle('tts:create-job', async (_, params) => {
+  return await cloudClient.request('/api/v1/tts/jobs', {
+    method: 'POST',
+    body: params,
+  });
+});
+
+ipcMain.handle('tts:list-jobs', async (_, params = {}) => {
+  const searchParams = new URLSearchParams();
+  if (params && typeof params === 'object') {
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== null) searchParams.append(k, String(v));
+    }
+  }
+  const qs = searchParams.toString();
+  return await cloudClient.request(`/api/v1/tts/jobs${qs ? '?' + qs : ''}`);
+});
+
+ipcMain.handle('tts:get-job', async (_, { jobId } = {}) => {
+  return await cloudClient.request(`/api/v1/tts/jobs/${encodeURIComponent(jobId)}`);
+});
+
+ipcMain.handle('tts:cancel-job', async (_, { jobId } = {}) => {
+  return await cloudClient.request(`/api/v1/tts/jobs/${encodeURIComponent(jobId)}/cancel`, {
+    method: 'POST',
+  });
+});
+
+ipcMain.handle('tts:create-voice', async (_, params) => {
+  return await cloudClient.request('/api/v1/tts/voices', {
+    method: 'POST',
+    body: params,
+  });
+});
+
+ipcMain.handle('tts:delete-voice', async (_, { voiceId } = {}) => {
+  return await cloudClient.request(`/api/v1/tts/voices/${encodeURIComponent(voiceId)}`, {
+    method: 'DELETE',
+  });
+});
+
+// -----------------------------------------------------------------------------
 // Team & Workspace IPC Handlers (Priority 6)
 // -----------------------------------------------------------------------------
 
@@ -1694,6 +2281,36 @@ ipcMain.handle('workspace:switch', async (_, { workspaceId } = {}) => {
   return switchRes;
 });
 
+ipcMain.handle('team:get-plans', async () => {
+  return await cloudClient.getTeamPlans();
+});
+
+ipcMain.handle('team:create-checkout', async (_, { teamName, planId, idempotencyKey } = {}) => {
+  const res = await cloudClient.createTeamCheckout(teamName, planId, idempotencyKey);
+  if (res.ok && res.payment_status === 'COMPLETED' && res.space?.id) {
+    await workspaceManager.syncWorkspaces();
+    workspaceManager.switchWorkspace(res.space.id);
+  }
+  return res;
+});
+
+ipcMain.handle('team:get-checkout-status', async (_, { checkoutId } = {}) => {
+  const res = await cloudClient.getTeamCheckoutStatus(checkoutId);
+  if (res.ok && res.payment_status === 'COMPLETED' && res.space?.id) {
+    await workspaceManager.syncWorkspaces();
+    workspaceManager.switchWorkspace(res.space.id);
+  }
+  return res;
+});
+
+ipcMain.handle('team:open-checkout-url', async (_, { url } = {}) => {
+  if (url && (url.startsWith('https://') || url.startsWith('http://'))) {
+    await shell.openExternal(url);
+    return { ok: true };
+  }
+  return { ok: false, error: 'Invalid checkout URL' };
+});
+
 ipcMain.handle('team:create', async (_, { name } = {}) => {
   const res = await cloudClient.createTeam(name);
   if (res.ok) {
@@ -1715,6 +2332,29 @@ ipcMain.handle('team:list-members', async (_, { teamId } = {}) => {
 
 ipcMain.handle('team:create-invitation', async (_, { teamId, offeredRole, recipientEmail } = {}) => {
   return await cloudClient.createTeamInvitation(teamId, offeredRole, recipientEmail);
+});
+
+ipcMain.handle('team:list-invitations', async (_, { teamId } = {}) => {
+  return await cloudClient.listTeamInvitations(teamId);
+});
+
+ipcMain.handle('team:revoke-invitation', async (_, { teamId, invId } = {}) => {
+  return await cloudClient.revokeTeamInvitation(teamId, invId);
+});
+
+// -----------------------------------------------------------------------------
+// Commercial Token Billing IPC
+// -----------------------------------------------------------------------------
+ipcMain.handle('billing:get-token-packages', async () => {
+  return await cloudClient.getTokenPackages();
+});
+
+ipcMain.handle('billing:create-token-checkout', async (_, { packageId, targetType, teamId, idempotencyKey } = {}) => {
+  return await cloudClient.createTokenCheckout(packageId, targetType, teamId, idempotencyKey);
+});
+
+ipcMain.handle('billing:get-token-checkout-status', async (_, { checkoutId } = {}) => {
+  return await cloudClient.getTokenCheckoutStatus(checkoutId);
 });
 
 ipcMain.handle('team:accept-invitation', async (_, { inviteToken } = {}) => {
@@ -1853,6 +2493,10 @@ ipcMain.handle('pipeline:regenerate-character', async (_, { jobId, characterId }
   return pipelineQueue.regenerateCharacter(jobId, characterId);
 });
 
+ipcMain.handle('pipeline:get-character-preview', async (_, { jobId, characterId } = {}) => {
+  return pipelineQueue.getCharacterPreview(jobId, characterId);
+});
+
 ipcMain.handle('pipeline:get-active-summary', async () => {
   return { ok: true, summary: pipelineQueue.getActiveJobSummary() };
 });
@@ -1873,6 +2517,10 @@ ipcMain.handle('pipeline:delete-job', async (_, { jobId } = {}) => {
   return pipelineQueue.deleteJob(jobId);
 });
 
+ipcMain.handle('pipeline:retry-tts', async (_, { jobId } = {}) => {
+  return pipelineQueue.retryTts(jobId);
+});
+
 // -----------------------------------------------------------------------------
 // Google Flow Browser & Automation IPC Handlers (Phase 4)
 // -----------------------------------------------------------------------------
@@ -1883,6 +2531,29 @@ ipcMain.handle('flow:get-profiles', async () => {
     profiles: flowProfileManager.getProfiles(),
     active_profile_id: flowProfileManager.getActiveProfile()?.id || null,
   };
+});
+
+ipcMain.handle('flow:get-settings', async () => {
+  try {
+    return {
+      ok: true,
+      settings: flowProfileManager ? flowProfileManager.getSettings() : null,
+    };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('flow:update-settings', async (_, { settings } = {}) => {
+  try {
+    let updated = null;
+    if (flowProfileManager) {
+      updated = flowProfileManager.updateSettings(settings || {});
+    }
+    return { ok: true, settings: updated };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
 });
 
 ipcMain.handle('flow:create-profile', async (_, { name }) => {
@@ -1945,6 +2616,9 @@ ipcMain.handle('flow:set-mode', async (_, { mode }) => {
 
 ipcMain.handle('flow:takeover', async () => {
   try {
+    if (pipelineQueue.activeJobId) {
+      pipelineQueue.pause(pipelineQueue.activeJobId);
+    }
     const res = googleFlowAdapter.requestTakeover();
     return { ok: true, ...res };
   } catch (err) {
@@ -1955,17 +2629,35 @@ ipcMain.handle('flow:takeover', async () => {
 ipcMain.handle('flow:resume-auto', async () => {
   try {
     googleFlowAdapter.resumeAutoMode();
+    if (pipelineQueue.activeJobId) {
+      pipelineQueue.resume(pipelineQueue.activeJobId);
+    }
     return { ok: true, mode: 'AUTO' };
   } catch (err) {
     return { ok: false, error: err.message };
   }
 });
 
-ipcMain.handle('flow:reload', async () => {
+ipcMain.handle('flow:reload', async (_, options = {}) => {
   if (flowBrowserManager) {
-    flowBrowserManager.reload();
+    return flowBrowserManager.reload(options);
   }
   return { ok: true };
+});
+
+ipcMain.handle('flow:get-runtime-status', async () => {
+  if (flowBrowserManager && typeof flowBrowserManager.getFlowRuntimeStatus === 'function') {
+    return flowBrowserManager.getFlowRuntimeStatus();
+  }
+  return null;
+});
+
+ipcMain.handle('flow:set-throttling', async (_, { isActive } = {}) => {
+  if (flowBrowserManager && typeof flowBrowserManager.setJobThrottling === 'function') {
+    flowBrowserManager.setJobThrottling(Boolean(isActive));
+    return { ok: true };
+  }
+  return { ok: false };
 });
 
 ipcMain.handle('flow:navigate-flow', async () => {
@@ -1975,9 +2667,16 @@ ipcMain.handle('flow:navigate-flow', async () => {
   return { ok: true };
 });
 
-ipcMain.handle('flow:view-bounds', async (_, { bounds }) => {
+ipcMain.handle('flow:view-show', async (_, { bounds }) => {
   if (flowBrowserManager) {
     flowBrowserManager.show(bounds);
+  }
+  return { ok: true };
+});
+
+ipcMain.handle('flow:view-bounds', async (_, { bounds }) => {
+  if (flowBrowserManager) {
+    flowBrowserManager.setBounds(bounds);
   }
   return { ok: true };
 });
@@ -1987,6 +2686,40 @@ ipcMain.handle('flow:view-hide', async () => {
     flowBrowserManager.hide();
   }
   return { ok: true };
+});
+
+ipcMain.handle('flow:capture-window', async (_, { filePath } = {}) => {
+  if (!mainWindow || mainWindow.isDestroyed()) return { ok: false };
+  const image = await mainWindow.capturePage();
+  if (filePath) {
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(filePath, image.toPNG());
+  }
+  return { ok: true, data: image.toPNG().toString('base64') };
+});
+
+ipcMain.handle('flow:capture-view', async (_, { filePath } = {}) => {
+  const wc = flowBrowserManager?.getWebContents?.();
+  if (!wc || wc.isDestroyed()) return { ok: false };
+  const image = await wc.capturePage();
+  if (filePath) {
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(filePath, image.toPNG());
+  }
+  return { ok: true, data: image.toPNG().toString('base64') };
+});
+
+ipcMain.handle('flow:capture-popover', async (_, { filePath } = {}) => {
+  if (!globalPopoverManager?.popoverView) return { ok: false };
+  const image = await globalPopoverManager.popoverView.webContents.capturePage();
+  if (filePath) {
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(filePath, image.toPNG());
+  }
+  return { ok: true, data: image.toPNG().toString('base64') };
 });
 
 // -----------------------------------------------------------------------------
@@ -2150,7 +2883,8 @@ ipcMain.handle('cloud:materialize-bundle', async (_, { spaceId, folderId, folder
 
     const files = listRes.files || [];
     for (const f of files) {
-      const targetPath = path.join(localDir, f.name);
+      const fileName = f.filename || f.name;
+      const targetPath = path.join(localDir, fileName);
       await cloudClient.downloadFile(f.id, targetPath);
     }
 
@@ -2240,15 +2974,29 @@ ipcMain.handle('upscale:process-images', async (event, { filePaths, resolution =
       return {
         ok: false,
         error: reserveRes?.message || 'Không thể khóa giữ token cho phiên upscale này.',
-        code: 'RESERVATION_FAILED',
+        code: reserveRes?.error_code || reserveRes?.code || 'RESERVATION_FAILED',
       };
     }
     reservationSuccessful = true;
   } catch (reserveErr) {
+    let errMsg = reserveErr.message || '';
+    if (errMsg.includes('SQLSTATE') || errMsg.includes('Data too long')) {
+      errMsg = 'Không thể khóa giữ token cho phiên xử lý. Vui lòng thử lại.';
+    }
+    let errCode = reserveErr.code || 'RESERVATION_FAILED';
+    if (reserveErr.code === 'INVALID_DEVICE_ID') {
+      errCode = 'INVALID_DEVICE_ID';
+    } else if (reserveErr.code === 'INSUFFICIENT_TOKENS' || reserveErr.code === 'INSUFFICIENT_CREDITS') {
+      errCode = 'INSUFFICIENT_CREDITS';
+    } else if (reserveErr.code === 'NETWORK_ERROR') {
+      errCode = 'NETWORK_ERROR';
+    } else if (errMsg.toLowerCase().includes('không đủ') || errMsg.toLowerCase().includes('insufficient')) {
+      errCode = 'INSUFFICIENT_CREDITS';
+    }
     return {
       ok: false,
-      error: reserveErr.message || `Số dư token không đủ. Cần ${totalRequiredTokens} token để phóng to ${filePaths.length} ảnh.`,
-      code: reserveErr.code || 'INSUFFICIENT_TOKENS',
+      error: errMsg || `Số dư token không đủ. Cần ${totalRequiredTokens} token để phóng to ${filePaths.length} ảnh.`,
+      code: errCode,
       requiredTokens: totalRequiredTokens,
     };
   }
@@ -2328,13 +3076,13 @@ ipcMain.handle('upscale:process-images', async (event, { filePaths, resolution =
             if (code === 0 && fs.existsSync(outputP)) {
               resolve();
             } else {
-              const sipsProc = spawn('sips', ['-Z', String(targetDim), inputP, '--out', outputP], { windowsHide: true });
+              const sipsProc = spawn('sips', ['-s', 'format', 'png', '-Z', String(targetDim), inputP, '--out', outputP], { windowsHide: true });
               sipsProc.on('close', (c) => (c === 0 && fs.existsSync(outputP) ? resolve() : reject(new Error('Sips failed'))));
               sipsProc.on('error', reject);
             }
           });
           proc.on('error', () => {
-            const sipsProc = spawn('sips', ['-Z', String(targetDim), inputP, '--out', outputP], { windowsHide: true });
+            const sipsProc = spawn('sips', ['-s', 'format', 'png', '-Z', String(targetDim), inputP, '--out', outputP], { windowsHide: true });
             sipsProc.on('close', (c) => (c === 0 && fs.existsSync(outputP) ? resolve() : reject(new Error('Sips failed'))));
             sipsProc.on('error', reject);
           });
@@ -2478,9 +3226,85 @@ ipcMain.handle('fs:delete-draft', async (_, targetPath) => {
     return { ok: false, error: 'Path is not a recognized generated draft directory. Protected from deletion.' };
   }
   try {
-    fs.rmSync(normalized, { recursive: true, force: true });
-    return { ok: true };
+    if (shell && typeof shell.trashItem === 'function') {
+      try {
+        await shell.trashItem(normalized);
+        return { ok: true };
+      } catch (trashErr) {
+        fs.rmSync(normalized, { recursive: true, force: true });
+        return { ok: true };
+      }
+    } else {
+      fs.rmSync(normalized, { recursive: true, force: true });
+      return { ok: true };
+    }
   } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('fs:delete-project', async (_, { projectId, projectData, draftDir } = {}) => {
+  const deletedPaths = [];
+  try {
+    // 1. Resolve 2TOOLNE project folder
+    let targetDir = null;
+    if (projectData?.projectDir && fs.existsSync(projectData.projectDir)) {
+      targetDir = projectData.projectDir;
+    } else if (projectData?.workspaceDir && fs.existsSync(projectData.workspaceDir)) {
+      targetDir = projectData.workspaceDir;
+    } else if (projectId) {
+      const wsDir = path.join(storeDataDir, 'workspace', projectId);
+      if (fs.existsSync(wsDir)) targetDir = wsDir;
+    }
+    if (!targetDir && projectId) {
+      const repoDir = path.resolve(__dirname, '../../../../projects_capcut', projectId);
+      if (fs.existsSync(repoDir)) targetDir = repoDir;
+    }
+
+    // 2. Trash 2TOOLNE project folder (prefer Trash/Recycle bin)
+    if (targetDir && fs.existsSync(targetDir)) {
+      if (shell && typeof shell.trashItem === 'function') {
+        try {
+          await shell.trashItem(targetDir);
+          deletedPaths.push(targetDir);
+        } catch (e) {
+          fs.rmSync(targetDir, { recursive: true, force: true });
+          deletedPaths.push(targetDir);
+        }
+      } else {
+        fs.rmSync(targetDir, { recursive: true, force: true });
+        deletedPaths.push(targetDir);
+      }
+    }
+
+    // 3. Trash CapCut draft folder if present
+    if (draftDir && typeof draftDir === 'string' && fs.existsSync(draftDir)) {
+      const normalizedDraft = path.normalize(draftDir);
+      const isDraftFolder = (
+        fs.existsSync(path.join(normalizedDraft, 'draft_content.json')) ||
+        fs.existsSync(path.join(normalizedDraft, 'draft_meta_info.json')) ||
+        normalizedDraft.includes('com.lveditor.draft') ||
+        normalizedDraft.includes('.2toolne-autoedit')
+      );
+      if (isDraftFolder) {
+        if (shell && typeof shell.trashItem === 'function') {
+          try {
+            await shell.trashItem(normalizedDraft);
+            deletedPaths.push(normalizedDraft);
+          } catch (e) {
+            fs.rmSync(normalizedDraft, { recursive: true, force: true });
+            deletedPaths.push(normalizedDraft);
+          }
+        } else {
+          fs.rmSync(normalizedDraft, { recursive: true, force: true });
+          deletedPaths.push(normalizedDraft);
+        }
+      }
+    }
+
+    return { ok: true, deletedPaths };
+  } catch (err) {
+    console.error('[fs:delete-project] Error:', err);
     return { ok: false, error: err.message };
   }
 });
@@ -2544,6 +3368,24 @@ ipcMain.handle('updater:get-state', async () => {
 // -----------------------------------------------------------------------------
 
 app.whenReady().then(async () => {
+  // Milestone M3: Instantiation of secureStorage deferred until app.whenReady()
+  _deferredSecureStorage = new SecureStorage();
+  if (cloudClient) cloudClient.secureStorage = _deferredSecureStorage;
+  if (workspaceManager) workspaceManager.secureStorage = _deferredSecureStorage;
+
+  // Pre-flight runtime integrity verification and Native Root of Trust handshake (Milestone 1)
+  try {
+    await verifyApplicationIntegrity({
+      requireBootstrapToken: Boolean(app && app.isPackaged),
+    });
+  } catch (integrityErr) {
+    console.error('[Startup] Aborting launch due to fatal integrity violation:', integrityErr.message);
+    if (app && typeof app.exit === 'function') {
+      app.exit(1);
+    }
+    return; // Halt startup: do NOT mount UI or start sidecar
+  }
+
   try {
     cloudClient.setCacheDir(path.join(app.getPath('userData'), 'cache', 'cloud_assets'));
     await sidecar.start();
@@ -2584,11 +3426,12 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', () => {
   sidecar.stop();
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  app.quit();
 });
 
 app.on('before-quit', () => {
+  if (globalPopoverManager) {
+    globalPopoverManager.destroy();
+  }
   sidecar.stop();
 });

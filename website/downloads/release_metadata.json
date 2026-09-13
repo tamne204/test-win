@@ -1,29 +1,45 @@
 {
-  "version": "2.0.1",
-  "release_tag": "v2.0.1-stable",
-  "build_target": "Windows 10/11 x64",
+  "version": "2.1.1",
+  "release_tag": "v2.1.1-stable",
+  "build_target": "Windows 10/11 x64 & macOS Universal",
   "product": "2TOOLNE AutoEdit V2",
   "authoritative_capcut_version": "9.3.0.3970",
-  "published_at": "2026-09-11T03:00:00+07:00",
+  "published_at": "2026-09-14T01:25:00+07:00",
   "packages": {
     "autoedit_installer": {
-      "package_filename": "2TOOLNE-AutoEdit-Setup-2.0.0.exe",
+      "package_filename": "2TOOLNE-AutoEdit-Setup-2.1.1.exe",
       "latest_filename": "2TOOLNE-AutoEdit-Setup-latest.exe",
-      "download_url": "https://www.2tamne.site/api/v1/downloads/request",
-      "latest_url": "https://www.2tamne.site/api/v1/downloads/request",
-      "sha256": "0d205a795fcf28732c3356687e92fe031a134ffb1183cf5e60ef61f6a0d9d2a6",
-      "size_bytes": 523331420,
-      "size_mb": 499.09,
-      "note": "Bộ cài đặt ban đầu (tự động cập nhật OTA lên v2.0.1 khi khởi chạy)"
+      "download_url": "https://2tamne.site/api/v1/downloads/request",
+      "latest_url": "https://2tamne.site/api/v1/downloads/request",
+      "sha256": "81745a1b52668da41aa136ac7a14f1e0bfd285ca1a97c46874e89c3e1fe632b0",
+      "size_bytes": 220366254,
+      "size_mb": 210.16,
+      "note": "Bộ cài đặt Windows Setup x64 v2.1.1"
     },
     "autoedit_update_package": {
-      "package_filename": "2toolne-autoedit-2.0.1-win-x64.zip",
+      "package_filename": "2toolne-autoedit-2.1.1-win-x64.zip",
       "latest_filename": "2toolne-autoedit-latest-win-x64.zip",
-      "download_url": "https://www.2tamne.site/api/v1/update/download",
-      "sha256": "fcdcb6af72d542e6f58bd2b0ca00b82d73c86fdb8cbf4f4f04e6b01b99a8161e",
-      "size_bytes": 949148943,
-      "size_mb": 905.18,
+      "download_url": "https://2tamne.site/api/v1/update/download",
+      "sha256": "8a9b4bb917a2859fbda77df898cec94f306a152942283da57b46db151ca03a9a",
+      "size_bytes": 290079506,
+      "size_mb": 276.64,
       "compatibility": "Tương thích chính xác CapCut 9.3.0.3970 & Tự động phân giải com.lveditor.draft"
+    },
+    "autoedit_macos_dmg": {
+      "package_filename": "2TOOLNE-AutoEdit-2.1.1.dmg",
+      "latest_filename": "2TOOLNE-AutoEdit-latest.dmg",
+      "download_url": "https://2tamne.site/api/v1/downloads/request",
+      "sha256": "4205a7f7542eaa32b0d8d63f2594ed1d6febea9278749d7e1b664cc30f10281f",
+      "size_bytes": 279390331,
+      "size_mb": 266.45
+    },
+    "autoedit_macos_arm64_dmg": {
+      "package_filename": "2TOOLNE-AutoEdit-2.1.1-arm64.dmg",
+      "latest_filename": "2TOOLNE-AutoEdit-arm64-latest.dmg",
+      "download_url": "https://2tamne.site/api/v1/downloads/request",
+      "sha256": "da9de72937a57715c365d6cddcaa056667cfafa8cc6e3fd005c49e984608fc8c",
+      "size_bytes": 274758284,
+      "size_mb": 262.03
     }
   },
   "legacy_products": {
@@ -35,6 +51,6 @@
   "brand": {
     "name": "2TOOLNE AutoEdit",
     "theme": "Orange & Zinc Dark Premium",
-    "status": "OFFICIAL_PRODUCTION_RELEASE_V2_0_1"
+    "status": "OFFICIAL_PRODUCTION_RELEASE_V2_1_1"
   }
 }

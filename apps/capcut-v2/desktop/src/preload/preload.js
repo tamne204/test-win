@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('autoedit', {
   selectScript: () => ipcRenderer.invoke('dialog:select-script'),
   saveSrtDialog: (defaultName) => ipcRenderer.invoke('dialog:save-srt', defaultName),
   openFolder: (folderPath) => ipcRenderer.invoke('shell:open-folder', folderPath),
+  openProjectFolder: (params) => ipcRenderer.invoke('shell:open-project-folder', params),
   processImportPaths: (paths) => ipcRenderer.invoke('importer:process-paths', { paths }),
   openFilesDialog: (options) => ipcRenderer.invoke('dialog:open-files', options),
   openAudioDialog: () => ipcRenderer.invoke('dialog:open-audio'),
@@ -36,6 +37,7 @@ contextBridge.exposeInMainWorld('autoedit', {
   openPath: (targetPath) => ipcRenderer.invoke('shell:open-path', targetPath),
   showItemInFolder: (targetPath) => ipcRenderer.invoke('shell:show-item-in-folder', targetPath),
   deleteDraftFolder: (targetPath) => ipcRenderer.invoke('fs:delete-draft', targetPath),
+  deleteProjectFolder: (params) => ipcRenderer.invoke('fs:delete-project', params),
   checkForUpdates: (opts) => ipcRenderer.invoke('updater:check-update', opts),
   updater: {
     check: (opts) => ipcRenderer.invoke('updater:check-update', opts),
@@ -128,18 +130,57 @@ contextBridge.exposeInMainWorld('autoedit', {
       ipcRenderer.invoke('cloud:materialize-bundle', { spaceId, folderId, folderName }),
   },
 
+  // Text-to-Speech & Voice Cloning (Phase 7 & 8)
+  tts: {
+    listVoices: (lang) => ipcRenderer.invoke('tts:list-voices', { lang }),
+    createJob: (params) => ipcRenderer.invoke('tts:create-job', params),
+    listJobs: (params) => ipcRenderer.invoke('tts:list-jobs', params),
+    getJob: (jobId) => ipcRenderer.invoke('tts:get-job', { jobId }),
+    cancelJob: (jobId) => ipcRenderer.invoke('tts:cancel-job', { jobId }),
+    createVoice: (params) => ipcRenderer.invoke('tts:create-voice', params),
+    deleteVoice: (voiceId) => ipcRenderer.invoke('tts:delete-voice', { voiceId }),
+  },
+
+
   // Team & Workspace Operations (Priority 6)
   workspace: {
     sync: () => ipcRenderer.invoke('workspace:sync'),
     getActive: () => ipcRenderer.invoke('workspace:get-active'),
     switch: (workspaceId) => ipcRenderer.invoke('workspace:switch', { workspaceId }),
   },
+  popover: {
+    open: (params) => ipcRenderer.invoke('popover:open', params),
+    close: () => ipcRenderer.invoke('popover:close'),
+    toggle: (params) => ipcRenderer.invoke('popover:toggle', params),
+    isOpen: () => ipcRenderer.invoke('popover:is-open'),
+    onAction: (callback) => {
+      const listener = (_, data) => callback(data);
+      ipcRenderer.on('popover:action', listener);
+      return () => ipcRenderer.removeListener('popover:action', listener);
+    },
+    onClosed: (callback) => {
+      const listener = () => callback();
+      ipcRenderer.on('popover:closed', listener);
+      return () => ipcRenderer.removeListener('popover:closed', listener);
+    },
+  },
   team: {
+    getPlans: () => ipcRenderer.invoke('team:get-plans'),
+    createCheckout: (teamName, planId, idempotencyKey) =>
+      ipcRenderer.invoke('team:create-checkout', { teamName, planId, idempotencyKey }),
+    getCheckoutStatus: (checkoutId) =>
+      ipcRenderer.invoke('team:get-checkout-status', { checkoutId }),
+    openCheckoutUrl: (url) =>
+      ipcRenderer.invoke('team:open-checkout-url', { url }),
     create: (name) => ipcRenderer.invoke('team:create', { name }),
     get: (teamId) => ipcRenderer.invoke('team:get', { teamId }),
     listMembers: (teamId) => ipcRenderer.invoke('team:list-members', { teamId }),
     createInvitation: (teamId, offeredRole, recipientEmail) =>
       ipcRenderer.invoke('team:create-invitation', { teamId, offeredRole, recipientEmail }),
+    listInvitations: (teamId) =>
+      ipcRenderer.invoke('team:list-invitations', { teamId }),
+    revokeInvitation: (teamId, invId) =>
+      ipcRenderer.invoke('team:revoke-invitation', { teamId, invId }),
     acceptInvitation: (inviteToken) => ipcRenderer.invoke('team:accept-invitation', { inviteToken }),
     changeRole: (teamId, userId, role) => ipcRenderer.invoke('team:change-role', { teamId, userId, role }),
     removeMember: (teamId, userId) => ipcRenderer.invoke('team:remove-member', { teamId, userId }),
@@ -148,6 +189,17 @@ contextBridge.exposeInMainWorld('autoedit', {
       ipcRenderer.invoke('team:activate-seat', { teamId, deviceAlias, platform }),
     revokeSeat: (teamId, seatId) => ipcRenderer.invoke('team:revoke-seat', { teamId, seatId }),
     delete: (teamId) => ipcRenderer.invoke('team:delete', { teamId }),
+  },
+
+  // Commercial Billing & Token Commerce
+  billing: {
+    getTokenPackages: () => ipcRenderer.invoke('billing:get-token-packages'),
+    createTokenCheckout: (packageId, targetType, teamId, idempotencyKey) =>
+      ipcRenderer.invoke('billing:create-token-checkout', { packageId, targetType, teamId, idempotencyKey }),
+    getTokenCheckoutStatus: (checkoutId) =>
+      ipcRenderer.invoke('billing:get-token-checkout-status', { checkoutId }),
+    openCheckoutUrl: (url) =>
+      ipcRenderer.invoke('team:open-checkout-url', { url }),
   },
 
   // Scoped AI Access Keys (Phase 1)
@@ -177,24 +229,53 @@ contextBridge.exposeInMainWorld('autoedit', {
     resume: (jobId) => ipcRenderer.invoke('pipeline:resume', { jobId }),
     cancel: (jobId) => ipcRenderer.invoke('pipeline:cancel', { jobId }),
     retryScene: (jobId, sceneId) => ipcRenderer.invoke('pipeline:retry-scene', { jobId, sceneId }),
+    retryTts: (jobId) => ipcRenderer.invoke('pipeline:retry-tts', { jobId }),
     approveCharacter: (jobId, characterId) => ipcRenderer.invoke('pipeline:approve-character', { jobId, characterId }),
     approveAllCharacters: (jobId) => ipcRenderer.invoke('pipeline:approve-all-characters', { jobId }),
     regenerateCharacter: (jobId, characterId) => ipcRenderer.invoke('pipeline:regenerate-character', { jobId, characterId }),
+    getCharacterPreview: (jobId, characterId) => ipcRenderer.invoke('pipeline:get-character-preview', { jobId, characterId }),
     getActiveSummary: () => ipcRenderer.invoke('pipeline:get-active-summary'),
     clearCompleted: () => ipcRenderer.invoke('pipeline:clear-completed'),
     runAll: () => ipcRenderer.invoke('pipeline:run-all'),
     updateBundleDir: (jobId, newBundleDir) => ipcRenderer.invoke('pipeline:update-bundle-dir', { jobId, newBundleDir }),
     deleteJob: (jobId) => ipcRenderer.invoke('pipeline:delete-job', { jobId }),
-    onProgress: (callback) => ipcRenderer.on('pipeline:job-progress', (_, data) => callback(data)),
-    onStateChanged: (callback) => ipcRenderer.on('pipeline:state-changed', (_, data) => callback(data)),
-    onCharacterApprovalRequired: (callback) => ipcRenderer.on('pipeline:character-approval-required', (_, data) => callback(data)),
-    onCompleted: (callback) => ipcRenderer.on('pipeline:completed', (_, data) => callback(data)),
-    onFailed: (callback) => ipcRenderer.on('pipeline:failed', (_, data) => callback(data)),
+    onProgress: (callback) => {
+      const listener = (_, data) => callback(data);
+      ipcRenderer.on('pipeline:job-progress', listener);
+      return () => ipcRenderer.removeListener('pipeline:job-progress', listener);
+    },
+    onStateChanged: (callback) => {
+      const listener = (_, data) => callback(data);
+      ipcRenderer.on('pipeline:state-changed', listener);
+      return () => ipcRenderer.removeListener('pipeline:state-changed', listener);
+    },
+    onCharacterApprovalRequired: (callback) => {
+      const listener = (_, data) => callback(data);
+      ipcRenderer.on('pipeline:character-approval-required', listener);
+      return () => ipcRenderer.removeListener('pipeline:character-approval-required', listener);
+    },
+    onCompleted: (callback) => {
+      const listener = (_, data) => callback(data);
+      ipcRenderer.on('pipeline:completed', listener);
+      return () => ipcRenderer.removeListener('pipeline:completed', listener);
+    },
+    onFailed: (callback) => {
+      const listener = (_, data) => callback(data);
+      ipcRenderer.on('pipeline:failed', listener);
+      return () => ipcRenderer.removeListener('pipeline:failed', listener);
+    },
+    onFlowActivity: (callback) => {
+      const listener = (_, data) => callback(data);
+      ipcRenderer.on('pipeline:flow-activity', listener);
+      return () => ipcRenderer.removeListener('pipeline:flow-activity', listener);
+    },
   },
 
   // Google Flow Embedded Browser (Phase 4)
   flow: {
     getProfiles: () => ipcRenderer.invoke('flow:get-profiles'),
+    getSettings: () => ipcRenderer.invoke('flow:get-settings'),
+    updateSettings: (settings) => ipcRenderer.invoke('flow:update-settings', { settings }),
     createProfile: (name) => ipcRenderer.invoke('flow:create-profile', { name }),
     switchProfile: (profileId) => ipcRenderer.invoke('flow:switch-profile', { profileId }),
     deleteProfile: (profileId) => ipcRenderer.invoke('flow:delete-profile', { profileId }),
@@ -202,12 +283,71 @@ contextBridge.exposeInMainWorld('autoedit', {
     setMode: (mode) => ipcRenderer.invoke('flow:set-mode', { mode }),
     takeover: () => ipcRenderer.invoke('flow:takeover'),
     resumeAuto: () => ipcRenderer.invoke('flow:resume-auto'),
-    reload: () => ipcRenderer.invoke('flow:reload'),
+    reload: (options) => ipcRenderer.invoke('flow:reload', options),
+    getRuntimeStatus: () => ipcRenderer.invoke('flow:get-runtime-status'),
+    setThrottling: (isActive) => ipcRenderer.invoke('flow:set-throttling', { isActive }),
     navigateFlow: () => ipcRenderer.invoke('flow:navigate-flow'),
+    showView: (bounds) => ipcRenderer.invoke('flow:view-show', { bounds }),
     updateViewBounds: (bounds) => ipcRenderer.invoke('flow:view-bounds', { bounds }),
     hideView: () => ipcRenderer.invoke('flow:view-hide'),
-    onStatusUpdated: (callback) => ipcRenderer.on('flow:status-updated', (_, data) => callback(data)),
-    onModeChanged: (callback) => ipcRenderer.on('flow:mode-changed', (_, data) => callback(data)),
+    captureWindow: (filePath) => ipcRenderer.invoke('flow:capture-window', { filePath }),
+    captureView: (filePath) => ipcRenderer.invoke('flow:capture-view', { filePath }),
+    capturePopover: (filePath) => ipcRenderer.invoke('flow:capture-popover', { filePath }),
+    onViewFocused: (callback) => {
+      const listener = () => callback();
+      ipcRenderer.on('flow:view-focused', listener);
+      return () => ipcRenderer.removeListener('flow:view-focused', listener);
+    },
+    onWindowResized: (callback) => {
+      const listener = () => callback();
+      ipcRenderer.on('flow:window-resized', listener);
+      return () => ipcRenderer.removeListener('flow:window-resized', listener);
+    },
+    onStatusUpdated: (callback) => {
+      const listener = (_, data) => callback(data);
+      ipcRenderer.on('flow:status-updated', listener);
+      return () => ipcRenderer.removeListener('flow:status-updated', listener);
+    },
+    onModeChanged: (callback) => {
+      const listener = (_, data) => callback(data);
+      ipcRenderer.on('flow:mode-changed', listener);
+      return () => ipcRenderer.removeListener('flow:mode-changed', listener);
+    },
+    onActivityEvent: (callback) => {
+      const listener = (_, data) => callback(data);
+      ipcRenderer.on('flow:activity-event', listener);
+      return () => ipcRenderer.removeListener('flow:activity-event', listener);
+    },
+    onTakeoverAction: (callback) => {
+      const listener = (_, data) => callback(data);
+      ipcRenderer.on('flow:action-takeover', listener);
+      return () => ipcRenderer.removeListener('flow:action-takeover', listener);
+    },
+    onResumeAutoAction: (callback) => {
+      const listener = (_, data) => callback(data);
+      ipcRenderer.on('flow:action-resume-auto', listener);
+      return () => ipcRenderer.removeListener('flow:action-resume-auto', listener);
+    },
+    onPauseAction: (callback) => {
+      const listener = (_, data) => callback(data);
+      ipcRenderer.on('flow:action-pause', listener);
+      return () => ipcRenderer.removeListener('flow:action-pause', listener);
+    },
+    onOpenCharacterApproval: (callback) => {
+      const listener = (_, data) => callback(data);
+      ipcRenderer.on('flow:open-character-approval', listener);
+      return () => ipcRenderer.removeListener('flow:open-character-approval', listener);
+    },
+    onAddReference: (callback) => {
+      const listener = (_, data) => callback(data);
+      ipcRenderer.on('flow:add-reference', listener);
+      return () => ipcRenderer.removeListener('flow:add-reference', listener);
+    },
+    onReopenSetup: (callback) => {
+      const listener = (_, data) => callback(data);
+      ipcRenderer.on('flow:reopen-setup', listener);
+      return () => ipcRenderer.removeListener('flow:reopen-setup', listener);
+    },
   },
 
   // Python Sidecar Operations

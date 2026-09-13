@@ -1,8 +1,10 @@
 """
 apps/capcut-v2/packaging/build_sidecar.py
-Build script to package Python Core Sidecar (autoedit-core / autoedit-core.exe)
-using PyInstaller.
-Standalone binary: Customers do not need Python, pip, or virtualenv installed.
+[DEV_ONLY / DEPRECATED] Development-only PyInstaller packaging script.
+WARNING: Prohibited from production release paths!
+CANONICAL PRODUCTION PACKAGER: NUITKA (apps/capcut-v2/packaging/build_nuitka_core.py)
+CORE_PRODUCTION_PACKAGER=NUITKA
+PYINSTALLER_PRODUCTION_USAGE=0
 """
 from __future__ import annotations
 

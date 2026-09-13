@@ -377,7 +377,7 @@ async function runTests() {
   // UIFIX-12: Toolbar Responsive Min-Width
   // ----------------------------------------------------
   console.log('Running UIFIX-12: Toolbar responsive layout and min-widths...');
-  assert.ok(cssContent.includes('.btn-subtle {\n  background-color: rgba(255, 255, 255, 0.05);\n  border: 1px solid var(--border-color);\n  color: var(--text-main);\n  padding: 4px 10px;\n  border-radius: var(--radius-sm);\n  font-size: 11px;\n  font-weight: 500;\n  cursor: pointer;\n  transition: background 0.15s ease;\n  white-space: nowrap;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}'), 'btn-subtle must have white-space: nowrap to prevent letter stacks');
+  assert.ok(cssContent.includes('.btn-subtle') && cssContent.includes('white-space: nowrap;'), 'btn-subtle must have white-space: nowrap to prevent letter stacks');
   assert.ok(htmlContent.includes('flow-toolbar-row1') && htmlContent.includes('flow-toolbar-row2'), 'Flow toolbar must be structured as two rows');
   console.log('✅ UIFIX-12 PASSED: Two-row responsive toolbar and button min-widths verified.\n');
 

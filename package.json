@@ -1,0 +1,11 @@
+{
+  "name": "2toolne-autoedit",
+  "version": "2.1.1",
+  "description": "2toolne AutoEdit for CapCut (Desktop Edition)",
+  "main": "src/main/index.js",
+  "author": "2TOOLNE Team",
+  "license": "Proprietary",
+  "dependencies": {
+    "lucide": "^1.45.0"
+  }
+}

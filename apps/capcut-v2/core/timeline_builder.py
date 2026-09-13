@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import uuid
 from typing import List, Optional, Dict, Any
+from PIL import Image
 
 from .edit_plan import (
     EditPlan,
@@ -64,6 +65,11 @@ class TimelineBuilder:
         visual_options: Optional[VisualPlannerOptions] = None,
         subtitle_cues: Optional[List[SubtitleCue]] = None,
         audio_duration_s: Optional[float] = None,
+        canvas_width: Optional[int] = None,
+        canvas_height: Optional[int] = None,
+        canvas_tier: Optional[str] = None,
+        scenes: Optional[List[Dict[str, Any]]] = None,
+        cross_fade_enabled: bool = False,
     ) -> EditPlan:
         """
         Build an EditPlan from provided image files, audio, and timing mode.
@@ -82,6 +88,7 @@ class TimelineBuilder:
             visual_options: VisualPlannerOptions runtime configuration.
             subtitle_cues: Optional rich A0 SubtitleCue objects.
             audio_duration_s: Master audio duration in seconds.
+            scenes: Optional scene metadata list from input bundle.
         """
         if not images:
             raise ValueError("TimelineBuilder requires at least one image.")
@@ -133,7 +140,45 @@ class TimelineBuilder:
                 else:
                     effective_audio_dur_s = 0.0
 
-                if v_opts.engine == VisualPlannerEngine.HIERARCHICAL_DP_V1:
+                if subtitles and len(images) == len(subtitles):
+                    # Direct 1-to-1 alignment: each scene image maps strictly to its corresponding subtitle cue
+                    for idx, sub in enumerate(subtitles):
+                        img_path = images[idx]
+                        motion = self.rule_engine.assign_motion(idx, weights=motion_weights)
+                        params = self.rule_engine.get_motion_parameters(motion)
+                        clip = EditPlanClip(
+                            clip_id=str(uuid.uuid4()).upper(),
+                            media_path=os.path.abspath(img_path),
+                            media_type="image",
+                            start_us=sub.start_us,
+                            duration_us=sub.end_us - sub.start_us,
+                            motion_type=motion,
+                            keyframe_params=params,
+                        )
+                        clips.append(clip)
+                    total_timeline_duration_us = clips[-1].end_us if clips else 0
+                elif scenes and len(images) == len(scenes) and len(scenes) > 1:
+                    # Partition total audio duration across all explicit scenes
+                    audio_dur_us = int(effective_audio_dur_s * 1_000_000) if effective_audio_dur_s > 0 else (len(scenes) * 3_000_000)
+                    step_us = audio_dur_us // len(scenes)
+                    for idx in range(len(scenes)):
+                        img_path = images[idx]
+                        s_us = idx * step_us
+                        e_us = audio_dur_us if idx == len(scenes) - 1 else (idx + 1) * step_us
+                        motion = self.rule_engine.assign_motion(idx, weights=motion_weights)
+                        params = self.rule_engine.get_motion_parameters(motion)
+                        clip = EditPlanClip(
+                            clip_id=str(uuid.uuid4()).upper(),
+                            media_path=os.path.abspath(img_path),
+                            media_type="image",
+                            start_us=s_us,
+                            duration_us=e_us - s_us,
+                            motion_type=motion,
+                            keyframe_params=params,
+                        )
+                        clips.append(clip)
+                    total_timeline_duration_us = clips[-1].end_us if clips else 0
+                elif v_opts.engine == VisualPlannerEngine.HIERARCHICAL_DP_V1:
                     adapter = VisualPipelineAdapter(options=v_opts)
                     shots, report = adapter.plan_visual_shots(
                         subtitles=visual_cues,
@@ -287,20 +332,103 @@ class TimelineBuilder:
                 )
             )
 
-        # Resolve dimensions based on aspect ratio
-        w = self.preset.width
-        h = self.preset.height
-        ratio = aspect_ratio or getattr(self.preset, "canvas_ratio", "9:16")
-        if ratio == "16:9":
-            w, h = 1920, 1080
-        elif ratio == "9:16":
-            w, h = 1080, 1920
-        elif ratio == "1:1":
-            w, h = 1080, 1080
-        elif ratio == "4:5":
-            w, h = 1080, 1350
-        elif ratio == "21:9":
-            w, h = 2560, 1080
+        # Resolve canvas dimensions strictly from project settings / preset, NOT source media dimensions
+        if canvas_width and canvas_height and canvas_width > 0 and canvas_height > 0:
+            w, h = canvas_width, canvas_height
+            ratio = aspect_ratio or EditPlanProject(width=w, height=h).aspect_ratio
+        else:
+            ratio = aspect_ratio or getattr(self.preset, "canvas_ratio", "9:16")
+            preset_w = getattr(self.preset, "width", 1080)
+            preset_h = getattr(self.preset, "height", 1920)
+
+            tier = canvas_tier
+            if not tier:
+                if preset_w == 4096 or preset_h == 4096:
+                    tier = "DCI_4K"
+                elif preset_w >= 3840 or preset_h >= 3840:
+                    tier = "UHD_4K"
+                elif preset_w == 2048 and preset_h == 1080:
+                    tier = "DCI_2K"
+                elif preset_w >= 2048 or preset_h >= 2048 or preset_w == 1440 or preset_h == 2560:
+                    tier = "2K"
+                elif (preset_w == 1280 and preset_h == 720) or (preset_w == 720 and preset_h == 1280):
+                    tier = "720p"
+                else:
+                    tier = "1080p"
+
+            if tier == "DCI_4K":
+                if ratio == "16:9":
+                    w, h = 4096, 2160
+                elif ratio == "9:16":
+                    w, h = 2160, 4096
+                elif ratio == "1:1":
+                    w, h = 3840, 3840
+                elif ratio == "4:5":
+                    w, h = 3072, 3840
+                else:
+                    w, h = 4096, 2160
+            elif tier == "UHD_4K":
+                if ratio == "16:9":
+                    w, h = 3840, 2160
+                elif ratio == "9:16":
+                    w, h = 2160, 3840
+                elif ratio == "1:1":
+                    w, h = 3840, 3840
+                elif ratio == "4:5":
+                    w, h = 3072, 3840
+                elif ratio == "21:9":
+                    w, h = 5120, 2160
+                else:
+                    w, h = 3840, 2160
+            elif tier == "DCI_2K":
+                if ratio == "16:9":
+                    w, h = 2048, 1080
+                elif ratio == "9:16":
+                    w, h = 1080, 2048
+                elif ratio == "1:1":
+                    w, h = 2048, 2048
+                elif ratio == "4:5":
+                    w, h = 2048, 2560
+                else:
+                    w, h = 2048, 1080
+            elif tier in ["2K", "1440p"]:
+                if ratio == "16:9":
+                    w, h = 2560, 1440
+                elif ratio == "9:16":
+                    w, h = 1440, 2560
+                elif ratio == "1:1":
+                    w, h = 2048, 2048
+                elif ratio == "4:5":
+                    w, h = 2048, 2560
+                elif ratio == "21:9":
+                    w, h = 3440, 1440
+                else:
+                    w, h = 2560, 1440
+            elif tier == "720p":
+                if ratio == "16:9":
+                    w, h = 1280, 720
+                elif ratio == "9:16":
+                    w, h = 720, 1280
+                elif ratio == "1:1":
+                    w, h = 720, 720
+                elif ratio == "4:5":
+                    w, h = 720, 900
+                else:
+                    w, h = 1280, 720
+            else:
+                # Standard 1080p resolution
+                if ratio == "16:9":
+                    w, h = 1920, 1080
+                elif ratio == "9:16":
+                    w, h = 1080, 1920
+                elif ratio == "1:1":
+                    w, h = 1080, 1080
+                elif ratio == "4:5":
+                    w, h = 1080, 1350
+                elif ratio == "21:9":
+                    w, h = 2560, 1080
+                else:
+                    w, h = 1080, 1920
 
         # Subtitle layout and safe area wrapping
         if caption_list:
@@ -341,6 +469,7 @@ class TimelineBuilder:
                 "has_audio": bool(audio_list),
                 "has_captions": bool(caption_list),
                 "visual_planner_engine": v_opts.engine.value,
+                "cross_fade_enabled": bool(cross_fade_enabled),
                 **shadow_metadata,
             },
         )

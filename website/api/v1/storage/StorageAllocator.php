@@ -40,8 +40,11 @@ class StorageAllocator {
                   AS SIGNED) >= :incoming_size
             ORDER BY priority DESC, allocatable_bytes DESC
             LIMIT 1
-            FOR UPDATE
         ";
+        $isSqlite = ($this->db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite');
+        if (!$isSqlite) {
+            $sql .= " FOR UPDATE";
+        }
 
         $stmt = $this->db->prepare($sql);
         $stmt->execute([':incoming_size' => $incomingFileSizeBytes]);

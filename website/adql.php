@@ -52,18 +52,18 @@ $authed = !empty($_SESSION['admin_authed']);
 <!doctype html>
 <html lang="vi">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Admin Dashboard – Quest Runner</title>
-  <link rel="icon" type="image/png" href="assets/favicon.png?v=2">
-  <link rel="shortcut icon" href="favicon.ico?v=2">
+  <title>2TOOLNE Admin — Task &amp; Runner Dashboard</title>
+  <meta name="theme-color" content="#FF7A00">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png">
   <script src="https://cdn.tailwindcss.com"></script>
 
   <script>
     tailwind.config = {
       theme: { extend: { colors: {
-        dc: { bg:"#000000", panel:"rgba(28,28,30,0.75)", rail:"rgba(0,0,0,0.65)", text:"#ffffff",
-              muted:"rgba(235,235,245,0.6)", blurple:"#0a84ff", green:"#30d158", red:"#ff453a", yellow:"#ffd60a" }
+        dc: { bg:"#0F1012", panel:"rgba(25,27,31,0.85)", rail:"rgba(15,16,18,0.85)", text:"#EDEDEE",
+              muted:"#8E95A2", blurple:"#FF7A00", green:"#10B981", red:"#EF4444", yellow:"#F59E0B" }
       }}}
     };
   </script>
@@ -75,10 +75,10 @@ $authed = !empty($_SESSION['admin_authed']);
     }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Montserrat", sans-serif;
-      background: #000000;
-      background-image: radial-gradient(circle at 50% 0%, rgba(10, 132, 255, 0.18) 0%, #000000 80%);
+      background: #0F1012;
+      background-image: radial-gradient(circle at 50% 0%, rgba(255, 122, 0, 0.08) 0%, #0F1012 80%);
       background-attachment: fixed;
-      color: #ffffff;
+      color: #EDEDEE;
       -webkit-font-smoothing: antialiased;
     }
     button, .btn {
@@ -107,12 +107,15 @@ $authed = !empty($_SESSION['admin_authed']);
 <?php if (!$authed): ?>
 <!-- ── Trang đăng nhập ── -->
 <div class="min-h-screen flex items-center justify-center p-6">
-  <div class="w-full max-w-sm bg-dc-panel rounded-xl p-8 flex flex-col gap-5"
-       style="border:1px solid rgba(255,255,255,.08)">
+  <div class="w-full max-w-[440px] bg-dc-panel rounded-2xl p-8 flex flex-col gap-5 shadow-2xl"
+       style="border:1px solid rgba(255,255,255,.08);background:#191B1F">
 
-    <div>
-      <h1 class="text-xl font-bold mb-1">🔐 Admin Dashboard</h1>
-      <p class="text-dc-muted text-sm">Quest Runner · <?= htmlspecialchars($_SERVER['HTTP_HOST'] ?? '') ?></p>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
+      <img src="assets/favicon.png" alt="2TOOLNE" style="width:46px;height:46px;border-radius:10px;object-fit:contain">
+      <div>
+        <h1 class="text-xl font-bold tracking-tight" style="color:#EDEDEE">2TOOLNE Runner</h1>
+        <p class="text-dc-muted text-xs">Admin Dashboard &bull; <?= htmlspecialchars($_SERVER['HTTP_HOST'] ?? '') ?></p>
+      </div>
     </div>
 
     <?php if ($loginError): ?>
@@ -121,24 +124,22 @@ $authed = !empty($_SESSION['admin_authed']);
     </div>
     <?php endif; ?>
 
-    <form method="POST" class="flex flex-col gap-3" autocomplete="off">
+    <form method="POST" class="flex flex-col gap-4" autocomplete="off">
       <div class="flex flex-col gap-1.5">
-        <label class="text-xs font-bold uppercase tracking-wider text-dc-muted">Admin Key</label>
-        <input name="key" type="password" placeholder="Nhập admin key…"
-          class="w-full rounded-md bg-dc-rail text-sm px-4 py-2.5 outline-none"
-          style="border:1px solid rgba(255,255,255,.12)" autofocus autocomplete="current-password">
+        <label class="text-xs font-bold uppercase tracking-wider text-dc-muted">Admin Access Key</label>
+        <input name="key" type="password" placeholder="Nhập khóa quản trị Runner…"
+          class="w-full rounded-lg bg-[#0F1012] text-sm px-4 py-3 outline-none transition-all focus:border-[#FF7A00]"
+          style="border:1px solid rgba(255,255,255,.12);color:#EDEDEE" autofocus autocomplete="current-password">
       </div>
       <button type="submit"
-        class="w-full text-white font-semibold text-sm py-2.5 rounded-md transition-all hover:brightness-110"
-        style="background:#5865f2">
-        Đăng nhập →
+        class="w-full text-white font-semibold text-sm py-3 rounded-lg transition-all hover:brightness-110 shadow-lg cursor-pointer"
+        style="background:#FF7A00">
+        Đăng nhập Runner &rarr;
       </button>
     </form>
 
-    <div class="rounded-lg px-3 py-2.5 text-xs text-dc-muted leading-5"
-         style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07)">
-      🔑 Lấy key tại:<br>
-      <strong>DirectAdmin → File Manager → public_html/storage/admin_key.txt</strong>
+    <div class="text-center text-xs text-dc-muted pt-2 border-t border-white/5">
+      Hệ thống phân phối tác vụ nội bộ &bull; Yêu cầu khóa quản trị hợp lệ
     </div>
 
   </div>

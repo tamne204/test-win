@@ -18,16 +18,24 @@ class CreditsController {
      * STEP 1: RESERVE TOKENS
      */
     public static function reserve(array $params, array $body): void {
-        $deviceId = $body['device_id'] ?? '';
-        $projectId = $body['project_id'] ?? '';
+        $deviceId = trim((string)($body['device_id'] ?? ''));
+        $projectId = trim((string)($body['project_id'] ?? ''));
         $amount = (int)($body['amount'] ?? 0);
-        $reservationId = $body['reservation_id'] ?? ('res_' . bin2hex(random_bytes(10)));
+        $reservationId = trim((string)($body['reservation_id'] ?? ('res_' . bin2hex(random_bytes(10)))));
         $userId = trim((string)($body['user_id'] ?? ''));
         $teamId = trim((string)($body['team_id'] ?? ''));
         $workspaceId = trim((string)($body['workspace_id'] ?? ''));
 
         if (empty($projectId) || $amount <= 0) {
             Router::error('project_id and positive amount are required', 400);
+        }
+
+        // Canonical Device Identifier Contract Validation (Non-empty, valid characters, max 191 chars)
+        if (empty($deviceId)) {
+            Router::error('device_id is required for token reservation.', 400, 'INVALID_DEVICE_ID');
+        }
+        if (strlen($deviceId) > 191 || !preg_match('/^[a-zA-Z0-9_\-.:]{3,191}$/', $deviceId)) {
+            Router::error('device_id format is invalid or exceeds maximum length (max 191 chars).', 400, 'INVALID_DEVICE_ID');
         }
 
         $db = Database::getConnection();
@@ -116,7 +124,8 @@ class CreditsController {
                 return;
             } catch (Throwable $e) {
                 $db->rollBack();
-                Router::error('Team reservation failed: ' . $e->getMessage(), 500);
+                error_log("[CreditsController::reserve:team] " . $e->getMessage());
+                Router::error('Không thể khóa giữ token cho phiên xử lý. Vui lòng thử lại.', 500, 'RESERVATION_FAILED');
             }
         }
 
@@ -204,7 +213,8 @@ class CreditsController {
             ]);
         } catch (Throwable $e) {
             $db->rollBack();
-            Router::error('Reservation failed: ' . $e->getMessage(), 500);
+            error_log("[CreditsController::reserve:personal] " . $e->getMessage());
+            Router::error('Không thể khóa giữ token cho phiên xử lý. Vui lòng thử lại.', 500, 'RESERVATION_FAILED');
         }
     }
 
@@ -456,10 +466,12 @@ class CreditsController {
                     return;
                 }
             }
-            Router::error('Commit failed: ' . $e->getMessage(), 500);
+            error_log("[CreditsController::commit:unique] " . $e->getMessage());
+            Router::error('Xác nhận sử dụng token thất bại. Vui lòng thử lại.', 500, 'COMMIT_FAILED');
         } catch (Throwable $e) {
             $db->rollBack();
-            Router::error('Commit failed: ' . $e->getMessage(), 500);
+            error_log("[CreditsController::commit] " . $e->getMessage());
+            Router::error('Xác nhận sử dụng token thất bại. Vui lòng thử lại.', 500, 'COMMIT_FAILED');
         }
     }
 
@@ -554,7 +566,8 @@ class CreditsController {
             ]);
         } catch (Throwable $e) {
             $db->rollBack();
-            Router::error('Release failed: ' . $e->getMessage(), 500);
+            error_log("[CreditsController::release] " . $e->getMessage());
+            Router::error('Hoàn trả token chưa sử dụng thất bại. Vui lòng thử lại.', 500, 'RELEASE_FAILED');
         }
     }
 }

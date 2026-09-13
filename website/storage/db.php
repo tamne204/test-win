@@ -10,12 +10,79 @@ function get_db() {
         $pass   = getenv('DB_PASS') ?: 'CyRzJKKmWf';
         $dsn    = "mysql:host={$host};dbname={$dbname};charset=utf8mb4";
         
-        $pdo = new PDO($dsn, $user, $pass, [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES => false,
-            PDO::MYSQL_ATTR_USE_BUFFERED_QUERY => true,
-        ]);
+        if (getenv('USE_SQLITE') === '1' || $host === 'sqlite') {
+            $sqlitePath = __DIR__ . '/local_dev.sqlite';
+            $pdo = new PDO('sqlite:' . $sqlitePath, null, null, [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_SILENT,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            ]);
+            if (method_exists($pdo, 'sqliteCreateFunction')) {
+                @$pdo->sqliteCreateFunction('NOW', function() { return date('Y-m-d H:i:s'); });
+                @$pdo->sqliteCreateFunction('GREATEST', function(...$args) { return max($args); });
+                @$pdo->sqliteCreateFunction('LEAST', function(...$args) { return min($args); });
+            }
+            try {
+                @$pdo->exec("ALTER TABLE tts_jobs ADD COLUMN required_model TEXT;");
+            } catch (Throwable $ignore) {}
+            return $pdo;
+        }
+
+        try {
+            $pdo = new PDO($dsn, $user, $pass, [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::ATTR_EMULATE_PREPARES => false,
+                PDO::ATTR_TIMEOUT => 2,
+            ]);
+        } catch (PDOException $e) {
+            // Local dev fallback if MySQL server is not reachable on localhost
+            if (php_sapi_name() === 'cli-server' || php_sapi_name() === 'cli' || strpos($_SERVER['HTTP_HOST'] ?? '', '127.0.0.1') !== false) {
+                static $mockPdo = null;
+                $sqlitePath = __DIR__ . '/local_dev.sqlite';
+                $mockPdo = new PDO('sqlite:' . $sqlitePath, null, null, [
+                    PDO::ATTR_ERRMODE => PDO::ERRMODE_SILENT,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                ]);
+                if (method_exists($mockPdo, 'sqliteCreateFunction')) {
+                    @$mockPdo->sqliteCreateFunction('NOW', function() { return date('Y-m-d H:i:s'); });
+                    @$mockPdo->sqliteCreateFunction('GREATEST', function(...$args) { return max($args); });
+                    @$mockPdo->sqliteCreateFunction('LEAST', function(...$args) { return min($args); });
+                }
+                $mockPdo->exec("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, email TEXT, fullname TEXT, phone TEXT, password_hash TEXT, password TEXT, role TEXT DEFAULT 'user', permissions TEXT, registered_ip TEXT, created_at TEXT);");
+                $mockPdo->exec("CREATE TABLE IF NOT EXISTS licenses (id INTEGER PRIMARY KEY AUTOINCREMENT, license_key TEXT UNIQUE, key_lookup_hash TEXT, key_secret_hash TEXT, key_last4 TEXT, license_id TEXT, product TEXT, tier TEXT, duration_days INTEGER, expires_at TEXT, status TEXT, hwid TEXT, device_name TEXT, tool_version TEXT, owner_username TEXT, note TEXT, activated_at TEXT, created_at TEXT);");
+                $mockPdo->exec("CREATE TABLE IF NOT EXISTS orders (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id TEXT UNIQUE, username TEXT, user TEXT, fullname TEXT, phone TEXT, product TEXT, package_name TEXT, package_price TEXT, duration_days INTEGER, tier TEXT, status TEXT, note TEXT, created_at TEXT);");
+                $mockPdo->exec("CREATE TABLE IF NOT EXISTS credit_wallets (id TEXT PRIMARY KEY, user_id TEXT, team_id TEXT, workspace_id TEXT, balance INTEGER, reserved_balance INTEGER, currency TEXT DEFAULT 'TOKEN', credit_mode TEXT, plan TEXT);");
+                $mockPdo->exec("CREATE TABLE IF NOT EXISTS system_config (config_key TEXT PRIMARY KEY, config_value TEXT);");
+                $mockPdo->exec("CREATE TABLE IF NOT EXISTS cloud_spaces (id TEXT PRIMARY KEY, owner_type TEXT, owner_id TEXT, name TEXT, status TEXT, expires_at TEXT, created_at TEXT);");
+                $mockPdo->exec("CREATE TABLE IF NOT EXISTS cloud_space_quotas (cloud_space_id TEXT PRIMARY KEY, effective_quota_bytes INTEGER, used_bytes INTEGER, base_quota_bytes INTEGER, addon_quota_bytes INTEGER, admin_adjustment_bytes INTEGER, reserved_bytes INTEGER, quota_expires_at TEXT, updated_at TEXT);");
+                $mockPdo->exec("CREATE TABLE IF NOT EXISTS cloud_files (id TEXT PRIMARY KEY, cloud_space_id TEXT, folder_id TEXT, storage_account_id TEXT, storage_provider TEXT, storage_file_id TEXT, filename TEXT, extension TEXT, mime_type TEXT, size_bytes INTEGER, checksum_sha256 TEXT, sha256_hash TEXT, status TEXT, app_id TEXT DEFAULT 'UPSCALE', project_id TEXT, provider_file_id TEXT, created_by_user_id TEXT, created_at TEXT, updated_at TEXT, deleted_at TEXT);");
+                $mockPdo->exec("CREATE TABLE IF NOT EXISTS team_members (id TEXT PRIMARY KEY, team_id TEXT, user_id TEXT, role TEXT, status TEXT, joined_at TEXT);");
+                $mockPdo->exec("CREATE TABLE IF NOT EXISTS teams (id TEXT PRIMARY KEY, name TEXT, owner_user_id TEXT, checkout_id TEXT, member_slots INTEGER, app_key_count INTEGER, status TEXT, created_at TEXT, expires_at TEXT);");
+                $mockPdo->exec("CREATE TABLE IF NOT EXISTS team_plans (id TEXT PRIMARY KEY, name TEXT, description TEXT, price INTEGER, currency TEXT DEFAULT 'VND', billing_period TEXT DEFAULT 'MONTHLY', duration_days INTEGER DEFAULT 30, member_slots INTEGER DEFAULT 2, desktop_key_count INTEGER DEFAULT 2, storage_bytes INTEGER DEFAULT 53687091200, shared_token_wallet INTEGER DEFAULT 1, initial_tokens INTEGER DEFAULT 0, features TEXT, requires_payment INTEGER DEFAULT 1, enabled INTEGER DEFAULT 1, sort_order INTEGER DEFAULT 1, created_at TEXT, updated_at TEXT);");
+                $mockPdo->exec("CREATE TABLE IF NOT EXISTS tickets_features (id TEXT PRIMARY KEY, username TEXT, title TEXT, description TEXT, status TEXT, created_at TEXT);");
+                $mockPdo->exec("CREATE TABLE IF NOT EXISTS tickets_bugs (id TEXT PRIMARY KEY, username TEXT, title TEXT, description TEXT, error_code TEXT, status TEXT, created_at TEXT);");
+                $mockPdo->exec("CREATE TABLE IF NOT EXISTS token_packages (id TEXT PRIMARY KEY, name TEXT, tokens INTEGER, price_vnd INTEGER, bonus_tokens INTEGER, active INTEGER);");
+                $mockPdo->exec("CREATE TABLE IF NOT EXISTS devices (id INTEGER PRIMARY KEY AUTOINCREMENT, device_id TEXT, device_fingerprint TEXT, device_fingerprint_hash TEXT, license_key TEXT, active INTEGER, created_at TEXT);");
+                $mockPdo->exec("CREATE TABLE IF NOT EXISTS storage_accounts (id TEXT PRIMARY KEY, provider TEXT, account_identifier TEXT, display_alias TEXT, encrypted_credentials TEXT, root_folder_id TEXT, total_capacity_bytes INTEGER DEFAULT 107374182400, used_capacity_bytes INTEGER DEFAULT 0, reserved_capacity_bytes INTEGER DEFAULT 0, safety_reserve_percent INTEGER DEFAULT 10, status TEXT DEFAULT 'ACTIVE', priority INTEGER DEFAULT 100, health_status TEXT DEFAULT 'HEALTHY', active_file_count INTEGER DEFAULT 0, created_at TEXT, updated_at TEXT);");
+                $mockPdo->exec("CREATE TABLE IF NOT EXISTS cloud_upload_reservations (id TEXT PRIMARY KEY, cloud_space_id TEXT, user_id TEXT, cloud_file_id TEXT, storage_account_id TEXT, session_url TEXT, reserved_bytes INTEGER, status TEXT DEFAULT 'RESERVED', idempotency_key TEXT UNIQUE, expires_at TEXT, created_at TEXT);");
+                $mockPdo->exec("CREATE TABLE IF NOT EXISTS team_invites (id TEXT PRIMARY KEY, team_id TEXT, invitee_email TEXT, invitee_user_id TEXT, inviter_user_id TEXT, role TEXT, status TEXT, expires_at TEXT, created_at TEXT);");
+                $mockPdo->exec("CREATE TABLE IF NOT EXISTS admin_audit_logs (id TEXT PRIMARY KEY, admin_user_id TEXT, action TEXT, target_user_id TEXT, reason TEXT, details TEXT, ip_address TEXT, created_at TEXT);");
+                $mockPdo->exec("CREATE TABLE IF NOT EXISTS license_entitlements (id TEXT PRIMARY KEY, user_id TEXT, plan TEXT, credit_mode TEXT, max_devices INTEGER, created_at TEXT);");
+                $mockPdo->exec("CREATE TABLE IF NOT EXISTS credit_transactions (id TEXT PRIMARY KEY, wallet_id TEXT, user_id TEXT, amount INTEGER, balance_after INTEGER, type TEXT, reference_id TEXT, description TEXT, created_by TEXT, created_at TEXT);");
+                $mockPdo->exec("CREATE TABLE IF NOT EXISTS ai_access_keys (id TEXT PRIMARY KEY, user_id TEXT, display_name TEXT, workspace_type TEXT, workspace_id TEXT, team_id TEXT, key_prefix TEXT, secret_hash TEXT, key_secret_hash TEXT, root_folder_id TEXT, scopes TEXT, created_at TEXT, last_used_at TEXT, expires_at TEXT, revoked_at TEXT);");
+                $mockPdo->exec("CREATE TABLE IF NOT EXISTS cloud_folders (id TEXT PRIMARY KEY, cloud_space_id TEXT, parent_id TEXT, name TEXT, created_by_user_id TEXT, created_at TEXT, updated_at TEXT, deleted_at TEXT);");
+                $mockPdo->exec("CREATE TABLE IF NOT EXISTS cloud_trash (id TEXT PRIMARY KEY, item_type TEXT, item_id TEXT, cloud_space_id TEXT, original_path TEXT, deleted_at TEXT);");
+                $mockPdo->exec("CREATE TABLE IF NOT EXISTS cloud_quota_adjustments (id TEXT PRIMARY KEY, cloud_space_id TEXT, delta_bytes INTEGER, new_effective_bytes INTEGER, reason TEXT, created_by TEXT, created_at TEXT);");
+                $mockPdo->exec("CREATE TABLE IF NOT EXISTS tts_jobs (id TEXT PRIMARY KEY, user_id TEXT, cloud_space_id TEXT, folder_id TEXT, voice_profile_id TEXT, text TEXT, language TEXT, output_format TEXT DEFAULT 'wav', output_filename TEXT, engine TEXT, required_model TEXT, model_version TEXT, settings_json TEXT, status TEXT DEFAULT 'QUEUED', progress INTEGER DEFAULT 0, worker_id TEXT, lease_until TEXT, heartbeat_at TEXT, attempt_count INTEGER DEFAULT 0, max_attempts INTEGER DEFAULT 3, cloud_file_id TEXT, duration_seconds REAL, size_bytes INTEGER, error_code TEXT, error_message TEXT, idempotency_key TEXT UNIQUE, created_at TEXT, queued_at TEXT, started_at TEXT, completed_at TEXT, updated_at TEXT);");
+                try {
+                    $mockPdo->exec("ALTER TABLE tts_jobs ADD COLUMN required_model TEXT;");
+                } catch (Throwable $ignore) {}
+                $mockPdo->exec("CREATE TABLE IF NOT EXISTS tts_voice_profiles (id TEXT PRIMARY KEY, user_id TEXT, cloud_space_id TEXT, name TEXT, engine TEXT, primary_language TEXT, reference_file_id TEXT, reference_text TEXT, reference_checksum_sha256 TEXT, status TEXT DEFAULT 'ACTIVE', created_at TEXT, updated_at TEXT);");
+                $mockPdo->exec("CREATE TABLE IF NOT EXISTS credit_reservations (reservation_id TEXT PRIMARY KEY, user_id TEXT, team_id TEXT, workspace_id TEXT, device_id TEXT, project_id TEXT, amount INTEGER, committed_amount INTEGER DEFAULT 0, status TEXT DEFAULT 'PENDING', created_at TEXT, updated_at TEXT);");
+                return $mockPdo;
+            }
+            throw $e;
+        }
     }
     return $pdo;
 }
@@ -26,7 +93,9 @@ function db_ensure_users_permissions_column() {
     if ($checked) return;
     $checked = true;
     try {
-        get_db()->exec("ALTER TABLE `users` ADD COLUMN `permissions` TEXT NULL AFTER `role`");
+        if (get_db()->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql') {
+            get_db()->exec("ALTER TABLE `users` ADD COLUMN `permissions` TEXT NULL AFTER `role`");
+        }
     } catch (Exception $e) {
         // Column already exists or table cannot be altered
     }
@@ -328,7 +397,7 @@ function db_log_admin_audit($action, $targetUserId, $reason, $details = []) {
         ');
         $stmt->execute([$auditId, $adminUser, $action, $targetUserId, $reason, $detailsJson, $ip, $now]);
         return $auditId;
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         return null;
     }
 }
@@ -562,17 +631,18 @@ function db_is_ip_trial_claimed($ip, $product = 'SLIDESHOW') {
 }
 
 function db_claim_ip_trial($ip, $username, $product = 'SLIDESHOW') {
-    $stmt = get_db()->prepare("
-        INSERT IGNORE INTO `trial_ips` (`ip_address`, `product`, `user_id`, `claimed_at`)
-        VALUES (:ip, :prod, :u, NOW())
-    ");
-    return $stmt->execute([':ip' => trim($ip), ':prod' => $product, ':u' => $username]);
+    $db = get_db();
+    $sql = ($db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite')
+        ? "INSERT OR IGNORE INTO `trial_ips` (`ip_address`, `product`, `user_id`, `claimed_at`) VALUES (:ip, :prod, :u, NOW())"
+        : "INSERT IGNORE INTO `trial_ips` (`ip_address`, `product`, `user_id`, `claimed_at`) VALUES (:ip, :prod, :u, NOW())";
+    $stmt = $db->prepare($sql);
+    return $stmt ? $stmt->execute([':ip' => trim($ip), ':prod' => $product, ':u' => $username]) : false;
 }
 
 // ── TICKETS (FEATURES & BUGS) ────────────────────────────────────
 function db_get_features() {
     $stmt = get_db()->query("SELECT * FROM `tickets_features` ORDER BY `created_at` DESC");
-    $rows = $stmt->fetchAll();
+    $rows = $stmt ? $stmt->fetchAll() : [];
     $result = [];
     foreach ($rows as $r) {
         $result[] = [
@@ -607,7 +677,7 @@ function db_delete_feature($id) {
 
 function db_get_bugs() {
     $stmt = get_db()->query("SELECT * FROM `tickets_bugs` ORDER BY `created_at` DESC");
-    $rows = $stmt->fetchAll();
+    $rows = $stmt ? $stmt->fetchAll() : [];
     $result = [];
     foreach ($rows as $r) {
         $result[] = [
@@ -644,7 +714,7 @@ function db_delete_bug($id) {
 // ── SYSTEM CONFIG ────────────────────────────────────────────────
 function db_get_system_config() {
     $stmt = get_db()->query("SELECT `config_key`, `config_value` FROM `system_config`");
-    $rows = $stmt->fetchAll();
+    $rows = $stmt ? $stmt->fetchAll() : [];
     $result = [
         'app_version' => '2.0.0',
         'download_url' => '/downloads/SlideshowBuilder_v2.0.0.zip',
@@ -1251,15 +1321,21 @@ function db_ensure_team_schema() {
     $done = true;
     try {
         $db = get_db();
-        $cols = $db->query("DESCRIBE `teams`")->fetchAll(PDO::FETCH_COLUMN);
+        if ($db->getAttribute(PDO::ATTR_DRIVER_NAME) !== 'mysql') {
+            return;
+        }
+        $desc = $db->query("DESCRIBE `teams`");
+        $cols = $desc ? $desc->fetchAll(PDO::FETCH_COLUMN) : [];
         if (!in_array('expires_at', $cols)) {
             $db->exec("ALTER TABLE `teams` ADD COLUMN `expires_at` DATETIME NULL AFTER `status`");
         }
-        $csCols = $db->query("DESCRIBE `cloud_spaces`")->fetchAll(PDO::FETCH_COLUMN);
+        $csDesc = $db->query("DESCRIBE `cloud_spaces`");
+        $csCols = $csDesc ? $csDesc->fetchAll(PDO::FETCH_COLUMN) : [];
         if (!in_array('expires_at', $csCols)) {
             $db->exec("ALTER TABLE `cloud_spaces` ADD COLUMN `expires_at` DATETIME NULL AFTER `status`");
         }
-        $csqCols = $db->query("DESCRIBE `cloud_space_quotas`")->fetchAll(PDO::FETCH_COLUMN);
+        $csqDesc = $db->query("DESCRIBE `cloud_space_quotas`");
+        $csqCols = $csqDesc ? $csqDesc->fetchAll(PDO::FETCH_COLUMN) : [];
         if (!in_array('quota_expires_at', $csqCols)) {
             $db->exec("ALTER TABLE `cloud_space_quotas` ADD COLUMN `quota_expires_at` DATETIME NULL AFTER `effective_quota_bytes`");
         }

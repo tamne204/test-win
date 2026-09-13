@@ -1,5 +1,16 @@
 <?php
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    $isSecure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
+    session_set_cookie_params([
+        'lifetime' => 14400,
+        'path'     => '/',
+        'domain'   => '',
+        'secure'   => $isSecure,
+        'httponly' => true,
+        'samesite' => 'Lax'
+    ]);
+    session_start();
+}
 require_once __DIR__ . '/storage/db.php';
 require_once __DIR__ . '/sepay_config.php';
 
@@ -19,7 +30,12 @@ if ($is_admin) {
     $_SESSION['admin_last_active'] = time();
 }
 
-$ADMIN_PASSWORD = '@2TamneAdmin2026';
+$ADMIN_PASSWORD = getenv('ADMIN_MASTER_PASSWORD') ?: getenv('ADMIN_PASSWORD') ?: '@2TamneAdmin2026';
+$ADMIN_PASSWORD_HASH = getenv('ADMIN_MASTER_HASH') ?: '';
+
+if (empty($_SESSION['admin_csrf_token'])) {
+    $_SESSION['admin_csrf_token'] = bin2hex(random_bytes(32));
+}
 
 // ── PERMISSIONS & ROLE PRESETS ──────────────────────────────────────
 $ALL_PERMISSIONS = [
@@ -191,50 +207,73 @@ if (isset($_GET['logout'])) {
 
 // Login
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['admin_login'])) {
-    $u = strtolower(trim($_POST['username'] ?? ''));
-    $p = $_POST['password'] ?? '';
+    $post_csrf = $_POST['csrf_token'] ?? '';
+    if (!hash_equals($_SESSION['admin_csrf_token'] ?? '', $post_csrf)) {
+        $msg_error = 'Yêu cầu không hợp lệ (CSRF). Vui lòng tải lại trang và thử lại!';
+    } else {
+        $fail_count = (int)($_SESSION['admin_login_fails'] ?? 0);
+        $lockout_until = (int)($_SESSION['admin_lockout_until'] ?? 0);
+        if ($fail_count >= 5 && time() < $lockout_until) {
+            $remain = ceil(($lockout_until - time()) / 60);
+            $msg_error = "Bạn đã thử đăng nhập sai quá 5 lần. Vui lòng thử lại sau {$remain} phút!";
+        } else {
+            $u = strtolower(trim($_POST['username'] ?? ''));
+            $p = (string)($_POST['password'] ?? '');
+            $login_success = false;
 
-    // 1. Check Master Admin Password (khi không điền user hoặc điền admin/super_admin)
-    if (empty($u) || $u === 'admin' || $u === 'super_admin') {
-        if ($p === $ADMIN_PASSWORD) {
-            $_SESSION['admin_logged'] = true;
-            $_SESSION['admin_user'] = 'super_admin';
-            $_SESSION['admin_fullname'] = 'Super Admin';
-            $_SESSION['admin_role'] = 'super_admin';
-            $_SESSION['admin_permissions'] = array_keys($ALL_PERMISSIONS);
-            $_SESSION['admin_last_active'] = time();
-            header("Location: license_admin.php");
-            exit;
-        } elseif (empty($u)) {
-            $msg_error = 'Sai mật khẩu quản trị!';
-        }
-    }
-
-    // 2. Check personal staff / admin account
-    if (!empty($u) && empty($msg_error)) {
-        $user_rec = db_get_user($u);
-        if ($user_rec && password_verify($p, $user_rec['password_hash'])) {
-            $u_role = $user_rec['role'] ?? 'user';
-            $u_perms = $user_rec['permissions'] ?? [];
-            if ($u_role === 'super_admin' || $u_role === 'admin') {
-                $u_perms = array_keys($ALL_PERMISSIONS);
+            // 1. Check Master Admin Credential (constant-time check)
+            $master_valid = false;
+            if (!empty($ADMIN_PASSWORD_HASH)) {
+                $master_valid = password_verify($p, $ADMIN_PASSWORD_HASH);
+            } elseif (!empty($ADMIN_PASSWORD)) {
+                $master_valid = hash_equals($ADMIN_PASSWORD, $p);
             }
 
-            // Must have a non-user role or permissions
-            if ($u_role !== 'user' && (!empty($u_perms) || $u_role === 'super_admin' || $u_role === 'admin')) {
+            if ($master_valid && (empty($u) || $u === 'admin' || $u === 'super_admin')) {
+                session_regenerate_id(true);
                 $_SESSION['admin_logged'] = true;
-                $_SESSION['admin_user'] = $user_rec['username'];
-                $_SESSION['admin_fullname'] = $user_rec['fullname'] ?: $user_rec['username'];
-                $_SESSION['admin_role'] = $u_role;
-                $_SESSION['admin_permissions'] = $u_perms;
+                $_SESSION['admin_user'] = 'super_admin';
+                $_SESSION['admin_fullname'] = 'Super Admin';
+                $_SESSION['admin_role'] = 'super_admin';
+                $_SESSION['admin_permissions'] = array_keys($ALL_PERMISSIONS);
                 $_SESSION['admin_last_active'] = time();
+                unset($_SESSION['admin_login_fails'], $_SESSION['admin_lockout_until']);
                 header("Location: license_admin.php");
                 exit;
-            } else {
-                $msg_error = 'Tài khoản này chưa được cấp quyền truy cập hệ thống quản trị!';
             }
-        } else {
-            $msg_error = 'Tên tài khoản hoặc mật khẩu không chính xác!';
+
+            // 2. Check personal staff / admin account
+            if (!empty($u)) {
+                $user_rec = db_get_user($u);
+                if ($user_rec && password_verify($p, $user_rec['password_hash'] ?? '')) {
+                    $u_role = $user_rec['role'] ?? 'user';
+                    $u_perms = $user_rec['permissions'] ?? [];
+                    if ($u_role === 'super_admin' || $u_role === 'admin') {
+                        $u_perms = array_keys($ALL_PERMISSIONS);
+                    }
+
+                    if ($u_role !== 'user' && (!empty($u_perms) || $u_role === 'super_admin' || $u_role === 'admin')) {
+                        session_regenerate_id(true);
+                        $_SESSION['admin_logged'] = true;
+                        $_SESSION['admin_user'] = $user_rec['username'];
+                        $_SESSION['admin_fullname'] = $user_rec['fullname'] ?: $user_rec['username'];
+                        $_SESSION['admin_role'] = $u_role;
+                        $_SESSION['admin_permissions'] = $u_perms;
+                        $_SESSION['admin_last_active'] = time();
+                        unset($_SESSION['admin_login_fails'], $_SESSION['admin_lockout_until']);
+                        header("Location: license_admin.php");
+                        exit;
+                    }
+                }
+            }
+
+            // Failed login - increment lockout counter
+            $fail_count++;
+            $_SESSION['admin_login_fails'] = $fail_count;
+            if ($fail_count >= 5) {
+                $_SESSION['admin_lockout_until'] = time() + 900;
+            }
+            $msg_error = 'Tài khoản hoặc mật khẩu không chính xác!';
         }
     }
 }
@@ -1275,11 +1314,23 @@ $count_ext     = count(array_filter($licenses_db, fn($x) => ($x['product']??'') 
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>Admin Portal — 2tamne.site Software Management</title>
+    <title>2TOOLNE Admin Portal — Software &amp; Cloud Management</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#FF7A00">
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png">
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+    <link rel="manifest" href="site.webmanifest">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        (function() {
+            var saved = localStorage.getItem('2toolne_theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', saved);
+        })();
+    </script>
     <link rel="stylesheet" href="globals.css?v=<?= filemtime(__DIR__ . '/globals.css') ?>">
     <style>
         .admin-header {
@@ -1511,36 +1562,32 @@ $count_ext     = count(array_filter($licenses_db, fn($x) => ($x['product']??'') 
     <?php if (!$admin_logged_in): ?>
         <!-- ═══ ADMIN LOGIN SCREEN ═══ -->
         <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px">
-            <div class="card" style="max-width:420px;width:100%">
-                <div class="card-header" style="justify-content:center;text-align:center;flex-direction:column;gap:6px">
-                    <div style="width:36px;height:36px;border-radius:8px;background:var(--emerald);display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:16px">2</div>
-                    <div class="card-title" style="font-size:17px">2tamne.site Admin Portal</div>
-                    <div class="text-subtle" style="font-size:12px">Đăng nhập tài khoản quản trị hoặc Mật khẩu Master</div>
+            <div class="card" style="max-width:440px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.36);border:1px solid var(--border)">
+                <div class="card-header" style="justify-content:center;text-align:center;flex-direction:column;gap:6px;padding:28px 24px 16px">
+                    <img src="assets/favicon.png" alt="2TOOLNE Logo" style="width:46px;height:46px;border-radius:10px;object-fit:contain;margin-bottom:4px">
+                    <div class="card-title" style="font-size:18px;font-weight:700;letter-spacing:-0.01em">2TOOLNE Admin Portal</div>
+                    <div class="text-subtle" style="font-size:12.5px;color:var(--muted-foreground)">Đăng nhập tài khoản quản trị hệ thống</div>
                 </div>
-                <div class="card-body">
+                <div class="card-body" style="padding:16px 24px 24px">
                     <?php if ($msg_error): ?>
-                        <div class="alert alert-danger"><?= $msg_error ?></div>
+                        <div class="alert alert-danger" style="margin-bottom:16px;font-size:13px"><?= $msg_error ?></div>
                     <?php endif; ?>
                     <form method="POST">
                         <input type="hidden" name="admin_login" value="1">
-                        <div class="form-group">
-                            <label class="form-label" style="font-size:12px">TÀI KHOẢN (Để trống nếu dùng Mật khẩu Master):</label>
-                            <input type="text" name="username" class="form-input" placeholder="Nhập username cá nhân hoặc để trống..." autocomplete="username">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['admin_csrf_token'] ?? '') ?>">
+                        <div class="form-group" style="margin-bottom:14px">
+                            <label class="form-label" style="font-size:12px;font-weight:600;margin-bottom:6px;display:block">TÀI KHOẢN</label>
+                            <input type="text" name="username" class="form-input" placeholder="Tên đăng nhập..." autocomplete="username">
                         </div>
-                        <div class="form-group">
-                            <label class="form-label" style="font-size:12px">MẬT KHẨU:</label>
-                            <input type="password" name="password" class="form-input" placeholder="Mật khẩu tài khoản hoặc Mật khẩu Master..." required autofocus autocomplete="current-password">
+                        <div class="form-group" style="margin-bottom:18px">
+                            <label class="form-label" style="font-size:12px;font-weight:600;margin-bottom:6px;display:block">MẬT KHẨU</label>
+                            <input type="password" name="password" class="form-input" placeholder="Mật khẩu truy cập..." required autofocus autocomplete="current-password">
                         </div>
-                        <button type="submit" class="btn btn-emerald" style="width:100%;height:40px;font-weight:700">Đăng Nhập Quản Trị</button>
+                        <button type="submit" class="btn btn-primary" style="width:100%;height:42px;font-weight:700;font-size:14px">Đăng Nhập Quản Trị</button>
                     </form>
-                    <div style="margin-top:14px;padding:10px 12px;background:var(--surface-2);border-radius:var(--radius-sm);font-size:11.5px;color:var(--muted-foreground);line-height:1.5;border:1px solid var(--border)">
-                        💡 <b>Gợi ý đăng nhập:</b><br>
-                        • <b>Super Admin:</b> Chỉ cần nhập Mật khẩu Master tối cao (bỏ trống ô tài khoản).<br>
-                        • <b>Nhân viên / Quản trị viên:</b> Nhập Tên tài khoản và Mật khẩu cá nhân đã được phân quyền.
-                    </div>
                 </div>
-                <div class="card-footer" style="text-align:center;font-size:12px;color:var(--muted-foreground)">
-                    Phiên làm việc an toàn có thời hạn 4 giờ
+                <div class="card-footer" style="text-align:center;font-size:12px;color:var(--muted-foreground);padding:14px 20px;border-top:1px solid var(--border)">
+                    Hệ thống xác thực nội bộ &bull; Phiên làm việc an toàn
                 </div>
             </div>
         </div>
@@ -1595,8 +1642,8 @@ $count_ext     = count(array_filter($licenses_db, fn($x) => ($x['product']??'') 
         <header class="admin-header">
             <div class="container" style="display:flex;justify-content:space-between;align-items:center;width:100%">
                 <div style="display:flex;align-items:center;gap:12px">
-                    <div style="width:24px;height:24px;border-radius:6px;background:var(--emerald);display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:12px">2</div>
-                    <b style="font-size:14px;color:var(--foreground)">2tamne Admin</b>
+                    <img src="assets/favicon.png" alt="2TOOLNE Logo" style="width:24px;height:24px;border-radius:6px;object-fit:contain">
+                    <b style="font-size:14px;color:var(--foreground)">2TOOLNE Admin</b>
                     
                     <div style="display:flex;align-items:center;gap:6px;padding-left:8px;border-left:1px solid var(--border)">
                         <span class="admin-user-info-text" style="font-size:12.5px;color:var(--foreground);font-weight:600">👤 <?= htmlspecialchars($cur_fullname) ?></span>
@@ -1620,6 +1667,9 @@ $count_ext     = count(array_filter($licenses_db, fn($x) => ($x['product']??'') 
                             ⏳ <span id="header-pending-count"><?= count($pending_orders) ?></span> đơn chờ duyệt
                         </span>
                     <?php endif; ?>
+                    <button type="button" class="btn btn-outline btn-xs" id="admin-theme-toggle" onclick="toggleAdminTheme()" title="Đổi giao diện Sáng / Tối" style="padding:2px 8px">
+                        <span id="admin-theme-icon">🌙</span>
+                    </button>
                     <a href="index.php" target="_blank" class="btn btn-outline btn-xs">🌐 Xem Website</a>
                     <a href="?logout=1" class="btn btn-outline btn-xs" style="color:var(--danger)">Đăng Xuất</a>
                 </div>
@@ -7388,6 +7438,21 @@ $count_ext     = count(array_filter($licenses_db, fn($x) => ($x['product']??'') 
                         m.classList.remove('active');
                     });
                 }
+            });
+
+            function toggleAdminTheme() {
+                var cur = document.documentElement.getAttribute('data-theme') || localStorage.getItem('2toolne_theme') || 'dark';
+                var next = cur === 'light' ? 'dark' : 'light';
+                document.documentElement.setAttribute('data-theme', next);
+                localStorage.setItem('2toolne_theme', next);
+                var icon = document.getElementById('admin-theme-icon');
+                if (icon) icon.textContent = next === 'light' ? '☀️' : '🌙';
+            }
+            document.addEventListener('DOMContentLoaded', function() {
+                var cur = localStorage.getItem('2toolne_theme') || 'dark';
+                document.documentElement.setAttribute('data-theme', cur);
+                var icon = document.getElementById('admin-theme-icon');
+                if (icon) icon.textContent = cur === 'light' ? '☀️' : '🌙';
             });
         </script>
     <?php endif; ?>

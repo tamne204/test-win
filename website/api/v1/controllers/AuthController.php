@@ -146,7 +146,7 @@ class AuthController {
         ');
         $stmt->execute([$sessionId, $challenge, $port, $expiresAt]);
 
-        $authUrl = "https://www.2tamne.site/index.php?app_auth=1&session=" . urlencode($sessionId) . "&challenge=" . urlencode($challenge) . "&port=" . $port;
+        $authUrl = "https://2tamne.site/index.php?app_auth=1&session=" . urlencode($sessionId) . "&challenge=" . urlencode($challenge) . "&port=" . $port;
 
         Router::json([
             'success' => true,

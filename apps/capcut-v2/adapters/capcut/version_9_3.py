@@ -20,6 +20,46 @@ except (ImportError, ValueError):
 
 
 
+def resolve_capcut_effect_path(resource_id: str) -> str:
+    """
+    Dynamically locate CapCut effect cache directory across macOS and Windows.
+    Probes standard cache directories without hardcoding machine-specific user paths.
+    Returns the resolved path if found, or empty string "" for CapCut fallback resolution.
+    """
+    import sys
+    candidate_bases: List[str] = []
+    if sys.platform == "darwin":
+        candidate_bases.extend([
+            os.path.expanduser("~/Library/Containers/com.lemon.lvoverseas/Data/Movies/CapCut/User Data/Cache/effect"),
+            os.path.expanduser("~/Movies/CapCut/User Data/Cache/effect"),
+            os.path.expanduser("~/Library/Application Support/CapCut/User Data/Cache/effect"),
+        ])
+    elif sys.platform == "win32":
+        local_app_data = os.environ.get("LOCALAPPDATA", "")
+        if local_app_data:
+            candidate_bases.append(os.path.join(local_app_data, "CapCut", "User Data", "Cache", "effect"))
+        app_data = os.environ.get("APPDATA", "")
+        if app_data:
+            candidate_bases.append(os.path.join(app_data, "CapCut", "User Data", "Cache", "effect"))
+
+    candidate_bases.append(os.path.expanduser("~/CapCut/User Data/Cache/effect"))
+
+    for base in candidate_bases:
+        if not base or not os.path.exists(base):
+            continue
+        res_dir = os.path.join(base, str(resource_id))
+        if os.path.isdir(res_dir):
+            try:
+                for entry in sorted(os.listdir(res_dir)):
+                    sub_path = os.path.join(res_dir, entry)
+                    if os.path.isdir(sub_path):
+                        return sub_path
+            except Exception:
+                pass
+            return res_dir
+    return ""
+
+
 class CapCutVersionAdapter_9_3:
     """
     Adapter implementing the empirical CapCut 9.3.0 draft schema.
@@ -54,14 +94,23 @@ class CapCutVersionAdapter_9_3:
         project_name = edit_plan.project.name
 
         # Staging: Copy source media into stable project directory
-        staged_clips: List[Tuple[EditPlanClip, str]] = []
+        staged_clips: List[Tuple[EditPlanClip, str, int, int]] = []
         for idx, clip in enumerate(edit_plan.clips):
             ext = os.path.splitext(clip.media_path)[1] or ".png"
             dest_name = f"clip_{idx:03d}{ext}"
             dest_path = os.path.join(media_dir, dest_name)
             if not os.path.exists(dest_path):
                 shutil.copy2(clip.media_path, dest_path)
-            staged_clips.append((clip, dest_path))
+
+            # Read dimensions accurately from physical image file
+            clip_w = edit_plan.project.width
+            clip_h = edit_plan.project.height
+            try:
+                with Image.open(dest_path) as im:
+                    clip_w, clip_h = im.size
+            except Exception:
+                pass
+            staged_clips.append((clip, dest_path, clip_w, clip_h))
 
         staged_audio: List[Tuple[EditPlanAudio, str]] = []
         for idx, aud in enumerate(edit_plan.audio):
@@ -132,27 +181,20 @@ class CapCutVersionAdapter_9_3:
 
         # Build Video Track & Segments
         video_segments: List[Dict[str, Any]] = []
-        for idx, (clip, stable_path) in enumerate(staged_clips):
+        for idx, (clip, stable_path, w, h) in enumerate(staged_clips):
             video_mat_id = str(uuid.uuid4()).upper()
+            is_video = getattr(clip, "media_type", "") == "video"
 
-            # Read dimensions if possible
-            w, h = 1080, 1920
-            try:
-                with Image.open(stable_path) as im:
-                    w, h = im.size
-            except Exception:
-                pass
-
-            # Register video/photo material
+            # Register video/photo material with EXACT media dimensions
             materials["videos"].append({
                 "id": video_mat_id,
                 "unique_id": "",
-                "type": "photo",
+                "type": "video" if is_video else "photo",
                 "duration": clip.duration_us,
                 "path": stable_path,
                 "media_path": "",
                 "local_id": "",
-                "has_audio": False,
+                "has_audio": is_video,
                 "width": w,
                 "height": h,
                 "category_id": "",
@@ -310,6 +352,40 @@ class CapCutVersionAdapter_9_3:
                 "caption_info": None,
                 "source": "segmentsourcenormal",
             })
+
+        # Assemble native Cross Fade transitions if enabled
+        cross_fade_enabled = bool(
+            getattr(edit_plan, "cross_fade_enabled", False)
+            or (edit_plan.metadata and edit_plan.metadata.get("cross_fade_enabled", False))
+        )
+        if cross_fade_enabled and len(video_segments) > 1:
+            fps = float(getattr(edit_plan.project, "fps", 30.0) or 30.0)
+            frames = max(1, int(round(0.5 * fps)))
+            quantized_duration = int(round(frames * (1_000_000.0 / fps)))
+            effect_path = resolve_capcut_effect_path("7657476671573937428")
+
+            for i in range(len(video_segments) - 1):
+                trans_id = str(uuid.uuid4()).upper()
+                materials["transitions"].append({
+                    "id": trans_id,
+                    "type": "transition",
+                    "name": "Cross Fade",
+                    "effect_id": "7657476671573937428",
+                    "resource_id": "7657476671573937428",
+                    "third_resource_id": "0",
+                    "source_platform": 1,
+                    "path": effect_path,
+                    "duration": quantized_duration,
+                    "is_overlap": True,
+                    "platform": "all",
+                    "category_id": "123456",
+                    "category_name": "Transitions",
+                    "request_id": "",
+                    "is_ai_transition": False,
+                    "video_path": "",
+                    "task_id": "",
+                })
+                video_segments[i]["extra_material_refs"].append(trans_id)
 
         tracks: List[Dict[str, Any]] = [
             {
@@ -594,19 +670,23 @@ class CapCutVersionAdapter_9_3:
                             "enter_from": 0,
                             "extra_info": os.path.basename(s_path),
                             "file_Path": s_path,
-                            "height": edit_plan.project.height,
+                            "height": h,
                             "id": str(uuid.uuid4()),
                             "import_time": int(now_us / 1_000_000),
                             "import_time_ms": now_us,
                             "item_source": 1,
                             "md5": "",
-                            "metetype": "photo",
-                            "roughcut_time_range": {"duration": clip.duration_us, "start": 0},
+                            "metetype": "video" if getattr(clip, "media_type", "") == "video" else "photo",
+                            "roughcut_time_range": (
+                                {"duration": clip.duration_us, "start": 0}
+                                if getattr(clip, "media_type", "") == "video"
+                                else {"duration": -1, "start": -1}
+                            ),
                             "sub_time_range": {"duration": -1, "start": -1},
                             "type": 0,
-                            "width": edit_plan.project.width,
+                            "width": w,
                         }
-                        for clip, s_path in staged_clips
+                        for clip, s_path, w, h in staged_clips
                     ]
                 },
                 {

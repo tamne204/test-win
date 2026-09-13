@@ -369,16 +369,18 @@ class DownloadEntitlementService {
                 $filename  = '2TOOLNE_Windows_Customer_Test_2.0.0-hardened.zip';
                 $sha256    = '812076c622b6a1eeebcac44a74d76ffedcd3bfa711d394a7a571ddfce86c19ac';
                 $sizeBytes = 971974552;
-            } elseif ($packageType === 'portable' || $packageType === 'zip' || $packageType === 'direct' || $packageType === 'v204' || $packageType === 'v201') {
-                $filename  = '2toolne-autoedit-2.0.4-win-x64.zip';
-                $sha256    = 'd561055f02db95150e831d1039533a19315b37d8dbcaa437ea37e31899e01459';
-                $sizeBytes = 706037910;
+            } elseif ($packageType === 'portable' || $packageType === 'zip' || $packageType === 'direct' || $packageType === 'v211' || $packageType === 'v210' || $packageType === 'v206' || $packageType === 'v205' || $packageType === 'v204' || $packageType === 'v201') {
+                $filename  = '2toolne-autoedit-2.1.1-win-x64.zip';
+                $sha256    = '8a9b4bb917a2859fbda77df898cec94f306a152942283da57b46db151ca03a9a';
+                $sizeBytes = 290079506;
             } elseif ($isMac) {
-                $filename  = '2toolne_AutoEdit_macOS_latest.dmg';
+                $filename  = '2TOOLNE-AutoEdit-2.1.1.dmg';
+                $sha256    = '4205a7f7542eaa32b0d8d63f2594ed1d6febea9278749d7e1b664cc30f10281f';
+                $sizeBytes = 279390331;
             } else {
-                $filename  = '2TOOLNE-AutoEdit-Setup-2.0.0.exe';
-                $sha256    = '0d205a795fcf28732c3356687e92fe031a134ffb1183cf5e60ef61f6a0d9d2a6';
-                $sizeBytes = 523331420;
+                $filename  = '2TOOLNE-AutoEdit-Setup-2.1.1.exe';
+                $sha256    = '81745a1b52668da41aa136ac7a14f1e0bfd285ca1a97c46874e89c3e1fe632b0';
+                $sizeBytes = 220366254;
             }
         } elseif (in_array($normProd, ['UPSCALE', '2TOOLNE.UPSCALE', '2TOOLNE_UPSCALE'])) {
             if ($isMac) {
@@ -435,8 +437,19 @@ class DownloadEntitlementService {
 
         // Also check alias filenames
         $aliases = [];
-        if ($filename === '2TOOLNE-AutoEdit-Setup-2.0.0.exe') {
+        if ($filename === '2TOOLNE-AutoEdit-Setup-2.1.1.exe' || $filename === '2TOOLNE-AutoEdit-Setup-2.1.0.exe') {
             $aliases[] = '2TOOLNE-AutoEdit-Setup-latest.exe';
+        } elseif ($filename === '2toolne-autoedit-2.1.1-win-x64.zip' || $filename === '2toolne-autoedit-2.1.0-win-x64.zip') {
+            $aliases[] = '2toolne-autoedit-latest-win-x64.zip';
+        } elseif ($filename === '2TOOLNE-AutoEdit-2.1.1.dmg' || $filename === '2TOOLNE-AutoEdit-2.1.0.dmg') {
+            $aliases[] = '2TOOLNE AutoEdit-2.1.1.dmg';
+            $aliases[] = '2TOOLNE AutoEdit-2.1.1-arm64.dmg';
+            $aliases[] = '2TOOLNE-AutoEdit-2.1.1-arm64.dmg';
+            $aliases[] = '2TOOLNE AutoEdit-2.1.0.dmg';
+            $aliases[] = '2TOOLNE AutoEdit-2.1.0-arm64.dmg';
+            $aliases[] = '2TOOLNE-AutoEdit-2.1.0-arm64.dmg';
+            $aliases[] = '2TOOLNE-AutoEdit-latest.dmg';
+            $aliases[] = '2toolne_AutoEdit_macOS_latest.dmg';
         } elseif ($filename === '2TOOLNE_Windows_Customer_Test_2.0.0-hardened.zip') {
             $aliases[] = '2TOOLNE-AutoEdit-Customer-latest.zip';
         }

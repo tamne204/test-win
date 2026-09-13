@@ -581,7 +581,7 @@ async function runAllTests() {
       assert.strictEqual(renderQueueAfter, initialRenderQueueData,
         'Render queue file must remain completely untouched by PipelineQueueV2');
 
-      console.log('✓ P3-15 PASS: Queue A and Queue B remained strictly isolated');
+      console.log('✓ P3-15 PASS: Pipeline Queue V2 and Render Queue / Queue B remained strictly isolated');
       passed++;
     }
 

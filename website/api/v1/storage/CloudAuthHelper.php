@@ -44,8 +44,35 @@ class CloudAuthHelper {
             ];
         }
 
-        // 3. Check HTTP Authorization: Bearer <token> or X-API-Key
+        // 3. Check HTTP Authorization: Bearer <token> or X-API-Key or Worker Secret
         $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
+        $rawWorkerSecret = $_SERVER['HTTP_X_WORKER_SECRET'] ?? '';
+        if (empty($rawWorkerSecret) && preg_match('/Bearer\s+(\S+)/i', $authHeader, $wMatches)) {
+            if (defined('TTS_WORKER_SECRET') && !empty(TTS_WORKER_SECRET) && hash_equals(TTS_WORKER_SECRET, $wMatches[1])) {
+                $rawWorkerSecret = $wMatches[1];
+            }
+        }
+        if (!empty($rawWorkerSecret) && defined('TTS_WORKER_SECRET') && hash_equals(TTS_WORKER_SECRET, $rawWorkerSecret)) {
+            return [
+                'id'        => 'tts_worker_daemon',
+                'username'  => 'tts_worker',
+                'email'     => 'worker@2tamne.site',
+                'fullname'  => 'TTS GPU Worker',
+                'role'      => 'worker',
+                'is_admin'  => true,
+                'is_worker' => true,
+                'ai_access_key' => [
+                    'id'             => 'worker_internal_key',
+                    'display_name'   => 'TTS Worker Service',
+                    'workspace_type' => 'SYSTEM',
+                    'workspace_id'   => 'system',
+                    'team_id'        => null,
+                    'root_folder_id' => null,
+                    'scopes'         => ['tts.worker', '*'],
+                ],
+            ];
+        }
+
         $rawAiKey = $_SERVER['HTTP_X_API_KEY'] ?? '';
         if (empty($rawAiKey) && preg_match('/Bearer\s+(2tl_ai_\S+)/i', $authHeader, $aiMatches)) {
             $rawAiKey = $aiMatches[1];
@@ -59,6 +86,7 @@ class CloudAuthHelper {
 
         if (preg_match('/Bearer\s+(\S+)/i', $authHeader, $matches)) {
             $token = $matches[1];
+            // 1. Try app_auth_sessions
             try {
                 $stmt = $db->prepare('SELECT user_id FROM app_auth_sessions WHERE (token = ? OR refresh_token = ? OR code = ? OR id = ?) AND expires_at > NOW() LIMIT 1');
                 $stmt->execute([$token, $token, $token, $token]);
@@ -74,6 +102,33 @@ class CloudAuthHelper {
                 }
             } catch (Throwable $e) {
                 // Ignore schema variations
+            }
+
+            // 2. Try JWT Bearer Token (header.payload.signature)
+            $jwtParts = explode('.', $token);
+            if (count($jwtParts) === 3) {
+                $rawHeader = self::base64UrlDecode($jwtParts[0]);
+                $rawPayload = self::base64UrlDecode($jwtParts[1]);
+                $sig = self::base64UrlDecode($jwtParts[2]);
+                $secret = defined('JWT_AUTH_SECRET') ? JWT_AUTH_SECRET : (getenv('JWT_SECRET') ?: '2toolne_jwt_auth_secret_token_key_2026');
+                $expectedSig = hash_hmac('sha256', $jwtParts[0] . '.' . $jwtParts[1], $secret, true);
+                if (hash_equals($expectedSig, $sig)) {
+                    $payload = json_decode($rawPayload, true);
+                    if (is_array($payload)) {
+                        if (empty($payload['exp']) || $payload['exp'] > time()) {
+                            $targetUserId = $payload['sub'] ?? ($payload['user_id'] ?? ($payload['uid'] ?? ''));
+                            if (!empty($targetUserId)) {
+                                $uStmt = $db->prepare('SELECT id, username, email, fullname, role FROM users WHERE id = ? OR username = ? LIMIT 1');
+                                $uStmt->execute([$targetUserId, $targetUserId]);
+                                $u = $uStmt->fetch(PDO::FETCH_ASSOC);
+                                if ($u) {
+                                    $u['is_admin'] = in_array($u['role'], ['admin', 'super_admin'], true);
+                                    return $u;
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -236,12 +291,16 @@ class CloudAuthHelper {
     public static function authorizeSpaceAccess(string $spaceId, string $userId): array {
         $db = Database::getConnection();
 
-        // If authenticated via AI Access Key, strictly enforce key workspace binding
+        // If authenticated via AI Access Key, strictly enforce key workspace binding unless worker scope is present
         $currentUser = self::getCurrentUser();
         if ($currentUser && !empty($currentUser['ai_access_key'])) {
-            $keyWs = $currentUser['ai_access_key']['workspace_id'];
-            if ($spaceId !== $keyWs) {
-                return ['allowed' => false, 'role' => 'DENIED', 'space' => null, 'reason' => 'AI_KEY_WORKSPACE_MISMATCH'];
+            $scopes = $currentUser['ai_access_key']['scopes'] ?? [];
+            $isWorkerScope = in_array('tts.worker', $scopes, true) || in_array('*', $scopes, true) || !empty($currentUser['is_worker']);
+            if (!$isWorkerScope) {
+                $keyWs = $currentUser['ai_access_key']['workspace_id'] ?? '';
+                if ($spaceId !== $keyWs) {
+                    return ['allowed' => false, 'role' => 'DENIED', 'space' => null, 'reason' => 'AI_KEY_WORKSPACE_MISMATCH'];
+                }
             }
         }
 
@@ -274,7 +333,12 @@ class CloudAuthHelper {
             }
         }
 
-        // 3. Super Admin bypass (only if not restricted by AI key)
+        // 3. Worker bypass (authorized worker uploading on behalf of job)
+        if (!empty($currentUser['is_worker']) || (isset($currentUser['ai_access_key']['scopes']) && (in_array('tts.worker', $currentUser['ai_access_key']['scopes'], true) || in_array('*', $currentUser['ai_access_key']['scopes'], true)))) {
+            return ['allowed' => true, 'role' => 'OWNER', 'space' => $space];
+        }
+
+        // 4. Super Admin bypass (only if not restricted by AI key)
         if (empty($currentUser['ai_access_key'])) {
             $uStmt = $db->prepare('SELECT role FROM users WHERE id = ? LIMIT 1');
             $uStmt->execute([$userId]);
@@ -285,5 +349,13 @@ class CloudAuthHelper {
         }
 
         return ['allowed' => false, 'role' => 'DENIED', 'space' => $space];
+    }
+
+    public static function base64UrlDecode(string $input): string {
+        $remainder = strlen($input) % 4;
+        if ($remainder) {
+            $input .= str_repeat('=', 4 - $remainder);
+        }
+        return base64_decode(strtr($input, '-_', '+/')) ?: '';
     }
 }

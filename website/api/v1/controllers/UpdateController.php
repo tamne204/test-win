@@ -16,11 +16,71 @@ class UpdateController {
     private const UPDATE_SECRET = '2TOOLNE_SECURE_UPDATE_SALT_2026';
     private const CANARY_CHANNEL = 'windows-canary';
     private const STABLE_CHANNEL = 'stable';
-    private const CANARY_VERSION = '2.0.4';
+    private const CANARY_VERSION = '2.1.1';
     private const TOKEN_TTL_SECONDS = 900; // Strictly 15 minutes
 
     // Durable private storage outside Apache webroot
     private const PRIVATE_PACKAGES_DIR = 'C:/2TOOLNE-Private/packages';
+
+    // 2.1.1 Authoritative Package Metadata (Single Source of Truth)
+    private const RELEASE_211_PACKAGE = '2toolne-autoedit-2.1.1-win-x64.zip';
+    private const RELEASE_211_SIZE_BYTES = 290079506;
+    private const RELEASE_211_SIZE_MB = 276.64;
+    private const RELEASE_211_SHA256 = '8a9b4bb917a2859fbda77df898cec94f306a152942283da57b46db151ca03a9a';
+    private const RELEASE_211_MAC_ARM64_PACKAGE = '2toolne-autoedit-2.1.1-mac-arm64.zip';
+    private const RELEASE_211_MAC_ARM64_SIZE_BYTES = 264732089;
+    private const RELEASE_211_MAC_ARM64_SIZE_MB = 252.47;
+    private const RELEASE_211_MAC_ARM64_SHA256 = 'cbc7bd71abbc10a5b261b796f89ccde2afbe0f2733f9b589dfbf5f9246863f72';
+    private const RELEASE_211_MAC_X64_PACKAGE = '2toolne-autoedit-2.1.1-mac-x64.zip';
+    private const RELEASE_211_MAC_X64_SIZE_BYTES = 269359281;
+    private const RELEASE_211_MAC_X64_SIZE_MB = 256.88;
+    private const RELEASE_211_MAC_X64_SHA256 = '9c56ea0a098d69baa0909b8066d529c8b75dcde1cb93d676de65a9b97bc354d9';
+    private const RELEASE_211_NOTES = '2TOOLNE AutoEdit v2.1.1: Tối ưu hóa bảo mật Native Root of Trust với cặp khóa Ed25519 sản xuất, loại bỏ dev fallback khi đóng gói, xác thực Staged Launcher, đóng gói NSIS sạch không chứa source code Python/Go, tương thích CapCut Desktop v9.3.0.3970.';
+
+    // 2.1.0 Authoritative Package Metadata (Single Source of Truth)
+    private const RELEASE_210_PACKAGE = '2toolne-autoedit-2.1.0-win-x64.zip';
+    private const RELEASE_210_SIZE_BYTES = 291637486;
+    private const RELEASE_210_SIZE_MB = 278.13;
+    private const RELEASE_210_SHA256 = '2d59fba6316b06ea1512c86c36dc9fd9429a20fdc723bf88b3d283516f82d0e4';
+    private const RELEASE_210_MAC_ARM64_PACKAGE = '2toolne-autoedit-2.1.0-mac-arm64.zip';
+    private const RELEASE_210_MAC_ARM64_SIZE_BYTES = 266231831;
+    private const RELEASE_210_MAC_ARM64_SIZE_MB = 253.90;
+    private const RELEASE_210_MAC_ARM64_SHA256 = 'c083c7c6ff1c5569c42d8be5202454cd14fb7b847d6f2c62c8002a0d4cdac0f8';
+    private const RELEASE_210_MAC_X64_PACKAGE = '2toolne-autoedit-2.1.0-mac-x64.zip';
+    private const RELEASE_210_MAC_X64_SIZE_BYTES = 270859022;
+    private const RELEASE_210_MAC_X64_SIZE_MB = 258.31;
+    private const RELEASE_210_MAC_X64_SHA256 = '96de1a5133cc1bb29dd6b8a7f9ee9c4b4365c784e0a9b4674d1e1ad79815dfaa';
+    private const RELEASE_210_NOTES = '2TOOLNE AutoEdit v2.1.0: Tối ưu hóa Media Grid tên tệp tin (Filename-Only) không decode thumbnail, chống tràn bộ nhớ với hàng nghìn tệp tin 4K, tích hợp Native Nuitka Onefile Engine, bảo mật Ed25519 toàn vẹn đa tệp tin, tương thích CapCut Desktop v9.3.0.3970.';
+
+    // 2.0.6 Authoritative Package Metadata (Single Source of Truth)
+    private const RELEASE_206_PACKAGE = '2toolne-autoedit-2.0.6-win-x64.zip';
+    private const RELEASE_206_SIZE_BYTES = 364742421;
+    private const RELEASE_206_SIZE_MB = 347.85;
+    private const RELEASE_206_SHA256 = '02f65105894e07820a165b2468c5a4d43ed3533ddc35bd7b35cb661555d9e56e';
+    private const RELEASE_206_MAC_ARM64_PACKAGE = '2toolne-autoedit-2.0.6-mac-arm64.zip';
+    private const RELEASE_206_MAC_ARM64_SIZE_BYTES = 263299413;
+    private const RELEASE_206_MAC_ARM64_SIZE_MB = 251.10;
+    private const RELEASE_206_MAC_ARM64_SHA256 = 'f47aea42e980d498022d04de1dd5f7fcce7e6231d5cd1d5c4eceac9ea2b94eaf';
+    private const RELEASE_206_MAC_X64_PACKAGE = '2toolne-autoedit-2.0.6-mac-x64.zip';
+    private const RELEASE_206_MAC_X64_SIZE_BYTES = 267926609;
+    private const RELEASE_206_MAC_X64_SIZE_MB = 255.51;
+    private const RELEASE_206_MAC_X64_SHA256 = '226d4fe5be44d09b9baad26e1e1895f00287ca705c6d7d71a79b3f54650dde2f';
+    private const RELEASE_206_NOTES = '2TOOLNE AutoEdit v2.0.6: Tích hợp Native Nuitka Onefile Engine, loại bỏ triệt để timeout sidecar, bảo mật Ed25519 toàn vẹn đa tệp tin, tương thích CapCut Desktop v9.3.0.3970.';
+
+    // 2.0.5 Authoritative Package Metadata (Single Source of Truth)
+    private const RELEASE_205_PACKAGE = '2toolne-autoedit-2.0.5-win-x64.zip';
+    private const RELEASE_205_SIZE_BYTES = 288647350;
+    private const RELEASE_205_SIZE_MB = 275.28;
+    private const RELEASE_205_SHA256 = '0837a7aa4f7ad04f32def4bf7ee1e62d8ebb5b672f3752c22228b4b4fa3c3e1f';
+    private const RELEASE_205_MAC_ARM64_PACKAGE = '2toolne-autoedit-2.0.5-mac-arm64.zip';
+    private const RELEASE_205_MAC_ARM64_SIZE_BYTES = 263299413;
+    private const RELEASE_205_MAC_ARM64_SIZE_MB = 251.10;
+    private const RELEASE_205_MAC_ARM64_SHA256 = 'f47aea42e980d498022d04de1dd5f7fcce7e6231d5cd1d5c4eceac9ea2b94eaf';
+    private const RELEASE_205_MAC_X64_PACKAGE = '2toolne-autoedit-2.0.5-mac-x64.zip';
+    private const RELEASE_205_MAC_X64_SIZE_BYTES = 267926609;
+    private const RELEASE_205_MAC_X64_SIZE_MB = 255.51;
+    private const RELEASE_205_MAC_X64_SHA256 = '226d4fe5be44d09b9baad26e1e1895f00287ca705c6d7d71a79b3f54650dde2f';
+    private const RELEASE_205_NOTES = '2TOOLNE AutoEdit v2.0.5: Tích hợp Native Root of Trust Bootstrap Verifier, bảo mật Ed25519 toàn vẹn đa tệp tin, tối ưu hóa giao diện Dark Mode và nâng cao độ ổn định tương thích CapCut v9.3.0.3970.';
 
     // 2.0.4 Authoritative Package Metadata (Single Source of Truth)
     private const RELEASE_204_PACKAGE = '2toolne-autoedit-2.0.4-win-x64.zip';
@@ -53,6 +113,180 @@ class UpdateController {
     // Trusted Release Artifact Registry (Strict product, platform, architecture isolation)
     private const TRUSTED_PACKAGES = [
         'autoedit' => [
+            '2.1.1' => [
+                'win32' => [
+                    'x64' => [
+                        'filename' => self::RELEASE_211_PACKAGE,
+                        'size_bytes' => self::RELEASE_211_SIZE_BYTES,
+                        'size_mb' => self::RELEASE_211_SIZE_MB,
+                        'sha256' => self::RELEASE_211_SHA256,
+                    ],
+                    'arm64' => [
+                        'filename' => self::RELEASE_211_PACKAGE,
+                        'size_bytes' => self::RELEASE_211_SIZE_BYTES,
+                        'size_mb' => self::RELEASE_211_SIZE_MB,
+                        'sha256' => self::RELEASE_211_SHA256,
+                    ],
+                    'installer' => [
+                        'filename' => '2TOOLNE-AutoEdit-Setup-2.1.1.exe',
+                        'size_bytes' => 220366254,
+                        'size_mb' => 210.16,
+                        'sha256' => '81745a1b52668da41aa136ac7a14f1e0bfd285ca1a97c46874e89c3e1fe632b0',
+                    ],
+                ],
+                'darwin' => [
+                    'arm64' => [
+                        'filename' => self::RELEASE_211_MAC_ARM64_PACKAGE,
+                        'size_bytes' => self::RELEASE_211_MAC_ARM64_SIZE_BYTES,
+                        'size_mb' => self::RELEASE_211_MAC_ARM64_SIZE_MB,
+                        'sha256' => self::RELEASE_211_MAC_ARM64_SHA256,
+                    ],
+                    'x64' => [
+                        'filename' => self::RELEASE_211_MAC_X64_PACKAGE,
+                        'size_bytes' => self::RELEASE_211_MAC_X64_SIZE_BYTES,
+                        'size_mb' => self::RELEASE_211_MAC_X64_SIZE_MB,
+                        'sha256' => self::RELEASE_211_MAC_X64_SHA256,
+                    ],
+                    'dmg' => [
+                        'filename' => '2TOOLNE-AutoEdit-2.1.1.dmg',
+                        'size_bytes' => 279390331,
+                        'size_mb' => 266.45,
+                        'sha256' => '4205a7f7542eaa32b0d8d63f2594ed1d6febea9278749d7e1b664cc30f10281f',
+                    ],
+                    'dmg_arm64' => [
+                        'filename' => '2TOOLNE-AutoEdit-2.1.1-arm64.dmg',
+                        'size_bytes' => 274758284,
+                        'size_mb' => 262.03,
+                        'sha256' => 'da9de72937a57715c365d6cddcaa056667cfafa8cc6e3fd005c49e984608fc8c',
+                    ],
+                ]
+            ],
+            '2.1.0' => [
+                'win32' => [
+                    'x64' => [
+                        'filename' => self::RELEASE_210_PACKAGE,
+                        'size_bytes' => self::RELEASE_210_SIZE_BYTES,
+                        'size_mb' => self::RELEASE_210_SIZE_MB,
+                        'sha256' => self::RELEASE_210_SHA256,
+                    ],
+                    'arm64' => [
+                        'filename' => self::RELEASE_210_PACKAGE,
+                        'size_bytes' => self::RELEASE_210_SIZE_BYTES,
+                        'size_mb' => self::RELEASE_210_SIZE_MB,
+                        'sha256' => self::RELEASE_210_SHA256,
+                    ],
+                    'installer' => [
+                        'filename' => '2TOOLNE-AutoEdit-Setup-2.1.0.exe',
+                        'size_bytes' => 220441242,
+                        'size_mb' => 210.23,
+                        'sha256' => '449528effbf2da109cd4b6aad93ba41650d6b8b05a7aca5f2f6ac0518a19b01d',
+                    ],
+                ],
+                'darwin' => [
+                    'arm64' => [
+                        'filename' => self::RELEASE_210_MAC_ARM64_PACKAGE,
+                        'size_bytes' => self::RELEASE_210_MAC_ARM64_SIZE_BYTES,
+                        'size_mb' => self::RELEASE_210_MAC_ARM64_SIZE_MB,
+                        'sha256' => self::RELEASE_210_MAC_ARM64_SHA256,
+                    ],
+                    'x64' => [
+                        'filename' => self::RELEASE_210_MAC_X64_PACKAGE,
+                        'size_bytes' => self::RELEASE_210_MAC_X64_SIZE_BYTES,
+                        'size_mb' => self::RELEASE_210_MAC_X64_SIZE_MB,
+                        'sha256' => self::RELEASE_210_MAC_X64_SHA256,
+                    ],
+                    'dmg' => [
+                        'filename' => '2TOOLNE-AutoEdit-2.1.0.dmg',
+                        'size_bytes' => 280957338,
+                        'size_mb' => 267.94,
+                        'sha256' => '1e8ccf02f43f48be50cee5cfe531e5c53eb81653be03d98760cbf78b7d4e2e95',
+                    ],
+                    'dmg_arm64' => [
+                        'filename' => '2TOOLNE-AutoEdit-2.1.0-arm64.dmg',
+                        'size_bytes' => 276340021,
+                        'size_mb' => 263.54,
+                        'sha256' => 'd10346d10e8d890685faa5364e2a91749b37a1008d50a3bd63af81c678725088',
+                    ],
+                ]
+            ],
+            '2.0.6' => [
+                'win32' => [
+                    'x64' => [
+                        'filename' => self::RELEASE_206_PACKAGE,
+                        'size_bytes' => self::RELEASE_206_SIZE_BYTES,
+                        'size_mb' => self::RELEASE_206_SIZE_MB,
+                        'sha256' => self::RELEASE_206_SHA256,
+                    ],
+                    'arm64' => [
+                        'filename' => self::RELEASE_206_PACKAGE,
+                        'size_bytes' => self::RELEASE_206_SIZE_BYTES,
+                        'size_mb' => self::RELEASE_206_SIZE_MB,
+                        'sha256' => self::RELEASE_206_SHA256,
+                    ],
+                    'installer' => [
+                        'filename' => '2TOOLNE-AutoEdit-Setup-2.0.6.exe',
+                        'size_bytes' => 355220975,
+                        'size_mb' => 338.77,
+                        'sha256' => '390eb48b67af83b7f183e1f4575707d0390aa0fd5779f6cca0e43df6f0639c32',
+                    ],
+                ],
+                'darwin' => [
+                    'arm64' => [
+                        'filename' => self::RELEASE_206_MAC_ARM64_PACKAGE,
+                        'size_bytes' => self::RELEASE_206_MAC_ARM64_SIZE_BYTES,
+                        'size_mb' => self::RELEASE_206_MAC_ARM64_SIZE_MB,
+                        'sha256' => self::RELEASE_206_MAC_ARM64_SHA256,
+                    ],
+                    'x64' => [
+                        'filename' => self::RELEASE_206_MAC_X64_PACKAGE,
+                        'size_bytes' => self::RELEASE_206_MAC_X64_SIZE_BYTES,
+                        'size_mb' => self::RELEASE_206_MAC_X64_SIZE_MB,
+                        'sha256' => self::RELEASE_206_MAC_X64_SHA256,
+                    ],
+                    'dmg' => [
+                        'filename' => '2TOOLNE-AutoEdit-2.0.6.dmg',
+                        'size_bytes' => 277919033,
+                        'size_mb' => 265.04,
+                        'sha256' => '666805b7ab2564394f053f4f20b4f3e317257b016d973051a16befd78386d35a',
+                    ],
+                    'dmg_arm64' => [
+                        'filename' => '2TOOLNE-AutoEdit-2.0.6-arm64.dmg',
+                        'size_bytes' => 273369192,
+                        'size_mb' => 260.71,
+                        'sha256' => 'b2ecc711bc090bf671ca04b3d6ed81098e6b7cca27fac4f125c0cc7be573dcd0',
+                    ],
+                ]
+            ],
+            '2.0.5' => [
+                'win32' => [
+                    'x64' => [
+                        'filename' => self::RELEASE_205_PACKAGE,
+                        'size_bytes' => self::RELEASE_205_SIZE_BYTES,
+                        'size_mb' => self::RELEASE_205_SIZE_MB,
+                        'sha256' => self::RELEASE_205_SHA256,
+                    ],
+                    'arm64' => [
+                        'filename' => self::RELEASE_205_PACKAGE,
+                        'size_bytes' => self::RELEASE_205_SIZE_BYTES,
+                        'size_mb' => self::RELEASE_205_SIZE_MB,
+                        'sha256' => self::RELEASE_205_SHA256,
+                    ]
+                ],
+                'darwin' => [
+                    'arm64' => [
+                        'filename' => self::RELEASE_205_MAC_ARM64_PACKAGE,
+                        'size_bytes' => self::RELEASE_205_MAC_ARM64_SIZE_BYTES,
+                        'size_mb' => self::RELEASE_205_MAC_ARM64_SIZE_MB,
+                        'sha256' => self::RELEASE_205_MAC_ARM64_SHA256,
+                    ],
+                    'x64' => [
+                        'filename' => self::RELEASE_205_MAC_X64_PACKAGE,
+                        'size_bytes' => self::RELEASE_205_MAC_X64_SIZE_BYTES,
+                        'size_mb' => self::RELEASE_205_MAC_X64_SIZE_MB,
+                        'sha256' => self::RELEASE_205_MAC_X64_SHA256,
+                    ]
+                ]
+            ],
             '2.0.4' => [
                 'win32' => [
                     'x64' => [
@@ -271,24 +505,25 @@ class UpdateController {
         string $arch,
         string $version,
         string $sha256,
-        string $principalId
+        string $principalId,
+        int $ttlSeconds = self::TOKEN_TTL_SECONDS
     ): array {
         $issuedAt = time();
-        $expires = $issuedAt + self::TOKEN_TTL_SECONDS;
+        $expires = $issuedAt + $ttlSeconds;
         $nonce = bin2hex(random_bytes(8));
 
         // Token elements: channel|appName|platform|arch|version|sha256|principalId|issuedAt|expires|nonce
         $tokenPayload = "{$channel}|{$appName}|{$platform}|{$arch}|{$version}|{$sha256}|{$principalId}|{$issuedAt}|{$expires}|{$nonce}";
         $sig = hash_hmac('sha256', $tokenPayload, self::UPDATE_SECRET);
         $token = base64_encode("{$tokenPayload}|{$sig}");
-        $downloadUrl = "https://www.2tamne.site/api/v1/update/download?token=" . urlencode($token);
+        $downloadUrl = "https://2tamne.site/api/v1/update/download?token=" . urlencode($token);
 
         return [
             'token' => $token,
             'download_url' => $downloadUrl,
             'issued_at' => $issuedAt,
             'expires' => $expires,
-            'expires_in' => self::TOKEN_TTL_SECONDS,
+            'expires_in' => $ttlSeconds,
             'nonce' => $nonce,
             'principal' => $principalId,
         ];
@@ -318,24 +553,27 @@ class UpdateController {
 
         // Resolve Target Release Metadata
         if ($appName === 'autoedit') {
+            $latestVersion = self::CANARY_VERSION; // Strictly '2.1.1'
+            $releaseNotes = self::RELEASE_211_NOTES;
+            $isMandatory = false;
+            $publishedAt = '2026-09-14 01:25:00';
             if ($isWin) {
-                $latestVersion = self::CANARY_VERSION;
-                $filename = self::RELEASE_204_PACKAGE;
-                $sizeBytes = self::RELEASE_204_SIZE_BYTES;
-                $fileSizeMb = self::RELEASE_204_SIZE_MB;
-                $sha256 = self::RELEASE_204_SHA256;
-                $releaseNotes = self::RELEASE_204_NOTES;
-                $isMandatory = false;
-                $publishedAt = '2026-09-11 06:00:00';
+                $filename = self::RELEASE_211_PACKAGE;
+                $sizeBytes = self::RELEASE_211_SIZE_BYTES;
+                $fileSizeMb = self::RELEASE_211_SIZE_MB;
+                $sha256 = self::RELEASE_211_SHA256;
             } else {
-                $latestVersion = '2.0.0';
-                $filename = "2toolne-autoedit-{$latestVersion}-mac-{$arch}.zip";
-                $sha256 = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
-                $sizeBytes = 152043520;
-                $fileSizeMb = 145.0;
-                $releaseNotes = "2TOOLNE AutoEdit macOS v{$latestVersion}";
-                $isMandatory = false;
-                $publishedAt = '2026-09-08 00:00:00';
+                if ($arch === 'x64') {
+                    $filename = self::RELEASE_211_MAC_X64_PACKAGE;
+                    $sizeBytes = self::RELEASE_211_MAC_X64_SIZE_BYTES;
+                    $fileSizeMb = self::RELEASE_211_MAC_X64_SIZE_MB;
+                    $sha256 = self::RELEASE_211_MAC_X64_SHA256;
+                } else {
+                    $filename = self::RELEASE_211_MAC_ARM64_PACKAGE;
+                    $sizeBytes = self::RELEASE_211_MAC_ARM64_SIZE_BYTES;
+                    $fileSizeMb = self::RELEASE_211_MAC_ARM64_SIZE_MB;
+                    $sha256 = self::RELEASE_211_MAC_ARM64_SHA256;
+                }
             }
         } else {
             $latestVersion = '1.0.2';

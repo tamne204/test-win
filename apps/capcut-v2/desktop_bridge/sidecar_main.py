@@ -13,11 +13,11 @@ import traceback
 
 # Force UTF-8 on Windows and POSIX
 try:
-    if hasattr(sys.stdin, "reconfigure"):
+    if sys.stdin is not None and hasattr(sys.stdin, "reconfigure"):
         sys.stdin.reconfigure(encoding="utf-8", errors="replace")
-    if hasattr(sys.stdout, "reconfigure"):
+    if sys.stdout is not None and hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    if hasattr(sys.stderr, "reconfigure"):
+    if sys.stderr is not None and hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 except Exception:
     pass
@@ -66,8 +66,8 @@ def main():
     sys.stderr.write("==================================================\n")
     sys.stderr.write("2TOOLNE AUTOEDIT PYTHON SIDECAR STARTED\n")
     sys.stderr.write(f"PID: {os.getpid()} | Python: {sys.version}\n")
-    sys.stderr.write(f"SIDECAR_VERSION: 2.0.4\n")
-    sys.stderr.write("SIDECAR_BUILD_ID: 2TOOLNE-AUTOEDIT-2.0.4-WIN-X64\n")
+    sys.stderr.write(f"SIDECAR_VERSION: 2.0.5\n")
+    sys.stderr.write("SIDECAR_BUILD_ID: 2TOOLNE-AUTOEDIT-2.0.5-WIN-X64\n")
     sys.stderr.write("DETECTOR_MODULE: adapters.capcut.detector.CapCutDetector\n")
     sys.stderr.write("DETECTOR_API_VERSION: 9.3.0.3970-verified-detect-only\n")
     sys.stderr.write("==================================================\n")
@@ -76,6 +76,12 @@ def main():
     bridge = DesktopBridge(
         notification_callback=send_to_stdout,
     )
+
+    if sys.stdin is None or sys.stdout is None:
+        if sys.stderr is not None:
+            sys.stderr.write("[Sidecar] Launched without standard IO handles. Exiting.\n")
+            sys.stderr.flush()
+        sys.exit(0)
 
     # Main event loop over stdin
     while True:

@@ -55,6 +55,23 @@ class CloudDownloadController {
         $mimeType = $file['mime_type'] ?: 'application/octet-stream';
         $size = (int)$file['size_bytes'];
 
+        // 1. Check if physical file exists locally on disk (e.g. uploaded via AI Gateway)
+        $candidates = [
+            dirname(__DIR__, 3) . '/storage/cloud_storage/' . ($file['storage_account_id'] ?? '') . '/' . $fileId,
+            dirname(__DIR__, 3) . '/uploads/cloud_storage/' . ($file['storage_account_id'] ?? '') . '/' . $fileId,
+        ];
+        foreach ($candidates as $localPath) {
+            if (file_exists($localPath) && !is_dir($localPath)) {
+                $actualSize = filesize($localPath);
+                header("Content-Type: {$mimeType}");
+                header("Content-Disposition: attachment; filename=\"{$filename}\"");
+                header("Content-Length: {$actualSize}");
+                header("Cache-Control: private, max-age=3600");
+                readfile($localPath);
+                exit;
+            }
+        }
+
         // If credentials exist, stream from Google Drive
         if (!empty($file['encrypted_credentials'])) {
             try {

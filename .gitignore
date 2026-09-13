@@ -8,6 +8,7 @@ __pycache__/
 venv/
 env/
 ENV/
+node_modules/
 build/
 develop-eggs/
 dist/
@@ -44,17 +45,24 @@ license.json
 credentials.json
 client_secret_*.json
 *secret*.json
+website/storage/admin_key.txt
+scratch/durability_tests/*_cookie.txt
 
 # Runtime & User Uploads / Outputs
 uploads/
 outputs/
 tts_outputs/
 projects/
+projects_capcut/
 sub_overlay_frames/
+backup/
 backups/
+deployment_backups/
 temp/
 logs/
 *.log
+website/storage/download_tokens/
+website/storage/*.sqlite*
 
 # Test Artifacts & Media Dumps
 test_*.mp4
@@ -106,3 +114,7 @@ apps/capcut-v2/desktop/resources/bin/win-x64/ffmpeg.exe
 apps/capcut-v2/desktop/resources/bin/win-x64/ffprobe.exe
 apps/capcut-v2/desktop/resources/autoedit-core/
 apps/capcut-v2/packaging/dist/
+
+# Ignore LanceDB data but keep the Parquet export
+.agent/memory-bank/lancedb/
+website/storage/ratelimit/

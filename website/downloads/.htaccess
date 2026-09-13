@@ -1,27 +1,23 @@
-RewriteEngine On
+# 2TOOLNE SECURE AUTHENTICATED SOFTWARE DOWNLOAD GATE
+# All direct static downloads of executables, archives, and metadata are strictly forbidden.
+# All downloads must be authenticated and authorized via /api/v1/downloads/request and streamed via short-lived signed tokens.
 
-# 2TOOLNE AutoEdit V2 Windows Setup (.exe) - Direct local file routes & aliases
-RewriteRule ^(autoedit|AutoEdit|2toolne-autoedit)$ /downloads/2TOOLNE-AutoEdit-Setup-latest.exe [R=302,L]
-RewriteRule ^(autoedit-setup|AutoEdit-Setup)$ /downloads/2TOOLNE-AutoEdit-Setup-latest.exe [R=302,L]
-RewriteRule ^(autoedit-portable|AutoEdit-Portable)$ /downloads/2TOOLNE-AutoEdit-Customer-latest.zip [R=302,L]
+Options -Indexes
 
-# 2toolne Upscale Windows Setup (.exe) - v1.1.2
-RewriteRule ^(2toolne_Upscale_Setup_latest\.exe|2toolne-upscale-setup-x64\.exe)$ "https://drive.usercontent.google.com/download?id=1C7EWqwFqaT19Kf1yttw2pQKM4-r5lIUz&export=download&confirm=t" [R=302,L]
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>
 
-# 2toolne Upscale macOS (.dmg) - v1.1.2
-RewriteRule ^(2toolne_Upscale_latest\.dmg|2toolne_latest\.dmg)$ "https://drive.usercontent.google.com/download?id=1aVQGzHfxQY0C38aomN1y5nepyET36014&export=download&confirm=t" [R=302,L]
-
-# 2toolne Upscale Windows Portable (.zip/.exe) - v1.1.2
-RewriteRule ^(2toolne_Upscale_Windows_latest\.zip)$ "https://drive.usercontent.google.com/download?id=1DBMggYA4FT5Y4eQ0kW_L6QHoU6nZLwVl&export=download&confirm=t" [R=302,L]
-
-# 2toolne Upscale macOS Universal (.zip) - v1.1.2
-RewriteRule ^(2toolne_Upscale_macOS_latest\.zip)$ "https://drive.usercontent.google.com/download?id=1h1uCimX88xzz4d0hInGIflXxNJ1qnqvD&export=download&confirm=t" [R=302,L]
-
-# SlideshowBuilder / 2toolne Studio Windows (.zip)
-RewriteRule ^(SlideshowBuilder_Windows_latest\.zip|2toolne_Windows_latest\.zip|latest\.zip)$ "https://drive.usercontent.google.com/download?id=1GXFGS6z4boaH7lG3W2EGZbAYTtlgJw2D&export=download" [R=302,L]
-
-# SlideshowBuilder / 2toolne Studio macOS (.zip)
-RewriteRule ^(SlideshowBuilder_macOS_latest\.zip|2toolne_macOS_latest\.zip)$ "https://drive.usercontent.google.com/download?id=1k5VmWgmqMbo7-QxrqdAzNUMXLYbq5lEL&export=download" [R=302,L]
-
-# Google Labs Extension (.zip)
-RewriteRule ^(2tamne_Labs_Extension_latest\.zip)$ "https://drive.usercontent.google.com/download?id=1ahoWoT2dmLNN1AgVpjUfF7-rgZJDk98M&export=download" [R=302,L]
+<FilesMatch "\.(?i:exe|zip|dmg|pkg|7z|rar|tar|gz|json|sha256|bat|sh|ps1)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>

@@ -12,7 +12,7 @@ class Router {
         // Enable CORS
         header('Access-Control-Allow-Origin: *');
         header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
-        header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Device-Id, X-Requested-With, X-User-Id');
+        header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Device-Id, X-Requested-With, X-User-Id, X-Worker-Secret, X-API-Key');
         header('Content-Type: application/json; charset=utf-8');
 
         if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -64,7 +64,8 @@ class Router {
                     call_user_func_array($route['handler'], [$params, $body]);
                     return;
                 } catch (Throwable $e) {
-                    self::error($e->getMessage(), 500);
+                    error_log("[Router::dispatch] " . $e->getMessage());
+                    self::error('Lỗi hệ thống máy chủ. Vui lòng thử lại.', 500, 'SERVER_ERROR');
                     return;
                 }
             }
@@ -98,6 +99,7 @@ class Router {
     public static function error(string $message, int $statusCode = 400, ?string $code = null): void {
         http_response_code($statusCode);
         echo json_encode([
+            'ok' => false,
             'success' => false,
             'error' => $message,
             'message' => $message,

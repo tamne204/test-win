@@ -8,7 +8,7 @@ const path = require('path');
 const fs = require('fs');
 
 const OUTPUT_DIR = path.resolve(__dirname, '../../../../reports/visual_rebrand');
-const ARTIFACT_DIR = path.resolve('/Users/2tamne/.gemini/antigravity/brain/1a778940-cb12-4abb-8dec-82d6da75a57d');
+const ARTIFACT_DIR = path.resolve('/Users/2tamne/.gemini/antigravity/brain/3d2290de-47f7-4fdb-8f58-9b5fc20b2eaa');
 
 if (!fs.existsSync(OUTPUT_DIR)) {
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
@@ -408,6 +408,7 @@ async function captureTabs() {
     width: 1536,
     height: 864,
     show: false,
+    backgroundColor: '#0E0F11',
     webPreferences: {
       preload: path.join(__dirname, '../src/preload/preload.js'),
       contextIsolation: true,
@@ -613,61 +614,6 @@ async function captureTabs() {
     (() => {
       const modals = document.querySelectorAll('.modal-overlay, .modal-backdrop');
       modals.forEach(m => { m.style.display = 'none'; m.classList.remove('show'); });
-    })();
-  `);
-
-  // 14. Light Mode Showcase
-  console.log('Capturing Light Mode Showcase...');
-  await win.webContents.executeJavaScript(`
-    (() => {
-      document.documentElement.setAttribute('data-theme', 'light');
-      const navBtn = document.querySelector('[data-tab="studio"]');
-      if (navBtn) navBtn.click();
-    })();
-  `);
-  await new Promise((r) => setTimeout(r, 500));
-  const lightImg = await win.webContents.capturePage();
-  fs.writeFileSync(path.join(OUTPUT_DIR, 'showcase_light_mode.png'), lightImg.toPNG());
-  copyToArtifacts('showcase_light_mode.png');
-  results.push({
-    tab: 'light_mode',
-    name: 'showcase_light_mode',
-    label: 'Studio in Light Mode ([data-theme="light"])',
-    file: 'showcase_light_mode.png',
-    size: `${lightImg.getSize().width}x${lightImg.getSize().height}`,
-    bytes: fs.statSync(path.join(OUTPUT_DIR, 'showcase_light_mode.png')).size,
-  });
-
-  // 15. Light Mode Modal Example
-  console.log('Capturing Light Mode Modal Example...');
-  await win.webContents.executeJavaScript(`
-    (() => {
-      const modal = document.getElementById('modalLogin') || document.getElementById('modalInputBundle') || document.getElementById('modalMissingImages');
-      if (modal) {
-        modal.style.display = 'flex';
-        modal.classList.add('show');
-      }
-    })();
-  `);
-  await new Promise((r) => setTimeout(r, 400));
-  const lightModalImg = await win.webContents.capturePage();
-  fs.writeFileSync(path.join(OUTPUT_DIR, 'modal_example_light.png'), lightModalImg.toPNG());
-  copyToArtifacts('modal_example_light.png');
-  results.push({
-    tab: 'modal_light',
-    name: 'modal_example_light',
-    label: 'Modal Dialog Surface in Light Mode',
-    file: 'modal_example_light.png',
-    size: `${lightModalImg.getSize().width}x${lightModalImg.getSize().height}`,
-    bytes: fs.statSync(path.join(OUTPUT_DIR, 'modal_example_light.png')).size,
-  });
-
-  // Close modal and reset to dark mode
-  await win.webContents.executeJavaScript(`
-    (() => {
-      const modals = document.querySelectorAll('.modal-overlay, .modal-backdrop');
-      modals.forEach(m => { m.style.display = 'none'; m.classList.remove('show'); });
-      document.documentElement.setAttribute('data-theme', 'dark');
     })();
   `);
 

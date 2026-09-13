@@ -29,7 +29,11 @@ class FlowDownloadManager {
   constructor(options = {}) {
     this.tempDir = options.tempDir || path.join(os.homedir(), '.2toolne', 'flow_downloads');
     this.activeAttempts = new Map(); // attempt_id -> attempt metadata
+    this.operationToAttempt = new Map(); // operation_id -> attempt_id (Section 22)
+    this.mediaToAttempt = new Map(); // media_id -> attempt_id (Section 22)
+    this.pathToAttempt = new Map(); // final_path -> attempt_id (Section 22)
     this.pendingDownloads = new Map(); // download item url/filename -> attempt_id
+    this.expectedAttemptId = null; // explicit target attempt ID before triggering download
 
     this.ensureTempDir();
   }
@@ -50,26 +54,77 @@ class FlowDownloadManager {
    * @param {string} [attempt.slug]
    * @param {string} attempt.target_dir
    * @param {string} [attempt.character_id]
+   * @param {string} [attempt.operation_id]
+   * @param {string} [attempt.media_id]
+   * @param {string} [attempt.flow_download_resolution]
    */
-  registerAttempt(attempt) {
-    if (!attempt.attempt_id) {
-      throw new Error('Attempt ID is required to register download attempt');
-    }
+  registerAttempt(attempt = {}) {
+    const attemptId = attempt.attempt_id || `att_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
     const record = {
-      attempt_id: attempt.attempt_id,
+      attempt_id: attemptId,
       pipeline_job_id: attempt.pipeline_job_id,
       scene_id: attempt.scene_id || '001',
       generation_type: attempt.generation_type || 'image',
       slug: attempt.slug || 'scene',
       target_dir: attempt.target_dir,
       character_id: attempt.character_id || null,
+      operation_id: attempt.operation_id || null,
+      media_id: attempt.media_id || null,
+      flow_download_resolution: attempt.flow_download_resolution || '1080p',
+      actual_flow_resolution: null,
+      actual_downloaded_width: 0,
+      actual_downloaded_height: 0,
       created_at: Date.now(),
       status: 'REGISTERED',
       temp_path: null,
       final_path: null,
     };
-    this.activeAttempts.set(attempt.attempt_id, record);
+    this.activeAttempts.set(attemptId, record);
+
+    if (record.operation_id) {
+      this.operationToAttempt.set(record.operation_id, record.attempt_id);
+    }
+    if (record.media_id) {
+      this.mediaToAttempt.set(record.media_id, record.attempt_id);
+    }
+
     return record;
+  }
+
+  /**
+   * Update correlation indices when operation_id or media_id is assigned (Section 21 & 22)
+   */
+  updateAttemptCorrelation(attemptId, { operation_id, media_id } = {}) {
+    const attempt = this.activeAttempts.get(attemptId);
+    if (!attempt) return null;
+
+    if (operation_id) {
+      attempt.operation_id = operation_id;
+      this.operationToAttempt.set(operation_id, attemptId);
+    }
+    if (media_id) {
+      attempt.media_id = media_id;
+      this.mediaToAttempt.set(media_id, attemptId);
+    }
+    return attempt;
+  }
+
+  /**
+   * Resolve attempt by any correlation key
+   */
+  getAttemptByCorrelation({ attempt_id, operation_id, media_id } = {}) {
+    if (attempt_id && this.activeAttempts.has(attempt_id)) {
+      return this.activeAttempts.get(attempt_id);
+    }
+    if (operation_id && this.operationToAttempt.has(operation_id)) {
+      const attId = this.operationToAttempt.get(operation_id);
+      return this.activeAttempts.get(attId) || null;
+    }
+    if (media_id && this.mediaToAttempt.has(media_id)) {
+      const attId = this.mediaToAttempt.get(media_id);
+      return this.activeAttempts.get(attId) || null;
+    }
+    return null;
   }
 
   getAttempt(attemptId) {
@@ -82,18 +137,57 @@ class FlowDownloadManager {
    */
   attachToSession(session) {
     if (!session || typeof session.on !== 'function') return;
+    this.session = session;
 
     session.on('will-download', (event, item, webContents) => {
       const url = item.getURL();
       const filename = item.getFilename();
       const ext = path.extname(filename) || '.mp4';
 
-      // Correlate with active attempt
+      // Correlate directly with active attempt using multi-key correlation (Section 22)
       let matchedAttempt = null;
-      for (const [attemptId, attempt] of this.activeAttempts.entries()) {
-        if (attempt.status === 'REGISTERED' || attempt.status === 'DOWNLOADING') {
-          matchedAttempt = attempt;
-          break;
+
+      // 0. Explicitly expected attempt before triggering download
+      if (this.expectedAttemptId && this.activeAttempts.has(this.expectedAttemptId)) {
+        matchedAttempt = this.activeAttempts.get(this.expectedAttemptId);
+        this.expectedAttemptId = null;
+      }
+
+      // 1. Check operation_id
+      if (!matchedAttempt) {
+        for (const [opId, attId] of this.operationToAttempt.entries()) {
+          if (opId && (url.includes(opId) || filename.includes(opId))) {
+            matchedAttempt = this.activeAttempts.get(attId);
+            break;
+          }
+        }
+      }
+
+      // 2. Check media_id
+      if (!matchedAttempt) {
+        for (const [mId, attId] of this.mediaToAttempt.entries()) {
+          if (mId && (url.includes(mId) || filename.includes(mId))) {
+            matchedAttempt = this.activeAttempts.get(attId);
+            break;
+          }
+        }
+      }
+
+      // 3. Check attempt_id
+      if (!matchedAttempt) {
+        for (const [attId, attempt] of this.activeAttempts.entries()) {
+          if (url.includes(attId) || filename.includes(attId)) {
+            matchedAttempt = attempt;
+            break;
+          }
+        }
+      }
+
+      // 4. Safe single fallback
+      if (!matchedAttempt) {
+        const pending = Array.from(this.activeAttempts.values()).filter(a => a.status === 'REGISTERED' || a.status === 'DOWNLOADING');
+        if (pending.length === 1) {
+          matchedAttempt = pending[0];
         }
       }
 
@@ -150,11 +244,31 @@ class FlowDownloadManager {
     const tempFilename = `direct_${attemptId}${ext}`;
     const tempPath = path.join(this.tempDir, tempFilename);
 
+    let cookieHeader = '';
+    if (this.session?.cookies) {
+      try {
+        const cookies = await this.session.cookies.get({ url: 'https://flow.google.com' });
+        if (cookies && cookies.length > 0) {
+          cookieHeader = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+        }
+      } catch (err) {
+        console.warn('[FlowDownloadManager] Failed getting session cookies:', err.message);
+      }
+    }
+
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+      'Referer': 'https://flow.google.com/',
+    };
+    if (cookieHeader) {
+      headers['Cookie'] = cookieHeader;
+    }
+
     await new Promise((resolve, reject) => {
       const file = fs.createWriteStream(tempPath);
       const client = url.startsWith('https') ? https : http;
 
-      const req = client.get(url, { headers: { 'User-Agent': '2TOOLNE-Flow/2.0' } }, (res) => {
+      const req = client.get(url, { headers }, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           file.close();
           fs.unlink(tempPath, () => {});
@@ -310,10 +424,25 @@ class FlowDownloadManager {
       throw new Error(check.error || 'FLOW_MEDIA_INVALID');
     }
 
+    // Classify actual downloaded resolution from width & height
+    const maxDim = Math.max(check.width, check.height);
+    let actualFlowRes = '1080p';
+    if (maxDim >= 3000) {
+      actualFlowRes = '4K';
+    } else if (maxDim >= 2000) {
+      actualFlowRes = '2K';
+    } else {
+      actualFlowRes = '1080p';
+    }
+    attempt.actual_flow_resolution = actualFlowRes;
+    attempt.actual_downloaded_width = check.width;
+    attempt.actual_downloaded_height = check.height;
+
     // Determine canonical destination
     fs.mkdirSync(attempt.target_dir, { recursive: true });
     let finalFilename = '';
-    const ext = isVideo ? 'mp4' : 'png';
+    const rawExt = (path.extname(srcPath) || '').replace('.', '').toLowerCase();
+    const ext = isVideo ? 'mp4' : (['png', 'jpg', 'jpeg', 'webp'].includes(rawExt) ? (rawExt === 'jpeg' ? 'jpg' : rawExt) : 'png');
 
     if (attempt.generation_type === 'character_ref') {
       const charId = attempt.character_id || 'CHAR_001';
@@ -337,9 +466,11 @@ class FlowDownloadManager {
     const checksum = crypto.createHash('sha256').update(fs.readFileSync(finalPath)).digest('hex');
 
     attempt.final_path = finalPath;
+    this.pathToAttempt.set(finalPath, attemptId);
     attempt.status = 'READY';
 
     return {
+      ok: true,
       path: finalPath,
       filename: finalFilename,
       size: stat.size,
@@ -347,6 +478,8 @@ class FlowDownloadManager {
       height: check.height,
       duration: check.duration,
       checksum,
+      actual_flow_resolution: actualFlowRes,
+      requested_flow_resolution: attempt.flow_download_resolution || '1080p',
     };
   }
 }

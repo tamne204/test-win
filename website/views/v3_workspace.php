@@ -159,6 +159,13 @@ $primary_team = !empty($user_teams) ? $user_teams[0] : null;
                         </button>
                     </li>
                     <li>
+                        <button type="button" class="v3-nav-item" id="btn-tab-tts" onclick="switchMainTab('tab-tts-studio')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                            <span>Text to Speech</span>
+                            <span class="v3-nav-badge" style="background:rgba(99,102,241,0.2);color:#818cf8;">AI</span>
+                        </button>
+                    </li>
+                    <li>
                         <button type="button" class="v3-nav-item" id="btn-tab-team" onclick="switchMainTab('tab-team')">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                             <span>Đội Nhóm (Team)</span>
@@ -275,7 +282,7 @@ $primary_team = !empty($user_teams) ? $user_teams[0] : null;
                     <div style="display:flex;align-items:center;gap:10px">
                         <button type="button" class="v3-btn v3-btn-primary" onclick="switchMainTab('tab-downloads')">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-                            <span>Tải AutoEdit 2.0</span>
+                            <span>Tải AutoEdit v2.1.1</span>
                         </button>
                     </div>
                 </div>
@@ -363,7 +370,7 @@ $primary_team = !empty($user_teams) ? $user_teams[0] : null;
                     <div style="display:flex;gap:12px;flex-wrap:wrap">
                         <button type="button" class="v3-btn v3-btn-secondary" onclick="switchMainTab('tab-downloads')">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-                            <span>Tải AutoEdit 2.0</span>
+                            <span>Tải AutoEdit v2.1.1</span>
                         </button>
                         <button type="button" class="v3-btn v3-btn-secondary" onclick="switchMainTab('tab-wallet-view')">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></svg>
@@ -392,12 +399,12 @@ $primary_team = !empty($user_teams) ? $user_teams[0] : null;
                         <div style="padding:14px;border-radius:var(--v3-radius-md);background:var(--v3-surface-2);border:1px solid var(--v3-border-subtle)">
                             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
                                 <b style="font-size:14px;color:#fff">2TOOLNE AutoEdit for CapCut</b>
-                                <span class="v3-badge v3-badge-active">v2.0.1 Stable</span>
+                                <span class="v3-badge v3-badge-active">v2.1.1 Stable</span>
                             </div>
                             <p style="font-size:12.5px;color:var(--v3-text-muted);margin:0 0 12px;line-height:1.5">
-                                Native Desktop Suite tự động hóa CapCut Desktop. Tương thích chính xác CapCut 9.3.0.3970. Tự sinh Timeline, Scale/Position mượt mà, rãnh âm thanh và phụ đề XML.
+                                Native Desktop Suite tự động hóa CapCut Desktop v9.3.0.3970. Bản v2.1.1 tối ưu bảo mật Native Root of Trust với khóa Ed25519 sản xuất, loại bỏ dev fallback khi đóng gói, xác thực Staged Launcher, Filename-Only Media Grid tránh tràn RAM.
                             </p>
-                            <button type="button" class="v3-btn v3-btn-xs v3-btn-outline" onclick="switchMainTab('tab-downloads')">Tải Bộ Cài Đặt</button>
+                            <button type="button" class="v3-btn v3-btn-xs v3-btn-outline" onclick="switchMainTab('tab-downloads')">Tải Bộ Cài Đặt v2.1.1</button>
                         </div>
 
                         <div style="padding:14px;border-radius:var(--v3-radius-md);background:var(--v3-surface-2);border:1px solid var(--v3-border-subtle)">
@@ -612,44 +619,61 @@ $primary_team = !empty($user_teams) ? $user_teams[0] : null;
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M15 9.5a3.5 3.5 0 0 0-7 0c0 4 7 2 7 6a3.5 3.5 0 0 1-7 0"/></svg>
                         <span>Chọn Gói Nạp Lượt Ảnh (Kích Hoạt Tự Động Qua SePay)</span>
                     </div>
-                    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:16px">
-                        <!-- Package 1 -->
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:16px">
+                        <!-- Package 1: Starter Batch -->
                         <div class="v3-card" style="text-align:center">
-                            <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:6px">Gói 50 Lượt</div>
-                            <div style="font-size:24px;font-weight:800;color:var(--v3-primary);font-family:'JetBrains Mono', monospace;margin-bottom:4px">50.000đ</div>
-                            <div style="font-size:11.5px;color:var(--v3-text-muted);margin-bottom:14px">1.000đ / lượt phóng to</div>
-                            <button type="button" class="v3-btn v3-btn-secondary" style="width:100%" onclick="openQrPayment('Gói 50 Lượt Token', '50.000đ', 365, 'VIP', 'TOKEN_WALLET')">
+                            <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:6px">Starter Batch</div>
+                            <div style="font-size:24px;font-weight:800;color:var(--v3-primary);font-family:'JetBrains Mono', monospace;margin-bottom:4px">100.000đ</div>
+                            <div style="font-size:12px;color:var(--v3-primary);font-weight:600;margin-bottom:4px">1.000 Tokens</div>
+                            <div style="font-size:11px;color:var(--v3-text-muted);margin-bottom:14px;min-height:28px">Cơ bản cho nhu cầu cá nhân &amp; thử nghiệm ảnh AI</div>
+                            <button type="button" class="v3-btn v3-btn-secondary" style="width:100%" onclick="openQrPayment('Starter Batch (1.000 Tokens)', '100.000đ', 365, 'pkg_starter', 'TOKEN_WALLET')">
                                 Nạp Gói Này
                             </button>
                         </div>
 
-                        <!-- Package 2 (Popular) -->
+                        <!-- Package 2: Creator Pack (Popular) -->
                         <div class="v3-card v3-card-glow" style="text-align:center;position:relative">
                             <span class="v3-badge v3-badge-brand" style="position:absolute;top:10px;right:10px">Phổ biến</span>
-                            <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:6px">Gói 200 Lượt</div>
-                            <div style="font-size:24px;font-weight:800;color:var(--v3-primary);font-family:'JetBrains Mono', monospace;margin-bottom:4px">150.000đ</div>
-                            <div style="font-size:11.5px;color:#10B981;margin-bottom:14px">Tiết kiệm 25% (750đ / lượt)</div>
-                            <button type="button" class="v3-btn v3-btn-primary" style="width:100%" onclick="openQrPayment('Gói 200 Lượt Token', '150.000đ', 365, 'VIP', 'TOKEN_WALLET')">
+                            <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:6px">Creator Pack</div>
+                            <div style="font-size:24px;font-weight:800;color:var(--v3-primary);font-family:'JetBrains Mono', monospace;margin-bottom:4px">250.000đ</div>
+                            <div style="font-size:12px;color:var(--v3-primary);font-weight:600;margin-bottom:4px">3.000 Tokens <span style="color:#10B981">(+200 tặng thêm)</span></div>
+                            <div style="font-size:11px;color:var(--v3-text-muted);margin-bottom:14px;min-height:28px">Gói được yêu thích nhất cho content creator</div>
+                            <button type="button" class="v3-btn v3-btn-primary" style="width:100%" onclick="openQrPayment('Creator Pack (3.000 Tokens)', '250.000đ', 365, 'pkg_creator', 'TOKEN_WALLET')">
                                 Nạp Gói Này
                             </button>
                         </div>
 
-                        <!-- Package 3 -->
-                        <div class="v3-card" style="text-align:center">
-                            <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:6px">Gói 500 Lượt</div>
-                            <div style="font-size:24px;font-weight:800;color:var(--v3-primary);font-family:'JetBrains Mono', monospace;margin-bottom:4px">300.000đ</div>
-                            <div style="font-size:11.5px;color:#10B981;margin-bottom:14px">Tiết kiệm 40% (600đ / lượt)</div>
-                            <button type="button" class="v3-btn v3-btn-secondary" style="width:100%" onclick="openQrPayment('Gói 500 Lượt Token', '300.000đ', 365, 'VIP', 'TOKEN_WALLET')">
+                        <!-- Package 3: Studio Pro -->
+                        <div class="v3-card" style="text-align:center;position:relative">
+                            <span class="v3-badge" style="position:absolute;top:10px;right:10px;background:rgba(16,185,129,0.15);color:#10B981;border:1px solid rgba(16,185,129,0.3)">Tiết kiệm</span>
+                            <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:6px">Studio Pro</div>
+                            <div style="font-size:24px;font-weight:800;color:var(--v3-primary);font-family:'JetBrains Mono', monospace;margin-bottom:4px">700.000đ</div>
+                            <div style="font-size:12px;color:var(--v3-primary);font-weight:600;margin-bottom:4px">10.000 Tokens <span style="color:#10B981">(+1.000 tặng thêm)</span></div>
+                            <div style="font-size:11px;color:var(--v3-text-muted);margin-bottom:14px;min-height:28px">Sản xuất số lượng lớn cho studio &amp; agency</div>
+                            <button type="button" class="v3-btn v3-btn-secondary" style="width:100%" onclick="openQrPayment('Studio Pro (10.000 Tokens)', '700.000đ', 365, 'pkg_studio', 'TOKEN_WALLET')">
                                 Nạp Gói Này
                             </button>
                         </div>
 
-                        <!-- Package 4 -->
+                        <!-- Package 4: Enterprise Ultra -->
                         <div class="v3-card" style="text-align:center">
-                            <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:6px">Gói 1.000 Lượt</div>
-                            <div style="font-size:24px;font-weight:800;color:var(--v3-primary);font-family:'JetBrains Mono', monospace;margin-bottom:4px">500.000đ</div>
-                            <div style="font-size:11.5px;color:#10B981;margin-bottom:14px">Tiết kiệm 50% (500đ / lượt)</div>
-                            <button type="button" class="v3-btn v3-btn-secondary" style="width:100%" onclick="openQrPayment('Gói 1.000 Lượt Token', '500.000đ', 365, 'VIP', 'TOKEN_WALLET')">
+                            <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:6px">Enterprise Ultra</div>
+                            <div style="font-size:24px;font-weight:800;color:var(--v3-primary);font-family:'JetBrains Mono', monospace;margin-bottom:4px">1.800.000đ</div>
+                            <div style="font-size:12px;color:var(--v3-primary);font-weight:600;margin-bottom:4px">30.000 Tokens <span style="color:#10B981">(+5.000 tặng thêm)</span></div>
+                            <div style="font-size:11px;color:var(--v3-text-muted);margin-bottom:14px;min-height:28px">Khối lượng cực lớn, ưu tiên băng thông tối đa</div>
+                            <button type="button" class="v3-btn v3-btn-secondary" style="width:100%" onclick="openQrPayment('Enterprise Ultra (30.000 Tokens)', '1.800.000đ', 365, 'pkg_enterprise', 'TOKEN_WALLET')">
+                                Nạp Gói Này
+                            </button>
+                        </div>
+
+                        <!-- Package 5: Unlimited Studio Trọn Đời -->
+                        <div class="v3-card" style="text-align:center;position:relative;border-color:rgba(255,122,0,0.4)">
+                            <span class="v3-badge v3-badge-brand" style="position:absolute;top:10px;right:10px">Trọn Đời</span>
+                            <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:6px">Trọn Đời Studio</div>
+                            <div style="font-size:24px;font-weight:800;color:var(--v3-primary);font-family:'JetBrains Mono', monospace;margin-bottom:4px">1.500.000đ</div>
+                            <div style="font-size:12px;color:var(--v3-primary);font-weight:600;margin-bottom:4px">Không Giới Hạn</div>
+                            <div style="font-size:11px;color:var(--v3-text-muted);margin-bottom:14px;min-height:28px">Đặc quyền phóng to &amp; tạo ảnh không giới hạn</div>
+                            <button type="button" class="v3-btn v3-btn-primary" style="width:100%" onclick="openQrPayment('Trọn Đời Studio (Unlimited)', '1.500.000đ', 36500, 'pkg_unlimited', 'TOKEN_WALLET')">
                                 Nạp Gói Này
                             </button>
                         </div>
@@ -831,6 +855,144 @@ $primary_team = !empty($user_teams) ? $user_teams[0] : null;
             </div>
 
             <!-- ═══════════════════════════════════════════════════════════════
+                 MODULE 4.5: TEXT TO SPEECH & VOICE CLONING (#tab-tts-studio)
+                 ═══════════════════════════════════════════════════════════════ -->
+            <div id="tab-tts-studio" class="tab-pane" style="display:none">
+                <div class="v3-module-header">
+                    <div>
+                        <h1 class="v3-module-title">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                            <span>Text-to-Speech &amp; Voice Cloning Studio</span>
+                        </h1>
+                        <p class="v3-module-subtitle">Tổng hợp giọng đọc AI tự nhiên đa ngôn ngữ (EN, JA, KO, VI) và nhân bản giọng nói trực tiếp lên 2TOOLNE Cloud.</p>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <button type="button" class="v3-btn v3-btn-secondary" onclick="openMyVoicesModal()">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                            <span>Giọng Của Tôi (My Voices)</span>
+                        </button>
+                        <button type="button" class="v3-btn v3-btn-primary" onclick="openCloneVoiceModal()">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            <span>Nhân Bản Giọng (Clone Voice)</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Studio Workspace Grid -->
+                <div style="display:grid;grid-template-columns:1.2fr 0.8fr;gap:20px;margin-bottom:24px;" class="v3-tts-grid">
+                    <!-- Left: Script & Destination -->
+                    <div class="v3-card" style="padding:20px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                            <label class="v3-form-label" style="margin:0;font-weight:700;letter-spacing:0.5px;">KỊCH BẢN VĂN BẢN (SCRIPT)</label>
+                            <span id="tts-char-count" style="font-size:12px;color:var(--v3-text-muted);font-family:monospace;">0 / 10,000</span>
+                        </div>
+                        <textarea id="tts-input-text" class="v3-input" style="width:100%;height:180px;resize:vertical;font-size:14px;line-height:1.6;padding:12px;box-sizing:border-box;font-family:inherit;" placeholder="Nhập kịch bản hoặc dán văn bản cần chuyển thành giọng nói tại đây... (Hỗ trợ tiếng Anh, Nhật Bản, Hàn Quốc, Việt Nam)" oninput="updateTtsCharCount()"></textarea>
+
+                        <div style="margin-top:16px;">
+                            <label class="v3-form-label">TÊN TỆP XUẤT XƯỞNG (FILENAME)</label>
+                            <input type="text" id="tts-output-filename" class="v3-input" placeholder="narration.wav" />
+                        </div>
+
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px;">
+                            <div>
+                                <label class="v3-form-label">LƯU TẠI KHÔNG GIAN (CLOUD SPACE)</label>
+                                <select id="tts-space-select" class="v3-select" onchange="onTtsSpaceChanged()">
+                                    <?php if (!empty($user_cloud_spaces)): ?>
+                                        <?php foreach ($user_cloud_spaces as $sp): ?>
+                                            <option value="<?= htmlspecialchars($sp['id']) ?>" <?= ($sp['owner_type'] === 'USER' ? 'selected' : '') ?>>
+                                                <?= ($sp['owner_type'] === 'TEAM' ? '👥 ' : '👤 ') . htmlspecialchars($sp['name']) ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="v3-form-label">THƯ MỤC LƯU (FOLDER)</label>
+                                <select id="tts-folder-select" class="v3-select">
+                                    <option value="">-- Thư mục gốc (Root) --</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Voice Configuration -->
+                    <div class="v3-card" style="padding:20px;display:flex;flex-direction:column;justify-content:space-between;">
+                        <div>
+                            <div style="margin-bottom:16px;">
+                                <label class="v3-form-label">NGÔN NGỮ (LANGUAGE)</label>
+                                <select id="tts-language-select" class="v3-select" onchange="onTtsLanguageChanged()">
+                                    <option value="en" selected>English (Tiếng Anh)</option>
+                                    <option value="ja">Japanese (日本語 - Tiếng Nhật)</option>
+                                    <option value="ko">Korean (한국어 - Tiếng Hàn)</option>
+                                    <option value="vi" disabled>Vietnamese (Tiếng Việt - Sắp ra mắt / Coming Soon)</option>
+                                </select>
+                            </div>
+
+                            <div style="margin-bottom:16px;">
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                                    <label class="v3-form-label" style="margin:0;">GIỌNG ĐỌC (VOICE)</label>
+                                    <button type="button" class="v3-btn v3-btn-ghost v3-btn-xs" style="font-size:11px;color:var(--v3-primary);" onclick="openCloneVoiceModal()">+ Clone Mới</button>
+                                </div>
+                                <select id="tts-voice-select" class="v3-select"></select>
+                            </div>
+
+                            <div style="margin-bottom:16px;">
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                                    <label class="v3-form-label" style="margin:0;">TỐC ĐỘ ĐỌC (SPEED)</label>
+                                    <span id="tts-speed-badge" style="font-size:12px;font-weight:700;color:var(--v3-primary);">1.00x</span>
+                                </div>
+                                <input type="range" id="tts-speed-slider" min="0.75" max="1.50" step="0.05" value="1.00" class="v3-range" style="width:100%;cursor:pointer;" oninput="document.getElementById('tts-speed-badge').textContent = parseFloat(this.value).toFixed(2) + 'x'" />
+                            </div>
+
+                            <div style="margin-bottom:16px;">
+                                <label class="v3-form-label">ĐỊNH DẠNG ÂM THANH (FORMAT)</label>
+                                <select id="tts-format-select" class="v3-select" onchange="onTtsFormatChanged()">
+                                    <option value="wav" selected>WAV (Studio Lossless · 24kHz / 16-bit)</option>
+                                    <option value="mp3">MP3 (Compressed Web Standard · 192 kbps)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <button type="button" id="btn-tts-submit" class="v3-btn v3-btn-primary" style="width:100%;padding:14px;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;" onclick="submitTtsJob()">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                                <span>Tạo Giọng Đọc AI (Generate)</span>
+                            </button>
+                            <div style="font-size:11.5px;color:var(--v3-text-muted);text-align:center;margin-top:8px;">
+                                ⚡ Tải trực tiếp lên 2TOOLNE Cloud · Miễn phí giai đoạn thử nghiệm
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bottom: Remote Job Queue Section -->
+                <div class="v3-card" style="padding:20px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid var(--v3-border);padding-bottom:12px;">
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <h3 style="margin:0;font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px;">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                                <span>Hàng Đợi Xử Lý &amp; Tệp Âm Thanh (TTS Queue)</span>
+                            </h3>
+                            <span id="tts-active-badge" class="v3-nav-badge" style="display:none;background:rgba(59,130,246,0.2);color:#60a5fa;">0 Đang xử lý</span>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <button type="button" class="v3-btn v3-btn-outline v3-btn-xs" onclick="fetchTtsJobs(true)" title="Làm mới hàng đợi">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                                <span>Làm Mới</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Queue List Container -->
+                    <div id="tts-queue-container">
+                        <div style="text-align:center;padding:32px;color:var(--v3-text-muted);" id="tts-queue-loading">
+                            Đang đồng bộ hàng đợi xử lý...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══════════════════════════════════════════════════════════════
                  MODULE 5: TEAM (#tab-team) — FIRST-CLASS PAGE
                  ═══════════════════════════════════════════════════════════════ -->
             <div id="tab-team" class="tab-pane" style="display:none">
@@ -886,22 +1048,95 @@ $primary_team = !empty($user_teams) ? $user_teams[0] : null;
                         </div>
                     </div>
 
-                    <!-- Invite Member Bar -->
+                    <?php if (in_array($primary_team['my_role'], ['OWNER', 'ADMIN'])): ?>
+                    <!-- Create Universal Invite Link -->
                     <div class="v3-card" style="margin-bottom:24px">
                         <div class="v3-card-header">
-                            <div class="v3-card-title">Mời Thành Viên Mới Vào Nhóm</div>
+                            <div class="v3-card-title">Tạo Liên Kết Mời Thành Viên (Universal Invite Link)</div>
                         </div>
+                        <p style="font-size:12.5px;color:var(--v3-text-muted);margin:0 0 14px 0">
+                            Tạo liên kết mời dùng 1 lần, bảo mật mã hóa và tự động hết hạn sau 7 ngày. Thành viên chỉ cần mở link để tham gia Workspace.
+                        </p>
                         <form method="POST" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:0">
-                            <input type="hidden" name="action" value="send_team_invite">
+                            <input type="hidden" name="action" value="create_team_invite_link">
                             <input type="hidden" name="team_id" value="<?= htmlspecialchars($primary_team['id']) ?>">
-                            <div style="flex:1;min-width:240px">
-                                <input type="text" name="target_username" class="v3-input" placeholder="Nhập tên đăng nhập (username) thành viên..." required>
+                            <div style="min-width:180px">
+                                <select name="offered_role" class="v3-select" style="width:100%">
+                                    <option value="EDITOR" selected>Biên tập viên (Editor)</option>
+                                    <option value="ADMIN">Quản trị viên (Admin)</option>
+                                    <option value="VIEWER">Chỉ xem (Viewer)</option>
+                                </select>
+                            </div>
+                            <div style="flex:1;min-width:220px">
+                                <input type="text" name="recipient_email" class="v3-input" placeholder="Ghi chú người nhận hoặc Email (tuỳ chọn)...">
                             </div>
                             <button type="submit" class="v3-btn v3-btn-primary">
-                                Gửi Lời Mời
+                                + Tạo Link Mời
                             </button>
                         </form>
                     </div>
+
+                    <!-- Active Invitations List -->
+                    <div class="v3-card" style="margin-bottom:24px">
+                        <div class="v3-card-header">
+                            <div class="v3-card-title">Liên Kết Mời Đang Chờ Tham Gia (<?= count($user_team_invitations ?? []) ?>)</div>
+                        </div>
+                        <?php if (empty($user_team_invitations)): ?>
+                            <div style="font-size:12.5px;color:var(--v3-text-muted);padding:8px 0">
+                                Hiện không có liên kết mời nào đang hoạt động. Bạn có thể tạo liên kết mới ở trên.
+                            </div>
+                        <?php else: ?>
+                            <div class="v3-table-wrapper">
+                                <table class="v3-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Vai Trò Mời</th>
+                                            <th>Ghi Chú / Người Nhận</th>
+                                            <th>Người Tạo</th>
+                                            <th>Hết Hạn</th>
+                                            <th style="text-align:right">Thao Tác</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($user_team_invitations as $inv): 
+                                            $inv_role = strtoupper($inv['offered_role'] ?? 'EDITOR');
+                                            $inv_creator = ($inv['inviter_fullname'] ?? '') ?: ($inv['inviter_username'] ?? 'Admin');
+                                        ?>
+                                            <tr>
+                                                <td>
+                                                    <?php if ($inv_role === 'ADMIN'): ?>
+                                                        <span class="v3-badge v3-badge-role-admin">Quản Trị (Admin)</span>
+                                                    <?php elseif ($inv_role === 'VIEWER'): ?>
+                                                        <span class="v3-badge v3-badge-neutral">Chỉ Xem (Viewer)</span>
+                                                    <?php else: ?>
+                                                        <span class="v3-badge v3-badge-role-member">Biên Tập (Editor)</span>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td style="font-size:12.5px;color:var(--v3-text-muted)">
+                                                    <?= htmlspecialchars($inv['recipient_email'] ?: 'Mọi người có liên kết') ?>
+                                                </td>
+                                                <td style="font-size:12.5px;color:#fff">
+                                                    <?= htmlspecialchars($inv_creator) ?>
+                                                </td>
+                                                <td style="font-size:12px;color:var(--v3-text-subtle)">
+                                                    <?= htmlspecialchars($inv['expires_at'] ?? '—') ?>
+                                                </td>
+                                                <td style="text-align:right">
+                                                    <form method="POST" style="display:inline;margin:0" onsubmit="return confirm('Bạn có chắc chắn muốn thu hồi liên kết mời này?')">
+                                                        <input type="hidden" name="action" value="revoke_team_invitation">
+                                                        <input type="hidden" name="team_id" value="<?= htmlspecialchars($primary_team['id']) ?>">
+                                                        <input type="hidden" name="invitation_id" value="<?= htmlspecialchars($inv['id']) ?>">
+                                                        <button type="submit" class="v3-btn v3-btn-danger v3-btn-xs">Thu Hồi</button>
+                                                    </form>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                    <?php endif; ?>
 
                     <!-- Members List Table -->
                     <div class="v3-card">
@@ -1074,6 +1309,422 @@ $primary_team = !empty($user_teams) ? $user_teams[0] : null;
                         </div>
                     <?php endif; ?>
                 </div>
+
+                <!-- ═══════════════════════════════════════════════════════════════
+                     MODULE 6.B: LOCAL AI SKILL HUB & DOCUMENTATION (2TL-CAP-SKIL)
+                     ═══════════════════════════════════════════════════════════════ -->
+                <?php
+                    $skill_md_file = __DIR__ . '/../assets/downloads/SKILL.md';
+                    $skill_md_content = file_exists($skill_md_file) ? file_get_contents($skill_md_file) : '';
+                ?>
+                <textarea id="v3-raw-skill-content" style="display:none;"><?= htmlspecialchars($skill_md_content) ?></textarea>
+
+                <div class="v3-card v3-card-glow" style="margin-top:28px;border-color:rgba(255,122,0,0.3);background:linear-gradient(180deg, rgba(255,122,0,0.06) 0%, rgba(25,27,31,0.6) 100%);">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:18px;">
+                        <div style="flex:1;min-width:280px">
+                            <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+                                <span class="v3-badge v3-badge-active" style="font-size:11px;padding:3px 8px;background:rgba(255,122,0,0.18);color:var(--v3-primary);border-color:rgba(255,122,0,0.4)">
+                                    CANONICAL v2.0.0
+                                </span>
+                                <span class="v3-badge" style="font-size:11px;padding:3px 8px;background:rgba(16,185,129,0.12);color:var(--v3-success);border-color:rgba(16,185,129,0.3)">
+                                    1 BUNDLE = 1 VIDEO = 1 CAPCUT DRAFT
+                                </span>
+                            </div>
+                            <h2 style="font-size:20px;font-weight:700;color:#fff;margin:0 0 6px 0;display:flex;align-items:center;gap:10px">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--v3-primary)" stroke-width="2"><path d="M12 2v4"/><path d="m4.93 4.93 2.83 2.83"/><path d="M2 12h4"/><path d="m4.93 19.07 2.83-2.83"/><path d="M12 22v-4"/><path d="m19.07 19.07-2.83-2.83"/><path d="M22 12h-4"/><path d="m19.07 4.93-2.83 2.83"/><circle cx="12" cy="12" r="3"/></svg>
+                                <span>Bộ Skill &amp; Tài Liệu Cho AI Local (2TL-CAP-SKIL)</span>
+                            </h2>
+                            <p style="font-size:13.5px;color:var(--v3-text-muted);margin:0;line-height:1.6;max-width:760px">
+                                Bộ tài liệu đặc tả kỹ thuật, mã nguồn Python SDK và các dự án mẫu giúp bất kỳ AI nào (Ollama, LM Studio, DeepSeek, vLLM, ChatGPT, Claude Project, Cursor, Windsurf) tự động biên kịch và sinh cấu trúc Input Bundle tương thích 100% với <b>CapCut Timeline Builder</b>.
+                            </p>
+                            <div style="font-size:12px;color:var(--v3-text-subtle);margin-top:8px;font-family:'JetBrains Mono', monospace">
+                                🔒 Mã băm SHA-256 gói Zip: <span style="color:var(--v3-text-muted)">c5fcd56036e77d6d20e1d197c33a6a4fc61163fc279a15f41ad5d97ee03c9333</span>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+                            <a href="/assets/downloads/2TL-CAP-SKIL.zip" download="2TL-CAP-SKIL.zip" class="v3-btn v3-btn-primary" style="text-decoration:none;display:inline-flex;align-items:center;gap:8px;font-weight:600;padding:10px 18px">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                                <span>Tải Gói 2TL-CAP-SKIL.zip (32 KB)</span>
+                            </a>
+                            <button type="button" class="v3-btn v3-btn-secondary" onclick="copyAiSkillContent()" style="display:inline-flex;align-items:center;gap:8px;font-weight:600;padding:10px 16px">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                <span>Sao Chép SKILL.md</span>
+                            </button>
+                            <button type="button" class="v3-btn v3-btn-outline" onclick="openViewSkillModal()" style="display:inline-flex;align-items:center;gap:8px;padding:10px 14px">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                                <span>Xem Tài Liệu</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── Interactive Sub-Navigation Tabs ── -->
+                <div class="v3-card" style="padding:0;overflow:hidden;margin-top:20px;">
+                    <style>
+                        .v3-ai-subnav {
+                            display: flex;
+                            align-items: center;
+                            gap: 4px;
+                            background: rgba(12, 13, 15, 0.95);
+                            border-bottom: 1px solid var(--v3-border);
+                            padding: 8px 12px;
+                            overflow-x: auto;
+                        }
+                        .v3-ai-subnav-btn {
+                            background: transparent;
+                            border: 1px solid transparent;
+                            border-radius: 8px;
+                            padding: 8px 14px;
+                            font-size: 13px;
+                            font-weight: 600;
+                            color: var(--v3-text-muted);
+                            cursor: pointer;
+                            display: inline-flex;
+                            align-items: center;
+                            gap: 7px;
+                            white-space: nowrap;
+                            transition: all 0.15s ease;
+                        }
+                        .v3-ai-subnav-btn:hover {
+                            color: #fff;
+                            background: rgba(255,255,255,0.04);
+                        }
+                        .v3-ai-subnav-btn.active {
+                            background: rgba(255, 122, 0, 0.12);
+                            border-color: rgba(255, 122, 0, 0.35);
+                            color: var(--v3-primary);
+                        }
+                        .v3-ai-panel {
+                            padding: 24px;
+                            display: none;
+                        }
+                        .v3-ai-panel.active {
+                            display: block;
+                        }
+                        .v3-code-block {
+                            background: #0B0C0E;
+                            border: 1px solid var(--v3-border);
+                            border-radius: 8px;
+                            padding: 14px 16px;
+                            font-family: 'JetBrains Mono', monospace;
+                            font-size: 12.5px;
+                            color: #E2E8F0;
+                            line-height: 1.55;
+                            position: relative;
+                            overflow-x: auto;
+                            margin: 10px 0;
+                        }
+                        .v3-code-block-header {
+                            display: flex;
+                            align-items: center;
+                            justify-content: space-between;
+                            margin-bottom: 8px;
+                            padding-bottom: 6px;
+                            border-bottom: 1px solid rgba(255,255,255,0.05);
+                            font-size: 11.5px;
+                            color: var(--v3-text-muted);
+                        }
+                        .v3-step-grid {
+                            display: grid;
+                            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+                            gap: 16px;
+                            margin-top: 16px;
+                        }
+                        .v3-step-card {
+                            background: rgba(255,255,255,0.02);
+                            border: 1px solid var(--v3-border);
+                            border-radius: 10px;
+                            padding: 16px;
+                            transition: all 0.2s ease;
+                        }
+                        .v3-step-card:hover {
+                            border-color: rgba(255, 122, 0, 0.3);
+                            background: rgba(255, 122, 0, 0.02);
+                        }
+                    </style>
+
+                    <div class="v3-ai-subnav">
+                        <button type="button" class="v3-ai-subnav-btn active" id="subtab-btn-setup" onclick="switchAiDocTab('setup')">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                            <span>1. Hướng Dẫn Cài Đặt AI</span>
+                        </button>
+                        <button type="button" class="v3-ai-subnav-btn" id="subtab-btn-schemas" onclick="switchAiDocTab('schemas')">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 22h14a2 2 0 0 0 2-2V7.5L14.5 2H6a2 2 0 0 0-2 2v4"/><polyline points="14 2 14 8 20 8"/><path d="m2 15 3 3 3-3"/></svg>
+                            <span>2. Cấu Trúc Bundle &amp; JSON</span>
+                        </button>
+                        <button type="button" class="v3-ai-subnav-btn" id="subtab-btn-prompts" onclick="switchAiDocTab('prompts')">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                            <span>3. Prompt Mẫu Ra Lệnh</span>
+                        </button>
+                        <button type="button" class="v3-ai-subnav-btn" id="subtab-btn-tools" onclick="switchAiDocTab('tools')">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m18 15-6-6-6 6"/></svg>
+                            <span>4. Validator &amp; Python SDK</span>
+                        </button>
+                        <button type="button" class="v3-ai-subnav-btn" id="subtab-btn-examples" onclick="switchAiDocTab('examples')">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                            <span>5. Dự Án Mẫu Có Sẵn</span>
+                        </button>
+                    </div>
+
+                    <!-- ── SUB-PANEL 1: HƯỚNG DẪN CÀI ĐẶT ── -->
+                    <div id="subpanel-ai-setup" class="v3-ai-panel active">
+                        <div style="margin-bottom:16px">
+                            <h3 style="font-size:16px;font-weight:700;color:#fff;margin:0 0 4px 0">Cách Nạp Skill Vào Các Ứng Dụng AI Phổ Biến</h3>
+                            <p style="font-size:13px;color:var(--v3-text-muted);margin:0">
+                                Bạn chỉ cần đính kèm file <code>SKILL.md</code> vào hệ thống AI để AI hiểu 100% cấu trúc xuất bản video của 2TOOLNE.
+                            </p>
+                        </div>
+
+                        <div class="v3-step-grid">
+                            <!-- LM Studio / Ollama -->
+                            <div class="v3-step-card">
+                                <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+                                    <div style="width:32px;height:32px;border-radius:8px;background:rgba(255,122,0,0.15);display:flex;align-items:center;justify-content:center;color:var(--v3-primary);font-weight:bold">1</div>
+                                    <h4 style="font-size:14.5px;font-weight:700;color:#fff;margin:0">LM Studio &amp; Ollama</h4>
+                                </div>
+                                <div style="font-size:13px;color:var(--v3-text-muted);line-height:1.5">
+                                    • Trong <b>LM Studio</b>: Nhấn tab Chat, vào mục <b>System Prompt</b> và dán toàn bộ nội dung file <code>SKILL.md</code>.<br>
+                                    • Với <b>Ollama</b>: Tạo <code>Modelfile</code> có cú pháp <code>SYSTEM """[nội dung SKILL.md]"""</code> rồi chạy <code>ollama create 2toolne-ai</code>.
+                                </div>
+                            </div>
+
+                            <!-- ChatGPT & Claude -->
+                            <div class="v3-step-card">
+                                <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+                                    <div style="width:32px;height:32px;border-radius:8px;background:rgba(16,185,129,0.15);display:flex;align-items:center;justify-content:center;color:var(--v3-success);font-weight:bold">2</div>
+                                    <h4 style="font-size:14.5px;font-weight:700;color:#fff;margin:0">Claude &amp; ChatGPT</h4>
+                                </div>
+                                <div style="font-size:13px;color:var(--v3-text-muted);line-height:1.5">
+                                    • Trong <b>Claude Projects</b>: Tạo Project mới, tải tệp <code>SKILL.md</code> vào mục <b>Project Knowledge</b>.<br>
+                                    • Trong <b>Custom GPTs</b>: Tải <code>SKILL.md</code> vào mục <b>Knowledge Files</b> và đặt lệnh tuân thủ cấu trúc bundle.
+                                </div>
+                            </div>
+
+                            <!-- Cursor & Antigravity -->
+                            <div class="v3-step-card">
+                                <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+                                    <div style="width:32px;height:32px;border-radius:8px;background:rgba(56,189,248,0.15);display:flex;align-items:center;justify-content:center;color:var(--v3-info);font-weight:bold">3</div>
+                                    <h4 style="font-size:14.5px;font-weight:700;color:#fff;margin:0">Cursor, Windsurf, Antigravity</h4>
+                                </div>
+                                <div style="font-size:13px;color:var(--v3-text-muted);line-height:1.5">
+                                    • Giải nén thư mục <code>2TL-CAP-SKIL/</code> vào dự án của bạn.<br>
+                                    • Thêm dòng chỉ định vào <code>.cursorrules</code> hoặc thư mục kỹ năng: <code>.agent/skills/input-bundle-generator/SKILL.md</code> để Coding Agent tự động thực hiện.
+                                </div>
+                            </div>
+
+                            <!-- Python & Automation -->
+                            <div class="v3-step-card">
+                                <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+                                    <div style="width:32px;height:32px;border-radius:8px;background:rgba(245,158,11,0.15);display:flex;align-items:center;justify-content:center;color:var(--v3-warning);font-weight:bold">4</div>
+                                    <h4 style="font-size:14.5px;font-weight:700;color:#fff;margin:0">Python Script &amp; n8n</h4>
+                                </div>
+                                <div style="font-size:13px;color:var(--v3-text-muted);line-height:1.5">
+                                    • Sử dụng script <code>scripts/toolne_client.py</code> đi kèm.<br>
+                                    • Chỉ cần thiết lập biến môi trường <code>TOOLNE_API_KEY="2tl_ai_..."</code> là hệ thống tự động đẩy toàn bộ thư mục bundle lên Cloud một cách bảo mật.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ── SUB-PANEL 2: CẤU TRÚC BUNDLE & SCHEMAS ── -->
+                    <div id="subpanel-ai-schemas" class="v3-ai-panel">
+                        <div style="margin-bottom:16px">
+                            <h3 style="font-size:16px;font-weight:700;color:#fff;margin:0 0 4px 0">Cấu Trúc Thư Mục Chuẩn Của 1 Input Bundle</h3>
+                            <p style="font-size:13px;color:var(--v3-text-muted);margin:0">
+                                1 Input Bundle đại diện cho đúng 1 Video thành phẩm. Khi nạp vào 2TOOLNE, hệ thống sẽ dựng tự động ra 1 dự án CapCut (<code>draft_content.json</code>).
+                            </p>
+                        </div>
+
+                        <div class="v3-code-block">
+<span style="color:#FF7A00">ten_thu_muc_bundle/</span>
+├── <b style="color:#10B981">2toolne.json</b>              <span style="color:#8E929B"># [BẮT BUỘC] Manifest điều phối cấu hình dự án</span>
+├── <b style="color:#10B981">prompts.json</b>              <span style="color:#8E929B"># [BẮT BUỘC] Danh sách phân cảnh &amp; prompt sinh media</span>
+├── <span style="color:#F59E0B">characters.json</span>           <span style="color:#8E929B"># [ĐIỀU KIỆN] Bắt buộc nếu có nhân vật cần nhất quán gương mặt</span>
+├── <span style="color:#F59E0B">audio.wav (hoặc .mp3)</span>     <span style="color:#8E929B"># [ĐIỀU KIỆN] Bắt buộc nếu audio_source là "LOCAL_AUDIO"</span>
+├── <span style="color:#F59E0B">tts.json</span>                  <span style="color:#8E929B"># [ĐIỀU KIỆN] Bắt buộc nếu audio_source là "TTS"</span>
+├── <span style="color:#565961">script.txt</span>                <span style="color:#8E929B"># [TÙY CHỌN] Kịch bản văn bản thuần để hiển thị phụ đề</span>
+└── <span style="color:#565961">refs/</span>                     <span style="color:#8E929B"># [TÙY CHỌN] Chứa ảnh chân dung mẫu tham chiếu</span>
+                        </div>
+
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+                            <!-- 2toolne.json schema card -->
+                            <div class="v3-step-card">
+                                <h4 style="font-size:14px;font-weight:700;color:var(--v3-primary);margin:0 0 6px 0">1. Quy tắc <code>2toolne.json</code></h4>
+                                <div style="font-size:12.5px;color:var(--v3-text-muted);line-height:1.55">
+                                    • <code>schema_version</code>: Bắt buộc cố định <code>"2.0.0"</code><br>
+                                    • <code>aspect_ratio</code>: <code>"16:9"</code> (YouTube) | <code>"9:16"</code> (TikTok/Shorts) | <code>"1:1"</code> | <code>"4:5"</code><br>
+                                    • <code>audio_source</code>: <code>"LOCAL_AUDIO"</code> | <code>"TTS"</code> | <code>"CLOUD_AUDIO"</code><br>
+                                    • <code>target_fps</code>: Tốc độ khung hình (mặc định <code>30</code>)
+                                </div>
+                            </div>
+
+                            <!-- prompts.json schema card -->
+                            <div class="v3-step-card">
+                                <h4 style="font-size:14px;font-weight:700;color:var(--v3-primary);margin:0 0 6px 0">2. Quy tắc <code>prompts.json</code></h4>
+                                <div style="font-size:12.5px;color:var(--v3-text-muted);line-height:1.55">
+                                    • <code>id</code>: Số nguyên tuần tự <code>1, 2, 3...</code><br>
+                                    • <code>image_prompt</code>: Viết bằng <b>Tiếng Anh</b> giàu chi tiết ánh sáng, góc máy, 8k<br>
+                                    • <code>video_prompt</code>: Viết bằng <b>Tiếng Anh</b> mô tả chuyển động camera &amp; vật thể<br>
+                                    • <code>camera_motion</code>: <code>zoom_in</code>, <code>zoom_out</code>, <code>pan_left_right</code>, <code>tilt_up</code>, <code>static</code>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ── SUB-PANEL 3: PROMPT MẪU RA LỆNH ── -->
+                    <div id="subpanel-ai-prompts" class="v3-ai-panel">
+                        <div style="margin-bottom:16px">
+                            <h3 style="font-size:16px;font-weight:700;color:#fff;margin:0 0 4px 0">Các Câu Lệnh Mẫu (Prompt Templates) Ra Lệnh Cho AI</h3>
+                            <p style="font-size:13px;color:var(--v3-text-muted);margin:0">
+                                Sao chép một trong các câu lệnh dưới đây và dán vào AI của bạn để AI tự động sinh trọn bộ các file cấu hình.
+                            </p>
+                        </div>
+
+                        <!-- Template 1 -->
+                        <div style="margin-bottom:16px">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                                <div style="font-weight:700;font-size:13.5px;color:#fff">Mẫu 1: Video Phong Cảnh &amp; Khám Phá (16:9, Âm Thanh Cục Bộ)</div>
+                                <button type="button" class="v3-btn v3-btn-secondary v3-btn-xs" onclick="copyAiPromptTemplate(1)">
+                                    📋 Sao Chép Prompt
+                                </button>
+                            </div>
+                            <div class="v3-code-block" id="ai-prompt-template-1">Bạn là chuyên gia biên kịch video tự động cho 2TOOLNE. Hãy dựa vào tài liệu 2TOOLNE Input Bundle Generator Skill (v2.0.0) để tạo cho tôi một Input Bundle hoàn chỉnh về chủ đề: "Khám phá Vịnh Hạ Long bình minh".
+Yêu cầu:
+- Tỷ lệ khung hình: 16:9
+- Nguồn âm thanh: LOCAL_AUDIO ("audio.wav")
+- Số phân cảnh: 4 scenes nối tiếp nhau từ id 1 đến 4.
+- Viết prompt tổng quan bằng tiếng Việt.
+- Viết image_prompt và video_prompt chi tiết bằng tiếng Anh (cinematic lighting, drone shot, 8k resolution).
+- Xuất đầy đủ các file: 2toolne.json, prompts.json, script.txt.</div>
+                        </div>
+
+                        <!-- Template 2 -->
+                        <div style="margin-bottom:16px">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                                <div style="font-weight:700;font-size:13.5px;color:#fff">Mẫu 2: Video Ngắn TikTok/Reels Nhất Quán Gương Mặt (9:16, Khóa Nhân Vật)</div>
+                                <button type="button" class="v3-btn v3-btn-secondary v3-btn-xs" onclick="copyAiPromptTemplate(2)">
+                                    📋 Sao Chép Prompt
+                                </button>
+                            </div>
+                            <div class="v3-code-block" id="ai-prompt-template-2">Bạn là chuyên gia biên kịch video tự động cho 2TOOLNE. Hãy dựa vào tài liệu 2TOOLNE Input Bundle Generator Skill (v2.0.0) để tạo cho tôi một Input Bundle cho video dọc ngắn TikTok/Reels (9:16) về câu chuyện: "Nghệ nhân pha cà phê vợt Sài Gòn - Bác Ba".
+Yêu cầu:
+- Tỷ lệ khung hình: 9:16
+- Nhân vật cố định: id="char_bac_ba", tên="Bác Ba", nghệ nhân 65 tuổi, gương mặt hiền từ từng trải, áo bà ba nâu.
+- Số phân cảnh: 4 scenes dọc.
+- Mọi phân cảnh có Bác Ba bắt buộc phải khai báo: "character_refs": ["char_bac_ba"].
+- Xuất đầy đủ: 2toolne.json, characters.json, prompts.json, script.txt.</div>
+                        </div>
+
+                        <!-- Template 3 -->
+                        <div>
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                                <div style="font-weight:700;font-size:13.5px;color:#fff">Mẫu 3: Video Khoa Học Đọc Giọng AI Tự Động (16:9, TTS Voice)</div>
+                                <button type="button" class="v3-btn v3-btn-secondary v3-btn-xs" onclick="copyAiPromptTemplate(3)">
+                                    📋 Sao Chép Prompt
+                                </button>
+                            </div>
+                            <div class="v3-code-block" id="ai-prompt-template-3">Bạn là chuyên gia biên kịch video tự động cho 2TOOLNE. Hãy dựa vào tài liệu 2TOOLNE Input Bundle Generator Skill (v2.0.0) để tạo cho tôi một Input Bundle về đề tài khoa học vũ trụ: "Bí ẩn thiên hà Andromeda".
+Yêu cầu:
+- Tỷ lệ khung hình: 16:9
+- Nguồn âm thanh: TTS (audio_source: "TTS")
+- Cấu hình TTS: voice_id="preset_en_ryan", language="en", output_format="wav", speed=1.0.
+- Số phân cảnh: 4 scenes vũ trụ huyền ảo với chuyển động máy quay zoom_in / pan_left_right.
+- Xuất đầy đủ: 2toolne.json, tts.json, prompts.json, script.txt.</div>
+                        </div>
+                    </div>
+
+                    <!-- ── SUB-PANEL 4: VALIDATOR & SDK ── -->
+                    <div id="subpanel-ai-tools" class="v3-ai-panel">
+                        <div style="margin-bottom:16px">
+                            <h3 style="font-size:16px;font-weight:700;color:#fff;margin:0 0 4px 0">Công Cụ Kiểm Tra Cú Pháp &amp; SDK Tự Động Hóa</h3>
+                            <p style="font-size:13px;color:var(--v3-text-muted);margin:0">
+                                Cả hai script dưới đây đều sử dụng 100% thư viện chuẩn của Python, hoạt động ngay lập tức mà không cần cài thêm pip packages.
+                            </p>
+                        </div>
+
+                        <div style="margin-bottom:18px">
+                            <div style="font-weight:700;font-size:13.5px;color:var(--v3-primary);margin-bottom:4px">1. Pre-flight Validator (Kiểm tra cú pháp Bundle trước khi xử lý)</div>
+                            <div style="font-size:12.5px;color:var(--v3-text-muted);margin-bottom:6px">
+                                Chạy lệnh sau trong Terminal để kiểm tra tính toàn vẹn của thư mục bundle do AI sinh ra:
+                            </div>
+                            <div class="v3-code-block">python3 2TL-CAP-SKIL/scripts/validator.py ./duong_dan_thu_muc_bundle
+
+<span style="color:#10B981"># Kết quả nếu hợp lệ 100%:</span>
+<span style="color:#10B981">[PASS] (OK) Bundle hợp lệ 100%! (4 scenes)</span></div>
+                        </div>
+
+                        <div style="margin-bottom:18px">
+                            <div style="font-weight:700;font-size:13.5px;color:var(--v3-primary);margin-bottom:4px">2. Python SDK Client (Tự động đẩy Bundle lên Cloud qua API Key)</div>
+                            <div style="font-size:12.5px;color:var(--v3-text-muted);margin-bottom:6px">
+                                Tự động upload tất cả file, đối chiếu mã băm SHA-256 bit-for-bit và đăng ký vào hàng đợi sản xuất:
+                            </div>
+                            <div class="v3-code-block"><span style="color:#8E929B"># Đặt khóa AI Key bạn vừa tạo ở trên</span>
+export TOOLNE_API_KEY="2tl_ai_your_key_here"
+
+<span style="color:#8E929B"># Đẩy trực tiếp thư mục bundle</span>
+python3 2TL-CAP-SKIL/scripts/toolne_client.py ./duong_dan_thu_muc_bundle</div>
+                        </div>
+
+                        <div>
+                            <div style="font-weight:700;font-size:13.5px;color:var(--v3-primary);margin-bottom:4px">3. Lệnh Desktop CLI Chính Thức</div>
+                            <div class="v3-code-block">node cli/2toolne.js auth add 2tl_ai_your_key_here
+node cli/2toolne.js bundle push ./duong_dan_thu_muc_bundle</div>
+                        </div>
+                    </div>
+
+                    <!-- ── SUB-PANEL 5: DỰ ÁN MẪU CÓ SẴN ── -->
+                    <div id="subpanel-ai-examples" class="v3-ai-panel">
+                        <div style="margin-bottom:16px">
+                            <h3 style="font-size:16px;font-weight:700;color:#fff;margin:0 0 4px 0">3 Bộ Kịch Bản Mẫu Chuẩn Có Sẵn Trong Tệp Zip</h3>
+                            <p style="font-size:13px;color:var(--v3-text-muted);margin:0">
+                                Các mẫu này đã vượt qua 100% bài kiểm tra của <code>validator.py</code>, bạn có thể giải nén và mở xem ngay:
+                            </p>
+                        </div>
+
+                        <div class="v3-step-grid">
+                            <div class="v3-step-card">
+                                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                                    <span class="v3-badge v3-badge-active">16:9 LANDSCAPE</span>
+                                    <span style="font-size:11.5px;color:var(--v3-text-subtle)">2 Scenes</span>
+                                </div>
+                                <h4 style="font-size:14.5px;font-weight:700;color:#fff;margin:0 0 6px 0">01_minimal_landscape</h4>
+                                <div style="font-size:12.5px;color:var(--v3-text-muted);line-height:1.5">
+                                    • Chủ đề: Bình minh Vịnh Hạ Long<br>
+                                    • Audio: <code>LOCAL_AUDIO</code> (audio.wav)<br>
+                                    • Đặc điểm: Không nhân vật, góc quay flycam drone mở rộng.
+                                </div>
+                            </div>
+
+                            <div class="v3-step-card">
+                                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                                    <span class="v3-badge v3-badge-active">9:16 VERTICAL</span>
+                                    <span style="font-size:11.5px;color:var(--v3-text-subtle)">2 Scenes</span>
+                                </div>
+                                <h4 style="font-size:14.5px;font-weight:700;color:#fff;margin:0 0 6px 0">02_character_driven</h4>
+                                <div style="font-size:12.5px;color:var(--v3-text-muted);line-height:1.5">
+                                    • Chủ đề: Bác Ba pha cà phê vợt Sài Gòn<br>
+                                    • Nhân vật: <code>char_bac_ba</code> (có ảnh chân dung tham chiếu)<br>
+                                    • Kích hoạt cơ chế Character Reference Gate.
+                                </div>
+                            </div>
+
+                            <div class="v3-step-card">
+                                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                                    <span class="v3-badge v3-badge-active">16:9 TTS ENGINE</span>
+                                    <span style="font-size:11.5px;color:var(--v3-text-subtle)">1 Scene</span>
+                                </div>
+                                <h4 style="font-size:14.5px;font-weight:700;color:#fff;margin:0 0 6px 0">03_automated_tts</h4>
+                                <div style="font-size:12.5px;color:var(--v3-text-muted);line-height:1.5">
+                                    • Chủ đề: Thiên hà Andromeda kỳ bí<br>
+                                    • Giọng đọc: <code>preset_en_ryan</code> (Tiếng Anh)<br>
+                                    • Tự động kết nối với API tạo Voice của 2TOOLNE.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- ═══════════════════════════════════════════════════════════════
@@ -1120,23 +1771,26 @@ $primary_team = !empty($user_teams) ? $user_teams[0] : null;
                     <div class="v3-card v3-card-glow">
                         <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
                             <span class="v3-badge v3-badge-brand">CHÍNH THỨC 2026</span>
-                            <span class="v3-badge v3-badge-active">v2.0.1 Stable</span>
+                            <span class="v3-badge v3-badge-active">v2.1.1 Stable</span>
                         </div>
                         <h3 style="font-size:18px;font-weight:700;color:#fff;margin:0 0 8px">2TOOLNE AutoEdit for CapCut</h3>
                         <p style="font-size:13px;color:var(--v3-text-muted);margin:0 0 16px;line-height:1.5">
                             Phần mềm Desktop độc lập điều phối và tự động hóa biên tập CapCut Desktop: Tạo Timeline, Keyframe Scale/Position mượt mà, Rãnh âm thanh &amp; Phụ đề XML tự động.
                         </p>
                         <div style="padding:12px;background:var(--v3-surface-2);border-radius:var(--v3-radius-sm);margin-bottom:16px;font-size:12px;color:var(--v3-text-muted)">
-                            <div>Hệ điều hành: <b>Windows 10/11 64-bit</b> &bull; Phiên bản: <b>v2.0.1</b> &bull; Dung lượng: <b>523 MB</b></div>
-                            <div style="margin-top:6px;color:#ff9e42">✨ <b>Tương thích chính xác CapCut 9.3.0.3970</b> &bull; Tự động phân giải com.lveditor.draft</div>
+                            <div>Hệ điều hành: <b>Windows 10/11 64-bit &bull; macOS</b> &bull; Phiên bản: <b>v2.1.1</b> &bull; Dung lượng: <b>210 MB (.exe) / 276 MB (.zip) / 266 MB (.dmg)</b></div>
+                            <div style="margin-top:6px;color:#ff9e42">✨ <b>Tương thích chính xác CapCut 9.3.0.3970</b> &bull; Native Root of Trust Ed25519 &bull; Native Nuitka Onefile Engine</div>
                         </div>
                         <div style="display:flex;gap:10px;flex-wrap:wrap">
-                            <button type="button" class="v3-btn v3-btn-primary" style="flex:1" onclick="requestSecureDownload('AUTOEDIT', 'windows-x64')">
+                            <button type="button" class="v3-btn v3-btn-primary" style="flex:1" onclick="requestSecureDownload('AUTOEDIT', 'windows-x64', 'installer')">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-                                <span>Tải Cho Windows (.exe)</span>
+                                <span>Tải Cài Đặt .exe (v2.1.1)</span>
+                            </button>
+                            <button type="button" class="v3-btn v3-btn-secondary" onclick="requestSecureDownload('AUTOEDIT', 'windows-x64', 'portable')">
+                                📦 Bản Portable .zip (v2.1.1)
                             </button>
                             <button type="button" class="v3-btn v3-btn-secondary" onclick="requestSecureDownload('AUTOEDIT', 'macos')">
-                                macOS (.dmg)
+                                🍏 macOS (.dmg)
                             </button>
                         </div>
                     </div>
@@ -1477,3 +2131,128 @@ $primary_team = !empty($user_teams) ? $user_teams[0] : null;
         </div>
     </div>
 </div>
+
+<!-- My Cloned Voices Modal -->
+<div id="modal-v3-my-voices" class="v3-modal-overlay" style="display:none">
+    <div class="v3-modal-card" style="max-width:650px;width:100%;">
+        <div class="v3-modal-header">
+            <h3 class="v3-modal-title" style="display:flex;align-items:center;gap:8px;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                <span>Giọng Của Tôi (My Cloned Voices)</span>
+            </h3>
+            <button type="button" class="v3-btn v3-btn-ghost v3-btn-xs" onclick="closeV3Modal('modal-v3-my-voices')">&times;</button>
+        </div>
+        <div class="v3-modal-body" style="max-height:60vh;overflow-y:auto;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+                <span style="font-size:12.5px;color:var(--v3-text-muted);">Các mẫu giọng nói bạn đã nhân bản và lưu trữ trên hệ thống.</span>
+                <button type="button" class="v3-btn v3-btn-primary v3-btn-xs" onclick="closeV3Modal('modal-v3-my-voices'); openCloneVoiceModal();">
+                    + Clone Mới
+                </button>
+            </div>
+            <div id="v3-my-voices-list">
+                <div style="text-align:center;padding:24px;color:var(--v3-text-muted);">Đang tải danh sách giọng...</div>
+            </div>
+        </div>
+        <div class="v3-modal-footer">
+            <button type="button" class="v3-btn v3-btn-secondary" onclick="closeV3Modal('modal-v3-my-voices')">Đóng</button>
+        </div>
+    </div>
+</div>
+
+<!-- Clone Voice Modal -->
+<div id="modal-v3-clone-voice" class="v3-modal-overlay" style="display:none">
+    <div class="v3-modal-card" style="max-width:550px;width:100%;">
+        <div class="v3-modal-header">
+            <h3 class="v3-modal-title" style="display:flex;align-items:center;gap:8px;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <span>Nhân Bản Giọng Nói AI (Voice Cloning)</span>
+            </h3>
+            <button type="button" class="v3-btn v3-btn-ghost v3-btn-xs" onclick="closeV3Modal('modal-v3-clone-voice')">&times;</button>
+        </div>
+        <div class="v3-modal-body">
+            <div class="v3-form-group">
+                <label class="v3-form-label">TÊN GIỌNG ĐỌC (VOICE NAME)</label>
+                <input type="text" id="v3-clone-voice-name" class="v3-input" placeholder="VD: Giọng Tự Nhiên Lan Chi..." required />
+            </div>
+
+            <div class="v3-form-group">
+                <label class="v3-form-label">NGÔN NGỮ THAM CHIẾU (REFERENCE LANGUAGE)</label>
+                <select id="v3-clone-voice-lang" class="v3-select">
+                    <option value="en" selected>English (Tiếng Anh)</option>
+                    <option value="ja">Japanese (日本語 - Tiếng Nhật)</option>
+                    <option value="ko">Korean (한국어 - Tiếng Hàn)</option>
+                    <option value="zh">Chinese (中文 - Tiếng Trung)</option>
+                </select>
+            </div>
+
+            <div class="v3-form-group">
+                <label class="v3-form-label">MẪU ÂM THANH GỐC (REFERENCE AUDIO · 5-30s)</label>
+                <div style="font-size:12px;color:var(--v3-text-muted);margin-bottom:8px;">
+                    Chọn tệp âm thanh sạch (không nhạc nền, rõ tiếng người nói) để làm mẫu giọng:
+                </div>
+                <input type="file" id="v3-clone-voice-file" class="v3-input" accept="audio/*,.wav,.mp3,.m4a,.ogg,.flac" style="padding:8px;" />
+                <div style="margin-top:8px;font-size:11.5px;color:var(--v3-text-muted);">
+                    Hoặc nhập mã tệp Cloud nếu đã có trên 2TOOLNE Cloud:
+                </div>
+                <input type="text" id="v3-clone-voice-ref-id" class="v3-input" placeholder="cf_xxxxxxxxxx" style="margin-top:4px;font-size:12px;font-family:monospace;" />
+            </div>
+
+            <div class="v3-form-group">
+                <label class="v3-form-label">NỘI DUNG MẪU (REFERENCE TRANSCRIPT) — <span style="color:var(--v3-primary);font-weight:normal;">Khuyến nghị (ICL Mode)</span></label>
+                <textarea id="v3-clone-voice-text" class="v3-input" style="height:65px;padding:8px;font-size:12.5px;" placeholder="Ghi lại chính xác câu nói trong file audio mẫu (Khuyến nghị để đạt độ giống cao nhất)..."></textarea>
+                <div style="font-size:11.5px;color:var(--v3-text-muted);margin-top:4px;">
+                    💡 Nếu để trống, hệ thống tự động kích hoạt chế độ X-Vector Only (Speaker-vector mode; độ tương đồng có thể thấp hơn).
+                </div>
+            </div>
+
+            <div class="v3-form-group" style="margin-top:14px;background:rgba(255,255,255,0.03);padding:10px 12px;border-radius:6px;border:1px solid var(--v3-border);">
+                <label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;cursor:pointer;line-height:1.5;">
+                    <input type="checkbox" id="v3-clone-voice-consent" style="margin-top:3px;" />
+                    <span>Tôi xác nhận và cam kết rằng tôi có đầy đủ quyền sở hữu hoặc sự cho phép hợp pháp đối với mẫu âm thanh giọng nói này.</span>
+                </label>
+            </div>
+        </div>
+        <div class="v3-modal-footer">
+            <button type="button" class="v3-btn v3-btn-outline" onclick="closeV3Modal('modal-v3-clone-voice')">Hủy</button>
+            <button type="button" id="btn-submit-clone-voice" class="v3-btn v3-btn-primary" onclick="submitCloneVoice()">
+                Khởi Tạo &amp; Lưu Mẫu Giọng
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- View Full SKILL.md Modal -->
+<div id="modal-v3-view-skill" class="v3-modal-overlay" style="display:none">
+    <div class="v3-modal-card" style="max-width:880px;width:92%;max-height:88vh;display:flex;flex-direction:column;">
+        <div class="v3-modal-header" style="flex-shrink:0;">
+            <div>
+                <h3 class="v3-modal-title" style="display:flex;align-items:center;gap:8px">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--v3-primary)" stroke-width="2"><path d="M12 2v4"/><path d="m4.93 4.93 2.83 2.83"/><path d="M2 12h4"/><path d="m4.93 19.07 2.83-2.83"/><path d="M12 22v-4"/><path d="m19.07 19.07-2.83-2.83"/><path d="M22 12h-4"/><path d="m19.07 4.93-2.83 2.83"/><circle cx="12" cy="12" r="3"/></svg>
+                    <span>Tài Liệu Đặc Tả: 2TOOLNE Input Bundle Generator Skill (v2.0.0)</span>
+                </h3>
+                <div style="font-size:12px;color:var(--v3-text-muted);margin-top:2px">Single Source of Architectural Truth cho Local AI &amp; Autonomous Agents</div>
+            </div>
+            <button type="button" class="v3-btn v3-btn-ghost v3-btn-xs" onclick="closeV3Modal('modal-v3-view-skill')">&times;</button>
+        </div>
+        <div class="v3-modal-body" style="flex:1;overflow-y:auto;padding:16px 20px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;background:rgba(255,255,255,0.03);padding:10px 14px;border-radius:8px;border:1px solid var(--v3-border);">
+                <div style="font-size:12.5px;color:var(--v3-text-muted)">
+                    Tệp: <code>SKILL.md</code> | Dung lượng: <b>19.2 KB</b> | Định dạng: <b>Markdown UTF-8</b>
+                </div>
+                <div style="display:flex;gap:8px">
+                    <button type="button" class="v3-btn v3-btn-secondary v3-btn-xs" onclick="copyAiSkillContent()">
+                        📋 Sao Chép Toàn Bộ
+                    </button>
+                    <a href="/assets/downloads/SKILL.md" download="SKILL.md" class="v3-btn v3-btn-outline v3-btn-xs" style="text-decoration:none">
+                        ⬇️ Tải File SKILL.md
+                    </a>
+                </div>
+            </div>
+            <pre style="background:#090A0C;border:1px solid var(--v3-border);border-radius:8px;padding:16px;font-family:'JetBrains Mono', monospace;font-size:12px;color:#E2E8F0;line-height:1.6;white-space:pre-wrap;word-break:break-word;margin:0;"><?= htmlspecialchars($skill_md_content) ?></pre>
+        </div>
+        <div class="v3-modal-footer" style="flex-shrink:0;">
+            <button type="button" class="v3-btn v3-btn-secondary" onclick="closeV3Modal('modal-v3-view-skill')">Đóng Cửa Sổ</button>
+        </div>
+    </div>
+</div>
+

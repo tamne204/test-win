@@ -104,7 +104,6 @@ foreach ($valid_keys as $vk) {
 // Nếu đến từ dải IP chính thức của SePay Webhook Server hoặc localhost
 $is_sepay_ip = (
     strpos($client_ip, '172.236.138.') === 0 || 
-    strpos($client_ip, '103.97.126.') === 0 || 
     $client_ip === '127.0.0.1' || 
     $client_ip === '::1'
 );
@@ -193,7 +192,7 @@ $days          = intval($order['duration_days'] ?? 30);
 $is_token_order = ($prod === 'TOKEN_WALLET' || stripos($pkg_n, 'Token') !== false || stripos($pkg_n, 'Unlimited') !== false);
 $is_unlimited   = (stripos($pkg_n, 'Unlimited') !== false || stripos($pkg_n, 'Trọn Đời') !== false);
 $is_cloud_storage = ($prod === 'CLOUD_STORAGE' || (stripos($pkg_n, 'Cloud') !== false && stripos($pkg_n, 'GB') !== false));
-$is_team_cloud    = ($prod === 'TEAM_CLOUD' || stripos($pkg_n, 'Team') !== false || stripos($pkg_n, 'Slot') !== false);
+$is_team_cloud    = ($prod === 'TEAM_CLOUD' || $prod === 'TEAM_WORKSPACE' || stripos($pkg_n, 'Team') !== false || stripos($pkg_n, 'Slot') !== false);
 $is_capcut      = ($prod === '2toolne.capcut.v2' || $prod === 'CAPCUT_V2' || stripos($pkg_n, 'CapCut') !== false || stripos($pkg_n, 'AutoEdit') !== false);
 $is_2toolne     = !$is_capcut && ($prod === '2TOOLNE' || stripos($pkg_n, '2toolne') !== false);
 $is_ext_order   = ($prod === 'LABS_EXTENSION' || stripos($pkg_n, 'Extension') !== false);
@@ -227,21 +226,56 @@ try {
             }
             $assigned_label = 'UNLIMITED-STUDIO';
         } else {
-            $tokens_to_add = 1000;
-            if (preg_match('/(\d+[\.,]?\d*)\s*Token/ui', $pkg_n, $m)) {
-                $raw_num = str_replace(['.', ','], '', $m[1]);
-                if (intval($raw_num) > 0) {
-                    $tokens_to_add = intval($raw_num);
+            $memo = json_decode((string)($order['memo'] ?? '{}'), true) ?: [];
+            $tokens_to_add = (int)($memo['total_tokens'] ?? 0);
+            if ($tokens_to_add <= 0) {
+                if (preg_match('/(\d+[\.,]?\d*)\s*Token/ui', $pkg_n, $m)) {
+                    $raw_num = str_replace(['.', ','], '', $m[1]);
+                    if (intval($raw_num) > 0) {
+                        $tokens_to_add = intval($raw_num);
+                    }
+                } elseif (stripos($pkg_n, '30.000') !== false || stripos($pkg_n, '1.800.000') !== false) {
+                    $tokens_to_add = 35000;
+                } elseif (stripos($pkg_n, '10.000') !== false || stripos($pkg_n, '700.000') !== false) {
+                    $tokens_to_add = 11000;
+                } elseif (stripos($pkg_n, '3.000') !== false || stripos($pkg_n, '250.000') !== false) {
+                    $tokens_to_add = 3200;
+                } elseif (stripos($pkg_n, '1.000') !== false || stripos($pkg_n, '100.000') !== false) {
+                    $tokens_to_add = 1000;
+                } else {
+                    $tokens_to_add = 1000;
                 }
-            } elseif (stripos($pkg_n, '10.000') !== false || stripos($pkg_n, '700.000') !== false) {
-                $tokens_to_add = 10000;
-            } elseif (stripos($pkg_n, '3.000') !== false || stripos($pkg_n, '250.000') !== false) {
-                $tokens_to_add = 3000;
-            } elseif (stripos($pkg_n, '1.000') !== false || stripos($pkg_n, '100.000') !== false) {
-                $tokens_to_add = 1000;
             }
-            db_adjust_user_wallet($u, $tokens_to_add, "Thanh toán thành công đơn {$ord_id}: {$pkg_n} (+{$tokens_to_add} Lượt)", 'SEPAY_AUTO');
-            $assigned_label = "+" . number_format($tokens_to_add) . " LƯỢT";
+
+            $target_type = $memo['target_type'] ?? 'PERSONAL';
+            $team_id = $memo['team_id'] ?? null;
+
+            if ($target_type === 'TEAM' && !empty($team_id)) {
+                $pdo = get_db();
+                $wStmt = $pdo->prepare('SELECT balance FROM `credit_wallets` WHERE `team_id` = ? FOR UPDATE');
+                $wStmt->execute([$team_id]);
+                $wRow = $wStmt->fetch();
+                if (!$wRow) {
+                    $newBal = $tokens_to_add;
+                    $pdo->prepare('INSERT INTO `credit_wallets` (`id`, `team_id`, `balance`, `reserved_balance`) VALUES (?, ?, ?, 0)')
+                        ->execute(['cw_' . bin2hex(random_bytes(10)), $team_id, $newBal]);
+                } else {
+                    $newBal = (int)$wRow['balance'] + $tokens_to_add;
+                    $pdo->prepare('UPDATE `credit_wallets` SET `balance` = ? WHERE `team_id` = ?')
+                        ->execute([$newBal, $team_id]);
+                }
+                $user_rec = db_get_user($u);
+                $uid = $user_rec['id'] ?? $u;
+                $txId = 'tx_' . bin2hex(random_bytes(12));
+                $pdo->prepare('
+                    INSERT INTO `credit_transactions` (`id`, `user_id`, `team_id`, `amount`, `balance_after`, `type`, `reference_id`, `description`, `created_by`, `created_at`)
+                    VALUES (?, ?, ?, ?, ?, "TOPUP", ?, ?, "SEPAY_AUTO", NOW())
+                ')->execute([$txId, $uid, $team_id, $tokens_to_add, $newBal, $ord_id, "Nạp token Team thành công đơn {$ord_id}: {$pkg_n} (+{$tokens_to_add} Tokens)"]);
+                $assigned_label = "+" . number_format($tokens_to_add) . " TOKENS (TEAM)";
+            } else {
+                db_adjust_user_wallet($u, $tokens_to_add, "Thanh toán thành công đơn {$ord_id}: {$pkg_n} (+{$tokens_to_add} Lượt)", 'SEPAY_AUTO');
+                $assigned_label = "+" . number_format($tokens_to_add) . " LƯỢT";
+            }
         }
         db_approve_order($ord_id, $assigned_label);
         $issued_result = $assigned_label;
@@ -279,9 +313,30 @@ try {
             }
             $assigned_label = "+{$slots_to_add} SLOTS TEAM";
         } else {
-            $tName = "Team của " . ($user_rec['fullname'] ?: $u);
-            $teamId = db_create_team($tName, $uid, 2, 90, 20);
-            $assigned_label = "TEAM-CLOUD-2SLOTS";
+            $memo = json_decode((string)($order['memo'] ?? '{}'), true) ?: [];
+            $planId = $memo['plan_id'] ?? $order['tier'];
+            $teamName = $memo['team_name'] ?? ("Team của " . ($user_rec['fullname'] ?: $u));
+            $userId = (string)($uid ?: ($memo['user_id'] ?? $u));
+
+            if (file_exists(__DIR__ . '/api/v1/services/TeamProvisioningService.php')) {
+                require_once __DIR__ . '/api/v1/services/TeamProvisioningService.php';
+                $db = get_db();
+                $pStmt = $db->prepare('SELECT * FROM team_plans WHERE id = ? LIMIT 1');
+                $pStmt->execute([$planId]);
+                $plan = $pStmt->fetch(PDO::FETCH_ASSOC) ?: [
+                    'name'              => $pkg_n,
+                    'duration_days'     => $days,
+                    'member_slots'      => 2,
+                    'desktop_key_count' => 2,
+                    'storage_bytes'     => 53687091200,
+                    'initial_tokens'    => 500,
+                ];
+                $provRes = TeamProvisioningService::provisionTeam($userId, $teamName, $plan, $order['id'], $order['id']);
+                $teamId = $provRes['team']['id'] ?? '';
+            } else {
+                $teamId = db_create_team($teamName, $userId, 2, 90, 20);
+            }
+            $assigned_label = "TEAM-WORKSPACE-{$teamId}";
         }
         db_approve_order($ord_id, $assigned_label);
         $issued_result = $assigned_label;

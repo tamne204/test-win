@@ -11,10 +11,11 @@ const http = require('http');
 const https = require('https');
 const crypto = require('crypto');
 const { URL } = require('url');
+const { CANONICAL_ORIGIN } = require('../common/endpoints');
 
 class CloudClient {
   constructor(options = {}) {
-    this.apiBase = options.apiBase || options.baseUrl || 'https://www.2tamne.site';
+    this.apiBase = options.apiBase || options.baseUrl || CANONICAL_ORIGIN;
     this._explicitToken = options.token !== undefined ? options.token : undefined;
     this.secureStorage = options.secureStorage;
     this.cacheDir = options.cacheDir || path.join(process.cwd(), 'cache', 'cloud_assets');
@@ -672,6 +673,49 @@ class CloudClient {
   // Team & Workspaces (Priority 6)
   // ==========================================
 
+  async getTeamPlans() {
+    const res = await this.request('/api/v1/billing/team-plans');
+    if (!res.ok) return res;
+    const d = res.data?.data || res.data || {};
+    return { ok: true, plans: d.plans || [] };
+  }
+
+  async createTeamCheckout(teamName, planId, idempotencyKey = '') {
+    const res = await this.request('/api/v1/billing/team-checkout', {
+      method: 'POST',
+      body: {
+        team_name: teamName,
+        plan_id: planId,
+        idempotency_key: idempotencyKey,
+      },
+    });
+    if (!res.ok) return res;
+    const d = res.data?.data || res.data || {};
+    return {
+      ok: true,
+      checkout_id: d.checkout_id,
+      checkout_url: d.checkout_url,
+      payment_status: d.payment_status,
+      requires_payment: d.requires_payment,
+      team: d.team,
+      space: d.space,
+      plan: d.plan,
+    };
+  }
+
+  async getTeamCheckoutStatus(checkoutId) {
+    const res = await this.request(`/api/v1/billing/team-checkout/${encodeURIComponent(checkoutId)}`);
+    if (!res.ok) return res;
+    const d = res.data?.data || res.data || {};
+    return {
+      ok: true,
+      checkout_id: d.checkout_id,
+      payment_status: d.payment_status,
+      team: d.team,
+      space: d.space,
+    };
+  }
+
   async createTeam(name) {
     const res = await this.request('/api/v1/teams', {
       method: 'POST',
@@ -715,6 +759,71 @@ class CloudClient {
       expires_at: d.expires_at,
     };
   }
+
+  async listTeamInvitations(teamId) {
+    const res = await this.request(`/api/v1/teams/${encodeURIComponent(teamId)}/invitations`);
+    if (!res.ok) return res;
+    const d = res.data?.data || res.data || {};
+    return { ok: true, invitations: d.invitations || [] };
+  }
+
+  async revokeTeamInvitation(teamId, invId) {
+    const res = await this.request(`/api/v1/teams/${encodeURIComponent(teamId)}/invitations/${encodeURIComponent(invId)}/revoke`, {
+      method: 'POST',
+    });
+    if (!res.ok) return res;
+    return { ok: true, revoked: true };
+  }
+
+  // ==========================================
+  // Token Packages & Top-up Checkout
+  // ==========================================
+
+  async getTokenPackages() {
+    const res = await this.request('/api/v1/billing/token-packages');
+    if (!res.ok) return res;
+    const d = res.data?.data || res.data || {};
+    return { ok: true, packages: d.packages || [] };
+  }
+
+  async createTokenCheckout(packageId, targetType = 'PERSONAL', teamId = '', idempotencyKey = '') {
+    const res = await this.request('/api/v1/billing/token-checkout', {
+      method: 'POST',
+      body: {
+        package_id: packageId,
+        target_type: targetType,
+        team_id: teamId,
+        idempotency_key: idempotencyKey,
+      },
+    });
+    if (!res.ok) return res;
+    const d = res.data?.data || res.data || {};
+    return {
+      ok: true,
+      checkout_id: d.checkout_id,
+      checkout_url: d.checkout_url,
+      payment_status: d.payment_status,
+      package: d.package,
+      target_type: d.target_type,
+      team_id: d.team_id,
+    };
+  }
+
+  async getTokenCheckoutStatus(checkoutId) {
+    const res = await this.request(`/api/v1/billing/token-checkout/${encodeURIComponent(checkoutId)}`);
+    if (!res.ok) return res;
+    const d = res.data?.data || res.data || {};
+    return {
+      ok: true,
+      checkout_id: d.checkout_id,
+      payment_status: d.payment_status,
+      target_type: d.target_type,
+      team_id: d.team_id,
+      wallet: d.wallet,
+      issued_result: d.issued_result,
+    };
+  }
+
 
   async acceptTeamInvitation(inviteToken) {
     const res = await this.request('/api/v1/teams/invitations/accept', {

@@ -37,17 +37,21 @@ class EditPlanProject:
 
     @property
     def aspect_ratio(self) -> str:
-        if self.width == 1080 and self.height == 1920:
-            return "9:16"
-        elif self.width == 1920 and self.height == 1080:
+        if self.width <= 0 or self.height <= 0:
             return "16:9"
-        elif self.width == 1080 and self.height == 1080:
+        ratio = self.width / self.height
+        if abs(ratio - 16 / 9) < 0.02:
+            return "16:9"
+        elif abs(ratio - 9 / 16) < 0.02:
+            return "9:16"
+        elif abs(ratio - 1.0) < 0.02:
             return "1:1"
-        elif self.width == 1080 and self.height == 1350:
+        elif abs(ratio - 4 / 5) < 0.02:
             return "4:5"
-        elif self.width == 2560 and self.height == 1080:
+        elif abs(ratio - 21 / 9) < 0.05 or abs(ratio - 64 / 27) < 0.05:
             return "21:9"
         return f"{self.width}:{self.height}"
+
 
 
 @dataclass

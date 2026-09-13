@@ -1,0 +1,51 @@
+<IfModule mod_setenvif.c>
+SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
+</IfModule>
+
+# 2TOOLNE Production Web Security & Access Controls
+Options -Indexes
+
+RewriteEngine On
+
+# Canonical origin: https://2tamne.site (redirect www to non-www, preserving /api/ requests)
+RewriteCond %{REQUEST_URI} !^/api/
+RewriteCond %{HTTP_HOST} ^www\.2tamne\.site$ [NC]
+RewriteRule ^(.*)$ https://2tamne.site/$1 [L,R=301]
+
+# Block direct access to storage directory
+RewriteRule ^storage(/.*)?$ - [F,L]
+
+# API log routes
+RewriteRule ^api/logs/([a-f0-9]{32})$ api/logs.php?task_id=$1 [QSA,L]
+RewriteRule ^api/status/([a-f0-9]{32})$ api/status.php?task_id=$1 [QSA,L]
+RewriteRule ^api/stop/([a-f0-9]{32})$ api/stop.php?task_id=$1 [QSA,L]
+
+# Block direct access to sensitive file extensions
+<FilesMatch "\.(txt|log|json|lock|env|git|sh|bat)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+<FilesMatch "^worker\.php$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Allow public webmanifest and robots
+<Files "site.webmanifest">
+    <IfModule mod_authz_core.c>
+        Require all granted
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Allow from all
+    </IfModule>
+</Files>

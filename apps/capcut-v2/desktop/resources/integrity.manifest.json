@@ -1,0 +1,16 @@
+{
+  "version": "2.1.1",
+  "timestamp": "2026-09-13T18:21:00.675Z",
+  "algorithm": "sha256",
+  "files": {
+    "app.asar": "895acb2136e5f50ea7c83db79b88178997ae05f0e2d32a7c1b6b6fb2caabaaa5",
+    "2toolne-runtime.exe": "99b3f7de0de55f2b0a5c2a9b39cf58dd5a606e29494e23e85837e97be91d6146",
+    "autoedit-core/win-x64/2toolne-core.exe": "02185bffc7b77825c580704156259ae89db67ec8d93d37b6ae64546bfbd78b06",
+    "bin/win-x64/ffmpeg.exe": "be9cf73c7945f9fba3594352faa852423bc3097fc34e95208a43cfea9ca86807",
+    "bin/win-x64/ffprobe.exe": "9ee50ed22738a3f26727cbd1908bfc140be246a97103712d90276ca72c0b927c",
+    "bin/win-x64/CapCutUiProbe.exe": "1bc09026ab1c4ffd4cd8d7de90d92b2bdf1d940ba45fb13a19540a97c27dcba9",
+    "engine/win-x64/realesrgan-ncnn-vulkan.exe": "07e49f7cbb4ede01ae4dd4c399d3a7e5846e3d2085c3128eff881e55cb7b1a0c",
+    "engine/win-x64/vcomp140.dll": "8f72ef2e483465444b2059fc6744d6cb22cd8d8a27f6fa56befd2a42dcd0f78b"
+  },
+  "signature": "BHdhP0Qg72ENWH4W9qjTbaq15UXkC/fELnO4VPpuubektGXUcnAYvkuyzmf+43UuMS6ZfakvxTxyRS8pH+z5CQ=="
+}

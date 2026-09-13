@@ -18,6 +18,24 @@ require_once __DIR__ . '/../storage/CurlHelper.php';
 
 class CloudUploadsController {
 
+    public static function createDirect(array $params, array $body): void {
+        $spaceId = $params['spaceId'] ?? ($body['cloud_space_id'] ?? ($body['space_id'] ?? ''));
+        if (empty($spaceId)) {
+            $user = CloudAuthHelper::getCurrentUser();
+            if ($user) {
+                $db = Database::getConnection();
+                $spStmt = $db->prepare('SELECT id FROM cloud_spaces WHERE owner_type = "USER" AND owner_id = ? LIMIT 1');
+                $spStmt->execute([(string)$user['id']]);
+                $sp = $spStmt->fetch(PDO::FETCH_ASSOC);
+                if ($sp) {
+                    $spaceId = $sp['id'];
+                }
+            }
+        }
+        $params['spaceId'] = $spaceId;
+        self::create($params, $body);
+    }
+
     /**
      * POST /api/v1/cloud/spaces/{spaceId}/uploads/create
      * Allocate physical account, reserve quota, and return direct Resumable Session URL
@@ -30,13 +48,19 @@ class CloudUploadsController {
         }
 
         $userId = (string)$user['id'];
+        $effectiveUserId = $userId;
+        $isWorker = !empty($user['is_worker']) || !empty($user['is_admin']) || (isset($user['ai_access_key']['scopes']) && in_array('tts.worker', $user['ai_access_key']['scopes'], true));
+        if ($isWorker && !empty($body['created_by_user_id'])) {
+            $effectiveUserId = trim((string)$body['created_by_user_id']);
+        }
+
         $auth = CloudAuthHelper::authorizeSpaceAccess($spaceId, $userId);
         if (!$auth['allowed']) {
             Router::error('Access denied to this cloud space', 403, 'FORBIDDEN');
         }
 
         require_once __DIR__ . '/../services/WorkspacePermissionService.php';
-        if (!WorkspacePermissionService::canUpload($auth['role'] ?? 'MEMBER')) {
+        if (!$isWorker && !WorkspacePermissionService::canUpload($auth['role'] ?? 'MEMBER')) {
             Router::error('Bạn không có quyền tải lên tệp trong không gian làm việc này (Role VIEWER)', 403, 'FORBIDDEN');
         }
 
@@ -46,6 +70,8 @@ class CloudUploadsController {
         $mimeType   = trim($body['mime_type'] ?? 'application/octet-stream');
         $sha256     = trim($body['checksum_sha256'] ?? '');
         $idempKey   = !empty($body['idempotency_key']) ? trim($body['idempotency_key']) : null;
+        $appId      = !empty($body['app_id']) ? strtoupper(trim((string)$body['app_id'])) : 'UPSCALE';
+        $projectId  = !empty($body['project_id']) ? trim((string)$body['project_id']) : null;
 
         if (empty($fileName) || $fileSize <= 0) {
             Router::error('file_name and positive file_size_bytes are required', 400);
@@ -130,14 +156,14 @@ class CloudUploadsController {
         // 3. Insert pending file record in cloud_files
         $insFile = $db->prepare('
             INSERT INTO cloud_files (
-                id, cloud_space_id, folder_id, created_by_user_id, app_id, filename, extension,
+                id, cloud_space_id, folder_id, created_by_user_id, project_id, app_id, filename, extension,
                 mime_type, size_bytes, checksum_sha256, storage_account_id, provider_file_id, status, created_at
             ) VALUES (
-                ?, ?, ?, ?, "UPSCALE", ?, ?, ?, ?, ?, ?, "PENDING", "PENDING_UPLOAD", NOW()
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "PENDING", "PENDING_UPLOAD", NOW()
             )
         ');
         $insFile->execute([
-            $cloudFileId, $spaceId, $folderId, $userId, $fileName, $ext,
+            $cloudFileId, $spaceId, $folderId, $effectiveUserId, $projectId, $appId, $fileName, $ext,
             $mimeType, $fileSize, $sha256 ?: null, $storageAccountId
         ]);
 

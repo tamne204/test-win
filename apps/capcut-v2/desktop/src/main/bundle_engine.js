@@ -149,6 +149,42 @@ class BundleEngine {
       }
     }
 
+    // 5.5 Detect audio configuration and files
+    let bundleAudioFile = null;
+    let bundleAudioPath = null;
+    const commonAudioNames = ['audio.mp3', 'audio.wav', 'audio.m4a', 'narration.mp3', 'narration.wav', 'narration.m4a', 'voice.mp3', 'voice.wav'];
+    const declaredAudio = manifest?.audio_file || (typeof manifest?.audio === 'string' ? manifest.audio : manifest?.audio?.file);
+    if (declaredAudio && fs.existsSync(path.join(bundleDir, declaredAudio))) {
+      bundleAudioFile = declaredAudio;
+      bundleAudioPath = path.join(bundleDir, declaredAudio);
+    } else {
+      for (const name of commonAudioNames) {
+        if (fileMap[name] && fs.existsSync(path.join(bundleDir, fileMap[name]))) {
+          bundleAudioFile = fileMap[name];
+          bundleAudioPath = path.join(bundleDir, fileMap[name]);
+          break;
+        }
+      }
+    }
+
+    // Resolve audio_source: LOCAL_AUDIO | CLOUD_AUDIO | TTS
+    let resolvedAudioSource = 'LOCAL_AUDIO';
+    let audioConfig = null;
+    if (manifest?.audio?.source) {
+      resolvedAudioSource = String(manifest.audio.source).toUpperCase();
+      audioConfig = manifest.audio;
+    } else if (manifest?.audio_source) {
+      resolvedAudioSource = String(manifest.audio_source).toUpperCase();
+    } else if (manifest?.cloud_audio_file_id || manifest?.audio?.cloud_file_id) {
+      resolvedAudioSource = 'CLOUD_AUDIO';
+      audioConfig = manifest.audio || { cloud_file_id: manifest.cloud_audio_file_id };
+    } else if (bundleAudioFile) {
+      resolvedAudioSource = 'LOCAL_AUDIO';
+    } else if (ttsData !== null || manifest?.tts || manifest?.audio?.tts) {
+      resolvedAudioSource = 'TTS';
+      audioConfig = manifest?.audio?.tts || ttsData;
+    }
+
     // Normalize scenes from promptsData
     const rawScenes = promptsData?.scenes || (Array.isArray(promptsData) ? promptsData : []);
     const normalizedScenes = [];
@@ -166,6 +202,10 @@ class BundleEngine {
         scene_id: sceneId,
         slug,
         prompt,
+        image_prompt: (s.image_prompt || prompt).trim(),
+        video_prompt: (s.video_prompt || prompt).trim(),
+        image_aspect_ratio: s.image_aspect_ratio || s.aspect_ratio || null,
+        video_aspect_ratio: s.video_aspect_ratio || s.aspect_ratio || null,
         negative_prompt: s.negative_prompt || '',
         character_refs: Array.isArray(s.character_refs) ? s.character_refs : (s.characters || []),
         camera_motion: s.camera_motion || s.motion || 'pan_left_right',
@@ -176,9 +216,24 @@ class BundleEngine {
       });
     }
 
+    // Normalize characters ensuring char.prompt is preserved
+    const rawChars = charactersData?.characters || (Array.isArray(charactersData) ? charactersData : []);
+    const normalizedCharacters = rawChars.map((c, idx) => {
+      const refImg = c.ref_image || c.reference_image_path || null;
+      return {
+        id: c.id || `char_${idx + 1}`,
+        name: c.name || `Character ${idx + 1}`,
+        description: c.description || '',
+        prompt: (c.prompt !== undefined && c.prompt !== null) ? String(c.prompt).trim() : '',
+        ref_image: refImg,
+        reference_image_path: c.reference_image_path || (refImg ? path.join(bundleDir, refImg) : null),
+      };
+    });
+
     // 6. Scan existing media assets in directory
     const assetScan = this.scanDirectoryAssets(bundleDir, normalizedScenes);
 
+    const hasManifest = manifest !== null;
     const projectName = manifest?.project_name || promptsData?.project_name || path.basename(bundleDir);
     const aspectRatio = manifest?.aspect_ratio || promptsData?.aspect_ratio || '9:16';
 
@@ -189,14 +244,19 @@ class BundleEngine {
       bundle_name: projectName,
       aspect_ratio: aspectRatio,
       schema_version: manifest?.schema_version || '2.0.0',
-      has_manifest: manifest !== null,
+      manifest: manifest || {},
+      has_manifest: hasManifest,
       has_prompts: promptsData !== null,
       has_characters: charactersData !== null,
       has_script: scriptContent !== null,
       has_tts: ttsData !== null,
+      audio_source: resolvedAudioSource,
+      audio_file: bundleAudioFile,
+      audio_path: bundleAudioPath,
+      audio_config: audioConfig,
       scenes_count: normalizedScenes.length,
       scenes: normalizedScenes,
-      characters: charactersData?.characters || (Array.isArray(charactersData) ? charactersData : []),
+      characters: normalizedCharacters,
       script: scriptContent,
       tts: ttsData,
       assets: assetScan,

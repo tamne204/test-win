@@ -164,29 +164,37 @@ jobs:
           } | ConvertTo-Json | Out-File -FilePath "dist/manifest_$ver.json" -Encoding utf8
 
       - name: 10. Deploy Package Direct to 2TOOLNE Production Server via FTP (Zero GitHub Artifacts)
-        shell: pwsh
+        shell: bash
+        env:
+          TOOLNE_FTP_HOST: ${{ secrets.TOOLNE_FTP_HOST }}
+          TOOLNE_FTP_USER: ${{ secrets.TOOLNE_FTP_USER }}
+          TOOLNE_FTP_PASS: ${{ secrets.TOOLNE_FTP_PASS }}
         run: |
-          $ver = "${{ github.event.inputs.release_version || '2.0.4' }}"
-          Write-Host "=================================================="
-          Write-Host "DEPLOYING $ver WINDOWS PACKAGE DIRECTLY TO 2TOOLNE SERVER"
-          Write-Host "=================================================="
-          $ftpHost = "43.129.165.150"
-          $ftpUser = "2tamne_site_code"
-          $ftpPass = "eKZ8ZN5tsd7D"
+          if [ -z "$TOOLNE_FTP_HOST" ]; then
+            echo "TOOLNE_FTP_HOST is not configured. Skipping production deployment."
+            exit 0
+          fi
+          ver="${{ github.event.inputs.release_version || '2.0.4' }}"
+          echo "=================================================="
+          echo "DEPLOYING $ver WINDOWS PACKAGE DIRECTLY TO 2TOOLNE SERVER"
+          echo "=================================================="
+          ftpHost="$TOOLNE_FTP_HOST"
+          ftpUser="$TOOLNE_FTP_USER"
+          ftpPass="$TOOLNE_FTP_PASS"
           
           # 1. Upload autoedit-core.exe
-          $coreExe = "apps/capcut-v2/packaging/dist/autoedit-core/autoedit-core.exe"
-          Write-Host "Uploading autoedit-core-$ver.exe ($((Get-Item $coreExe).Length) bytes)..."
-          curl.exe -s -T $coreExe -u "${ftpUser}:${ftpPass}" "ftp://${ftpHost}:21/storage/packages/autoedit-core-${ver}.exe"
+          coreExe="apps/capcut-v2/packaging/dist/autoedit-core/autoedit-core.exe"
+          echo "Uploading autoedit-core-$ver.exe..."
+          curl -s -T "$coreExe" -u "${ftpUser}:${ftpPass}" "ftp://${ftpHost}:21/storage/packages/autoedit-core-${ver}.exe"
           
           # 2. Upload manifest
-          $manifest = "dist/manifest_$ver.json"
-          curl.exe -s -T $manifest -u "${ftpUser}:${ftpPass}" "ftp://${ftpHost}:21/storage/packages/manifest_${ver}.json"
+          manifest="dist/manifest_$ver.json"
+          curl -s -T "$manifest" -u "${ftpUser}:${ftpPass}" "ftp://${ftpHost}:21/storage/packages/manifest_${ver}.json"
           
           # 3. Upload release zip directly
-          $pkgZip = "dist/2toolne-autoedit-$ver-win-x64.zip"
-          Write-Host "Uploading 2toolne-autoedit-$ver-win-x64.zip ($((Get-Item $pkgZip).Length) bytes)..."
-          curl.exe -T $pkgZip -u "${ftpUser}:${ftpPass}" "ftp://${ftpHost}:21/storage/packages/2toolne-autoedit-${ver}-win-x64.zip"
+          pkgZip="dist/2toolne-autoedit-$ver-win-x64.zip"
+          echo "Uploading 2toolne-autoedit-$ver-win-x64.zip..."
+          curl -T "$pkgZip" -u "${ftpUser}:${ftpPass}" "ftp://${ftpHost}:21/storage/packages/2toolne-autoedit-${ver}-win-x64.zip"
           
-          Write-Host "Direct upload to production server completed successfully!"
-          Write-Host "Zero GitHub Artifacts stored. Ephemeral runner will be discarded safely."
+          echo "Direct upload to production server completed successfully!"
+          echo "Zero GitHub Artifacts stored. Ephemeral runner will be discarded safely."

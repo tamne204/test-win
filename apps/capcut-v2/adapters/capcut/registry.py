@@ -30,7 +30,7 @@ class CapCutAdapterRegistry:
 
     # Explicit map of verified version regex patterns to adapter classes (macOS)
     _VERIFIED_REGISTRY: Dict[str, Type] = {
-        r"^9\.[3-4](\.\d+)?$": CapCutVersionAdapter_9_3,
+        r"^9\.[3-4](\.\d+)*$": CapCutVersionAdapter_9_3,
     }
 
     # Explicit map of known broken / unsupported version patterns
@@ -71,9 +71,9 @@ class CapCutAdapterRegistry:
 
         target_platform = platform_name or sys.platform
 
-        # 1. Windows strict allowlist matching
+        # 1. Windows verified version matching (support 9.3.x and 9.4.x)
         if target_platform.startswith("win"):
-            if version_str in cls.SUPPORTED_WINDOWS_CAPCUT_VERSIONS:
+            if version_str in cls.SUPPORTED_WINDOWS_CAPCUT_VERSIONS or re.match(r"^9\.[3-4](\.\d+)*$", version_str):
                 return (
                     CapCutVersionAdapter_9_3,
                     STATUS_VERIFIED,
@@ -89,7 +89,7 @@ class CapCutAdapterRegistry:
                 return (
                     None,
                     STATUS_UNSUPPORTED,
-                    f"CapCut {version_str} is UNSUPPORTED on Windows. Production support is locked to {cls.SUPPORTED_WINDOWS_CAPCUT_VERSIONS}.",
+                    f"CapCut {version_str} is UNSUPPORTED on Windows. Production support requires CapCut 9.3.x or 9.4.x.",
                 )
 
         # 2. Non-Windows (macOS) verified registry matching

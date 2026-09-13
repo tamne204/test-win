@@ -27,6 +27,8 @@ require_once __DIR__ . '/services/DownloadEntitlementService.php';
 require_once __DIR__ . '/controllers/TeamController.php';
 require_once __DIR__ . '/controllers/AiGatewayController.php';
 require_once __DIR__ . '/controllers/DownloadController.php';
+require_once __DIR__ . '/controllers/TtsController.php';
+require_once __DIR__ . '/controllers/BillingController.php';
 
 $router = new Router();
 
@@ -85,6 +87,18 @@ $router->get('/wallet/transactions', [WalletController::class, 'getTransactions'
 $router->get('/packages', [WalletController::class, 'getPackages']);
 $router->post('/payments/create', [WalletController::class, 'createPayment']);
 
+// Commercial Team Plans & Billing
+$router->get('/billing/team-plans', [BillingController::class, 'getTeamPlans']);
+$router->post('/billing/team-checkout', [BillingController::class, 'createTeamCheckout']);
+$router->get('/billing/team-checkout/{id}', [BillingController::class, 'getCheckoutStatus']);
+$router->post('/billing/team-checkout/{id}/test-pay', [BillingController::class, 'testSimulatePayment']);
+
+// Commercial Token Packages & Billing
+$router->get('/billing/token-packages', [BillingController::class, 'getTokenPackages']);
+$router->post('/billing/token-checkout', [BillingController::class, 'createTokenCheckout']);
+$router->get('/billing/token-checkout/{id}', [BillingController::class, 'getTokenCheckoutStatus']);
+$router->post('/billing/token-checkout/{id}/test-pay', [BillingController::class, 'testSimulateTokenPayment']);
+
 // Admin Management
 $router->get('/admin/users', [AdminController::class, 'listUsers']);
 $router->post('/admin/wallet/adjust', [AdminController::class, 'adjustWallet']);
@@ -113,6 +127,7 @@ $router->delete('/cloud/files/{id}/permanent', [CloudFilesController::class, 'pe
 $router->delete('/cloud/folders/{id}/permanent', [CloudFilesController::class, 'permanentDeleteFolder']);
 
 // Uploads (Direct Resumable & Relay Fallback)
+$router->post('/cloud/uploads', [CloudUploadsController::class, 'createDirect']);
 $router->post('/cloud/spaces/{spaceId}/uploads/create', [CloudUploadsController::class, 'create']);
 $router->post('/cloud/uploads/{id}/relay', [CloudUploadsController::class, 'relay']);
 $router->post('/cloud/spaces/{spaceId}/uploads/{id}/relay', [CloudUploadsController::class, 'relay']);
@@ -136,10 +151,13 @@ $router->get('/cloud/public/share/folder', [CloudShareController::class, 'public
 
 // Team & Workspaces (Priority 6)
 $router->post('/teams', [TeamController::class, 'createTeam']);
+$router->get('/teams/invitations/inspect', [TeamController::class, 'inspectInvitation']);
+$router->post('/teams/invitations/accept', [TeamController::class, 'acceptInvitation']);
+$router->get('/teams/{id}/invitations', [TeamController::class, 'listInvitations']);
+$router->post('/teams/{id}/invitations/{invId}/revoke', [TeamController::class, 'revokeInvitation']);
 $router->get('/teams/{id}', [TeamController::class, 'getTeam']);
 $router->get('/teams/{id}/members', [TeamController::class, 'listMembers']);
 $router->post('/teams/{id}/invitations', [TeamController::class, 'createInvitation']);
-$router->post('/teams/invitations/accept', [TeamController::class, 'acceptInvitation']);
 $router->post('/teams/{id}/members/{userId}/role', [TeamController::class, 'changeMemberRole']);
 $router->delete('/teams/{id}/members/{userId}', [TeamController::class, 'removeMember']);
 $router->get('/teams/{id}/seats', [TeamController::class, 'listSeats']);
@@ -174,5 +192,28 @@ $router->post('/ai/fs/mkdir', [AiGatewayController::class, 'fsMkdir']);
 $router->post('/ai/fs/upload', [AiGatewayController::class, 'fsUpload']);
 $router->get('/ai/fs/read', [AiGatewayController::class, 'fsRead']);
 $router->post('/ai/bundle/register', [AiGatewayController::class, 'bundleRegister']);
+
+// ==========================================
+// TTS & VOICE CLONING (Phase 1-4)
+// ==========================================
+// Public Endpoints
+$router->get('/tts/capabilities', [TtsController::class, 'getCapabilities']);
+$router->post('/tts/jobs', [TtsController::class, 'createJob']);
+$router->get('/tts/jobs', [TtsController::class, 'listJobs']);
+$router->get('/tts/jobs/{id}', [TtsController::class, 'getJob']);
+$router->post('/tts/jobs/{id}/cancel', [TtsController::class, 'cancelJob']);
+$router->get('/tts/voices', [TtsController::class, 'listVoices']);
+$router->get('/tts/voices/{id}/preview', [TtsController::class, 'previewVoice']);
+$router->post('/tts/voices', [TtsController::class, 'createVoice']);
+$router->delete('/tts/voices/{id}', [TtsController::class, 'deleteVoice']);
+
+// Internal Worker Endpoints
+$router->post('/internal/tts/jobs/claim', [TtsController::class, 'claimJob']);
+$router->post('/internal/tts/jobs/{id}/heartbeat', [TtsController::class, 'heartbeatJob']);
+$router->post('/internal/tts/jobs/{id}/progress', [TtsController::class, 'progressJob']);
+$router->post('/internal/tts/jobs/{id}/complete', [TtsController::class, 'completeJob']);
+$router->post('/internal/tts/jobs/{id}/fail', [TtsController::class, 'failJob']);
+$router->get('/internal/tts/voices/{id}', [TtsController::class, 'getVoiceDetails']);
+$router->get('/internal/tts/voices/{id}/reference-audio', [TtsController::class, 'streamVoiceReferenceAudio']);
 
 $router->dispatch();

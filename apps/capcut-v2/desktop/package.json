@@ -1,6 +1,6 @@
 {
   "name": "2toolne-autoedit",
-  "version": "2.0.4",
+  "version": "2.1.1",
   "description": "2toolne AutoEdit for CapCut (Desktop Edition)",
   "main": "src/main/index.js",
   "scripts": {
@@ -23,5 +23,8 @@
   "devDependencies": {
     "electron": "^33.2.1",
     "electron-builder": "^25.1.8"
+  },
+  "dependencies": {
+    "lucide": "^1.45.0"
   }
 }

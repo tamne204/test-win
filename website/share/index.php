@@ -33,18 +33,25 @@ if (!empty($legacyToken)) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>2TOOLNE Cloud — Chia Sẻ Tệp Tin</title>
+  <meta name="theme-color" content="#FF7A00">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
   <style>
     :root {
-      --bg-dark: #0f172a;
-      --card-bg: #1e293b;
-      --card-border: #334155;
-      --text-main: #f8fafc;
-      --text-muted: #94a3b8;
-      --accent-cyan: #06b6d4;
-      --accent-blue: #3b82f6;
-      --accent-green: #10b981;
-      --accent-red: #ef4444;
-      --btn-hover: #0891b2;
+      --bg-dark: #0F1012;
+      --card-bg: #191B1F;
+      --card-border: #2A2D33;
+      --text-main: #EDEDEE;
+      --text-muted: #8E95A2;
+      --brand-primary: #FF7A00;
+      --brand-hover: #FF8F1F;
+      --accent-cyan: #FF7A00;
+      --accent-blue: #FF7A00;
+      --accent-green: #10B981;
+      --accent-red: #EF4444;
+      --btn-hover: #E56E00;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -287,8 +294,8 @@ if (!empty($legacyToken)) {
 <body>
 
   <!-- Brand Header -->
-  <div class="brand-header">
-    <span class="brand-logo">☁️</span>
+  <div class="brand-header" style="display:flex;align-items:center;justify-content:center;gap:8px">
+    <img src="/assets/favicon.png" alt="2TOOLNE Logo" style="width:28px;height:28px;border-radius:6px;object-fit:contain">
     <span class="brand-title">2TOOLNE Cloud</span>
   </div>
 

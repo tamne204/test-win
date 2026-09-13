@@ -12,6 +12,7 @@ require_once __DIR__ . '/../Database.php';
 require_once __DIR__ . '/../Router.php';
 require_once __DIR__ . '/../storage/CloudAuthHelper.php';
 require_once __DIR__ . '/../services/WorkspacePermissionService.php';
+require_once __DIR__ . '/../services/TeamProvisioningService.php';
 require_once __DIR__ . '/CapCutLicenseController.php';
 
 class TeamController {
@@ -37,65 +38,29 @@ class TeamController {
         $userId = (string)$user['id'];
         $db = Database::getConnection();
 
-        $teamId = 'tm_' . bin2hex(random_bytes(8));
-        $spaceId = 'cs_team_' . bin2hex(random_bytes(8));
-        $walletId = 'cw_' . bin2hex(random_bytes(8));
+        // Fetch authoritative default plan metadata
+        $pStmt = $db->prepare('SELECT * FROM team_plans WHERE id = "team_starter" LIMIT 1');
+        $pStmt->execute();
+        $plan = $pStmt->fetch(PDO::FETCH_ASSOC) ?: [
+            'name'              => 'Team Starter',
+            'duration_days'     => 30,
+            'member_slots'      => 2,
+            'desktop_key_count' => 2,
+            'storage_bytes'     => 53687091200,
+            'initial_tokens'    => 500,
+        ];
 
-        $db->beginTransaction();
-        try {
-            // 1. Create Team record
-            $tStmt = $db->prepare('
-                INSERT INTO teams (id, name, owner_user_id, member_slots, app_key_count, status, created_at)
-                VALUES (?, ?, ?, 2, 2, "ACTIVE", NOW())
-            ');
-            $tStmt->execute([$teamId, $name, $userId]);
-
-            // 2. Add creator as OWNER in team_members
-            $tmStmt = $db->prepare('
-                INSERT INTO team_members (id, team_id, user_id, role, status, joined_at)
-                VALUES (?, ?, ?, "OWNER", "ACTIVE", NOW())
-            ');
-            $tmStmt->execute(['tm_mem_' . bin2hex(random_bytes(8)), $teamId, $userId]);
-
-            // 3. Create Team Cloud Space
-            $csStmt = $db->prepare('
-                INSERT INTO cloud_spaces (id, owner_type, owner_id, name, status, created_at)
-                VALUES (?, "TEAM", ?, ?, "ACTIVE", NOW())
-            ');
-            $csStmt->execute([$spaceId, $teamId, $name]);
-
-            // 4. Create Team Space Quota (50GB default)
-            $csqStmt = $db->prepare('
-                INSERT INTO cloud_space_quotas (cloud_space_id, base_quota_bytes, effective_quota_bytes, used_bytes, reserved_bytes)
-                VALUES (?, 53687091200, 53687091200, 0, 0)
-            ');
-            $csqStmt->execute([$spaceId]);
-
-            // 5. Create Team Wallet (Dedicated tokens)
-            $cwStmt = $db->prepare('
-                INSERT INTO credit_wallets (id, user_id, team_id, workspace_id, balance, reserved_balance)
-                VALUES (?, ?, ?, ?, 0, 0)
-            ');
-            $cwStmt->execute([$walletId, $userId, $teamId, $spaceId]);
-
-            $db->commit();
-
-            Router::json([
-                'ok'        => true,
-                'team'      => [
-                    'id'            => $teamId,
-                    'name'          => $name,
-                    'owner_user_id' => $userId,
-                    'member_slots'  => 2,
-                    'app_key_count' => 2,
-                    'workspace_id'  => $spaceId,
-                    'role'          => 'OWNER',
-                ],
-            ], 201);
-        } catch (Throwable $e) {
-            $db->rollBack();
-            Router::error('Không thể tạo Team: ' . $e->getMessage(), 500);
+        // Provision atomically and safely using TeamProvisioningService (user_id = NULL for team wallet)
+        $provRes = TeamProvisioningService::provisionTeam($userId, $name, $plan);
+        if (!$provRes['ok']) {
+            Router::error('Không thể tạo không gian Team. Vui lòng thử lại sau.', 500, 'TEAM_PROVISIONING_FAILED');
         }
+
+        Router::json([
+            'ok'    => true,
+            'team'  => $provRes['team'],
+            'space' => $provRes['space'],
+        ], 201);
     }
 
     /**
@@ -293,13 +258,247 @@ class TeamController {
         $inviteUrl = "{$baseUrl}/invite/#{$rawToken}";
 
         Router::json([
-            'ok'           => true,
-            'invite_id'    => $invId,
-            'offered_role' => $offeredRole,
-            'expires_at'   => $expiresAt,
-            'invite_token' => $rawToken,
-            'invite_url'   => $inviteUrl,
+            'ok'            => true,
+            'invite_id'     => $invId,
+            'invitation_id' => $invId,
+            'id'            => $invId,
+            'offered_role'  => $offeredRole,
+            'expires_at'    => $expiresAt,
+            'invite_token'  => $rawToken,
+            'invite_url'    => $inviteUrl,
         ], 201);
+    }
+
+    /**
+     * GET /api/v1/teams/{id}/invitations
+     * List all team invitations (OWNER / ADMIN only)
+     */
+    public static function listInvitations(array $params, array $body): void {
+        $user = CloudAuthHelper::getCurrentUser();
+        if (!$user) {
+            Router::error('Authentication required', 401, 'UNAUTHORIZED');
+        }
+
+        $teamId = $params['id'] ?? '';
+        $userId = (string)$user['id'];
+        $db = Database::getConnection();
+
+        $tmStmt = $db->prepare('SELECT role FROM team_members WHERE team_id = ? AND user_id = ? AND status = "ACTIVE" LIMIT 1');
+        $tmStmt->execute([$teamId, $userId]);
+        $caller = $tmStmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$caller || !WorkspacePermissionService::canInviteMember($caller['role'])) {
+            Router::error('Bạn không có quyền xem danh sách lời mời của Team', 403, 'FORBIDDEN');
+        }
+
+        $stmt = $db->prepare('
+            SELECT ti.id, ti.team_id, ti.offered_role, ti.recipient_email, ti.created_by_user_id,
+                   ti.expires_at, ti.used_at, ti.revoked_at, ti.created_at,
+                   u.username as inviter_username, u.fullname as inviter_fullname
+            FROM team_invitations ti
+            LEFT JOIN users u ON ti.created_by_user_id = u.id
+            WHERE ti.team_id = ?
+            ORDER BY ti.created_at DESC
+            LIMIT 50
+        ');
+        $stmt->execute([$teamId]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $now = time();
+        $invitations = array_map(function($r) use ($now) {
+            $isUsed = !empty($r['used_at']);
+            $isRevoked = !empty($r['revoked_at']);
+            $isExpired = strtotime($r['expires_at']) < $now;
+
+            $status = 'ACTIVE';
+            if ($isUsed) {
+                $status = 'USED';
+            } elseif ($isRevoked) {
+                $status = 'REVOKED';
+            } elseif ($isExpired) {
+                $status = 'EXPIRED';
+            }
+
+            return [
+                'id'              => $r['id'],
+                'team_id'         => $r['team_id'],
+                'offered_role'    => $r['offered_role'],
+                'recipient_email' => $r['recipient_email'] ?: null,
+                'created_by'      => $r['inviter_fullname'] ?: $r['inviter_username'] ?: $r['created_by_user_id'],
+                'created_at'      => $r['created_at'],
+                'expires_at'      => $r['expires_at'],
+                'used_at'         => $r['used_at'],
+                'revoked_at'      => $r['revoked_at'],
+                'status'          => $status,
+            ];
+        }, $rows);
+
+        Router::json([
+            'ok'          => true,
+            'invitations' => $invitations,
+        ]);
+    }
+
+    /**
+     * POST /api/v1/teams/{id}/invitations/{invId}/revoke
+     * Revoke an active invitation (OWNER / ADMIN only)
+     */
+    public static function revokeInvitation(array $params, array $body): void {
+        $user = CloudAuthHelper::getCurrentUser();
+        if (!$user) {
+            Router::error('Authentication required', 401, 'UNAUTHORIZED');
+        }
+
+        $teamId = $params['id'] ?? '';
+        $invId = $params['invId'] ?? '';
+        $userId = (string)$user['id'];
+        $db = Database::getConnection();
+
+        $tmStmt = $db->prepare('SELECT role FROM team_members WHERE team_id = ? AND user_id = ? AND status = "ACTIVE" LIMIT 1');
+        $tmStmt->execute([$teamId, $userId]);
+        $caller = $tmStmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$caller || !WorkspacePermissionService::canInviteMember($caller['role'])) {
+            Router::error('Bạn không có quyền thu hồi lời mời của Team', 403, 'FORBIDDEN');
+        }
+
+        $invStmt = $db->prepare('SELECT id, used_at, revoked_at FROM team_invitations WHERE id = ? AND team_id = ? LIMIT 1');
+        $invStmt->execute([$invId, $teamId]);
+        $inv = $invStmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$inv) {
+            Router::error('Không tìm thấy lời mời', 404, 'NOT_FOUND');
+        }
+
+        if (!empty($inv['used_at'])) {
+            Router::error('Lời mời này đã được sử dụng, không thể thu hồi', 400, 'ALREADY_USED');
+        }
+
+        if (!empty($inv['revoked_at'])) {
+            Router::json(['ok' => true, 'revoked' => true, 'already_revoked' => true]);
+            return;
+        }
+
+        $db->prepare('UPDATE team_invitations SET revoked_at = NOW() WHERE id = ? AND team_id = ?')->execute([$invId, $teamId]);
+
+        Router::json([
+            'ok'      => true,
+            'revoked' => true,
+            'message' => 'Đã thu hồi liên kết mời thành công.',
+        ]);
+    }
+
+    /**
+     * GET /api/v1/teams/invitations/inspect
+     * Safe public preview of an invitation by raw token (Zero token burning)
+     */
+    public static function inspectInvitation(array $params, array $body): void {
+        $rawToken = trim((string)($_GET['token'] ?? ($body['token'] ?? ($body['invite_token'] ?? ''))));
+        if (empty($rawToken)) {
+            Router::error('Mã lời mời là bắt buộc', 400, 'MISSING_TOKEN');
+        }
+
+        $tokenHash = hash('sha256', $rawToken);
+        $db = Database::getConnection();
+
+        $stmt = $db->prepare('
+            SELECT ti.*, t.name as team_name, t.status as team_status, t.member_slots,
+                   u.username as inviter_username, u.fullname as inviter_fullname
+            FROM team_invitations ti
+            JOIN teams t ON ti.team_id = t.id
+            LEFT JOIN users u ON ti.created_by_user_id = u.id
+            WHERE ti.invite_token_hash = ?
+            LIMIT 1
+        ');
+        $stmt->execute([$tokenHash]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$row) {
+            Router::error('Không tìm thấy lời mời hoặc liên kết không đúng', 404, 'NOT_FOUND');
+        }
+
+        $teamId = $row['team_id'];
+
+        // Count current members
+        $cntStmt = $db->prepare('SELECT COUNT(*) FROM team_members WHERE team_id = ? AND status = "ACTIVE"');
+        $cntStmt->execute([$teamId]);
+        $memberCount = (int)$cntStmt->fetchColumn();
+        $memberSlots = (int)$row['member_slots'];
+
+        // Check already member if caller is authenticated
+        $currentUser = CloudAuthHelper::getCurrentUser();
+        $alreadyMember = false;
+        $currentRole = null;
+        if ($currentUser) {
+            $tmStmt = $db->prepare('SELECT role, status FROM team_members WHERE team_id = ? AND user_id = ? AND status = "ACTIVE" LIMIT 1');
+            $tmStmt->execute([$teamId, (string)$currentUser['id']]);
+            $mem = $tmStmt->fetch(PDO::FETCH_ASSOC);
+            if ($mem) {
+                $alreadyMember = true;
+                $currentRole = strtoupper($mem['role']);
+            }
+        }
+
+        // Validity check
+        if (!empty($row['used_at'])) {
+            Router::json([
+                'ok'        => false,
+                'valid'     => false,
+                'error'     => 'INVITE_ALREADY_USED',
+                'message'   => 'Liên kết mời này đã được sử dụng trước đó (chỉ sử dụng 1 lần).',
+                'team_name' => $row['team_name'],
+            ], 410);
+            return;
+        }
+
+        if (!empty($row['revoked_at'])) {
+            Router::json([
+                'ok'        => false,
+                'valid'     => false,
+                'error'     => 'INVITE_REVOKED',
+                'message'   => 'Liên kết mời này đã bị thu hồi.',
+                'team_name' => $row['team_name'],
+            ], 410);
+            return;
+        }
+
+        if (strtotime($row['expires_at']) < time()) {
+            Router::json([
+                'ok'        => false,
+                'valid'     => false,
+                'error'     => 'INVITE_EXPIRED',
+                'message'   => 'Liên kết mời này đã hết hạn.',
+                'team_name' => $row['team_name'],
+            ], 410);
+            return;
+        }
+
+        if ($row['team_status'] !== 'ACTIVE') {
+            Router::json([
+                'ok'        => false,
+                'valid'     => false,
+                'error'     => 'TEAM_INACTIVE',
+                'message'   => 'Team này không còn hoạt động.',
+                'team_name' => $row['team_name'],
+            ], 410);
+            return;
+        }
+
+        Router::json([
+            'ok'             => true,
+            'valid'          => true,
+            'team_id'        => $row['team_id'],
+            'team_name'      => $row['team_name'],
+            'offered_role'   => $row['offered_role'],
+            'inviter_name'   => $row['inviter_fullname'] ?: $row['inviter_username'] ?: 'Trưởng nhóm',
+            'expires_at'     => $row['expires_at'],
+            'member_count'   => $memberCount,
+            'member_slots'   => $memberSlots,
+            'is_full'        => ($memberCount >= $memberSlots),
+            'already_member' => $alreadyMember,
+            'current_role'   => $currentRole,
+            'is_logged_in'   => $currentUser !== null,
+        ]);
     }
 
     /**
