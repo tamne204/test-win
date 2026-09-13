@@ -76,19 +76,14 @@ def check_compiler_availability(target_os: str, compiler_pref: str) -> Tuple[boo
                 "to link native Windows CPython runtime and DLLs."
             )
 
-        # 1. Check MSVC cl.exe
+        # 1. Check cl.exe (MSVC in PATH)
         cl_path = shutil.which("cl.exe")
         if cl_path and compiler_pref in ("auto", "msvc"):
             return True, "msvc", cl_path
 
-        # 2. Check MinGW gcc.exe
-        gcc_path = shutil.which("gcc.exe") or shutil.which("gcc")
-        if gcc_path and compiler_pref in ("auto", "mingw"):
-            return True, "mingw", gcc_path
-
-        # 3. Check vswhere.exe for Visual Studio installation
+        # 2. Check vswhere.exe for Visual Studio installation
         vswhere = os.path.expandvars(r"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe")
-        if os.path.isfile(vswhere):
+        if os.path.isfile(vswhere) and compiler_pref in ("auto", "msvc"):
             try:
                 cmd = [
                     vswhere,
@@ -100,9 +95,14 @@ def check_compiler_availability(target_os: str, compiler_pref: str) -> Tuple[boo
                 res = subprocess.run(cmd, capture_output=True, text=True, check=False)
                 vs_dir = res.stdout.strip()
                 if vs_dir and os.path.isdir(vs_dir):
-                    return True, "msvc-detected", vs_dir
+                    return True, "msvc", vs_dir
             except Exception:
                 pass
+
+        # 3. Check MinGW gcc.exe as fallback
+        gcc_path = shutil.which("gcc.exe") or shutil.which("gcc")
+        if gcc_path and compiler_pref in ("auto", "mingw"):
+            return True, "mingw", gcc_path
 
         if compiler_pref == "mingw":
             # Nuitka can auto-download MinGW with --mingw64 and --assume-yes-for-downloads
@@ -226,6 +226,7 @@ def build_nuitka_command(
         "--assume-yes-for-downloads",
         "--remove-output",
         "--no-pyi-file",
+        "--lto=no",
     ])
 
     if verbose:
@@ -584,7 +585,7 @@ def main():
 
     # 5. Execute Nuitka
     print(f"\n--- Executing Nuitka {args.mode.upper()} Compilation ---")
-    proc = subprocess.run(cmd, env=env)
+    proc = subprocess.run(cmd, env=env, stdin=subprocess.DEVNULL)
     if proc.returncode != 0:
         raise RuntimeError(f"Nuitka compilation failed with exit code: {proc.returncode}")
 

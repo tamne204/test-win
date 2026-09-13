@@ -52,6 +52,11 @@ jobs:
           RUN_DATE=$(Get-Date -Format "o")
           "@ | Out-File -FilePath windows-ci-report/runner-context.txt -Encoding utf8
 
+      - name: 4b. Setup MSVC C++ Compiler (VS 2022 x64)
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
       - name: 5. Install Nuitka & Sidecar Build Dependencies
         shell: pwsh
         run: |
@@ -71,11 +76,11 @@ jobs:
           Write-Host "COMPILING REAL PRODUCTION 2TOOLNE-CORE.EXE VIA NUITKA"
           Write-Host "=================================================="
           
-          $actualCmd = "python apps/capcut-v2/packaging/build_nuitka_core.py --target-os=windows --mode=onefile --console-mode=disable --clean --verbose"
+          $actualCmd = "python apps/capcut-v2/packaging/build_nuitka_core.py --target-os=windows --mode=onefile --compiler=msvc --console-mode=disable --clean --verbose"
           Write-Host "Executing: $actualCmd"
           "NUITKA_ACTUAL_COMMAND=$actualCmd" | Out-File -FilePath $env:GITHUB_ENV -Append
           
-          python apps/capcut-v2/packaging/build_nuitka_core.py --target-os=windows --mode=onefile --console-mode=disable --clean --verbose
+          python apps/capcut-v2/packaging/build_nuitka_core.py --target-os=windows --mode=onefile --compiler=msvc --console-mode=disable --clean --verbose
           
           $nuitkaExe = "apps/capcut-v2/packaging/dist/2toolne-core.exe"
           if (-not (Test-Path $nuitkaExe)) {
