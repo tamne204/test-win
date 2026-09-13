@@ -81,7 +81,7 @@ jobs:
             apps/capcut-v2/packaging/dist/2toolne-core.exe
             apps/capcut-v2/packaging/dist/core-build-metadata.json
             C:\Users\runneradmin\AppData\Local\Nuitka\Nuitka\Cache
-          key: nuitka-core-${{ runner.os }}-${{ hashFiles(apps/capcut-v2/packaging/build_nuitka_core.py) }}
+          key: nuitka-core-${{ runner.os }}-${{ hashFiles('apps/capcut-v2/packaging/build_nuitka_core.py') }}
 
       - name: 6. Compile Real Production Core with Nuitka (--onefile)
         shell: pwsh
