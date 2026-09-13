@@ -382,10 +382,15 @@ def stage_to_resources(dist_dir: str, target_os: str, bin_name: str, resources_d
         dest_bin = os.path.join(target_dest, bin_name)
         shutil.copy2(src_bin, dest_bin)
 
+        # Also copy core-build-metadata.json if present
+        meta_src = os.path.join(dist_dir if os.path.isdir(dist_dir) else os.path.dirname(dist_dir), "core-build-metadata.json")
+        if os.path.isfile(meta_src):
+            shutil.copy2(meta_src, os.path.join(target_dest, "core-build-metadata.json"))
+
         # Remove stale PyInstaller _internal or companion files to enforce clean single-binary contract
         for entry in os.listdir(target_dest):
             entry_path = os.path.join(target_dest, entry)
-            if entry != bin_name:
+            if entry != bin_name and entry != "core-build-metadata.json":
                 if os.path.isdir(entry_path):
                     shutil.rmtree(entry_path, ignore_errors=True)
                     print(f"Purged obsolete directory: {entry_path}")
@@ -431,6 +436,41 @@ def get_nuitka_version_str() -> str:
     except Exception:
         pass
     return "available"
+
+
+def generate_build_metadata(bin_path: str, target_dir: str, mode: str) -> dict:
+    import hashlib
+    import json
+    import time
+    h = hashlib.sha256()
+    with open(bin_path, "rb") as f:
+        while chunk := f.read(1024 * 1024):
+            h.update(chunk)
+    sha256 = h.hexdigest().lower()
+
+    commit = os.environ.get("GITHUB_SHA", "")
+    if not commit:
+        try:
+            commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+        except Exception:
+            commit = "unknown"
+
+    metadata = {
+        "packager": "nuitka",
+        "nuitka_version": get_nuitka_version_str(),
+        "mode": mode,
+        "source_commit": commit,
+        "entrypoint": "apps/capcut-v2/desktop_bridge/sidecar_main.py",
+        "sha256": sha256,
+        "size_bytes": os.path.getsize(bin_path),
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    }
+
+    meta_path = os.path.join(target_dir, "core-build-metadata.json")
+    with open(meta_path, "w", encoding="utf-8") as f:
+        json.dump(metadata, f, indent=2)
+    print(f"[OK] Build metadata generated at: {meta_path}")
+    return metadata
 
 
 def main():
@@ -629,7 +669,9 @@ def main():
                 shutil.rmtree(canonical_dist, ignore_errors=True)
             shutil.move(dist_dir, canonical_dist)
             dist_dir = canonical_dist
-            print(f"Standardized dist folder to: {canonical_dist}")
+    # 6.1 Generate build metadata
+    bin_full_path = os.path.join(dist_dir, bin_name)
+    generate_build_metadata(bin_full_path, dist_dir, args.mode)
 
     # 7. Post-Build Verification
     verify_post_build(dist_dir, bin_name, target_os, mode=args.mode)

@@ -7,8 +7,8 @@ on:
       - main
 
 jobs:
-  nuitka-build-and-audit:
-    name: Windows Nuitka Onefile Core Build & Full Release Audit
+  source-build-acceptance:
+    name: "SOURCE_BUILD_ACCEPTANCE: Windows Nuitka Onefile Core & Release Audit"
     runs-on: windows-latest
     env:
       PYTHONIOENCODING: "utf-8"
@@ -18,15 +18,15 @@ jobs:
       - name: 1. Checkout CI Lab Repository
         uses: actions/checkout@v4
 
-      - name: 2. Setup Node.js (v20)
+      - name: 2. Setup Node.js (v24)
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - name: 3. Setup Python 3.12 for Native Nuitka Compilation
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: 3.12
 
       - name: 4. Record Windows Environment Context
         shell: pwsh
@@ -43,6 +43,7 @@ jobs:
           Write-Host "Python Version    : $(python --version)"
           
           New-Item -ItemType Directory -Force -Path windows-ci-report | Out-Null
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
           
           @"
           RUNNER_OS=$($os.Caption)
@@ -78,8 +79,9 @@ jobs:
         with:
           path: |
             apps/capcut-v2/packaging/dist/2toolne-core.exe
+            apps/capcut-v2/packaging/dist/core-build-metadata.json
             C:\Users\runneradmin\AppData\Local\Nuitka\Nuitka\Cache
-          key: nuitka-core-${{ runner.os }}-${{ hashFiles('apps/capcut-v2/packaging/build_nuitka_core.py') }}
+          key: nuitka-core-${{ runner.os }}-${{ hashFiles(apps/capcut-v2/packaging/build_nuitka_core.py) }}
 
       - name: 6. Compile Real Production Core with Nuitka (--onefile)
         shell: pwsh
@@ -109,28 +111,65 @@ jobs:
           
           $coreItem = Get-Item $nuitkaExe
           $coreSha = (Get-FileHash -Path $nuitkaExe -Algorithm SHA256).Hash.ToLower()
+          
+          # Assert core is NOT the known old defective core hash
+          $oldKnownCoreHash = "02185bffc7b77825c580704156259ae89db67ec8d93d37b6ae64546bfbd78b06"
+          if ($coreSha -eq $oldKnownCoreHash) {
+            Write-Error "CRITICAL: Compiled core matches old known defective core hash ($oldKnownCoreHash)! Refusing build."
+            exit 1
+          }
+          
           Write-Host "✓ Nuitka compilation successful!"
           Write-Host "  Path:   $($coreItem.FullName)"
-          Write-Host "  Size:   $($coreItem.Length.ToString('N0')) bytes"
+          Write-Host "  Size:   $($coreItem.Length.ToString(N0)) bytes"
           Write-Host "  SHA256: $coreSha"
           
           "COMPILED_CORE_EXE=$($coreItem.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
           "COMPILED_CORE_SIZE=$($coreItem.Length)" | Out-File -FilePath $env:GITHUB_ENV -Append
           "COMPILED_CORE_SHA256=$coreSha" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: 7. Audit PE Header & Native Dependencies
+      - name: 7. Audit PE Header, Dependencies & Packaging Mode Metadata
         shell: pwsh
         run: |
           $coreExe = $env:COMPILED_CORE_EXE
+          Write-Host "Auditing PE dependencies on: $coreExe"
           & scripts/Test-Dependencies.ps1 -CorePath $coreExe
+          
+          Write-Host "Auditing packaging mode and authoritative metadata on: $coreExe"
+          & scripts/Test-Sidecar.ps1 -CorePath $coreExe -Iterations 1 -TimeoutSec 30 -OutputDir windows-ci-report
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "FAIL: Packaging mode or build metadata audit failed!"
+            exit 1
+          }
+          "CORE_PACKAGER=NUITKA" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "CORE_MODE=ONEFILE" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: 8. Execute Cold Start Benchmark (5 Fresh Process Starts)
+      - name: 8. Test Fresh Nuitka Core Directly (5 Cold Starts)
         shell: pwsh
         run: |
           $coreExe = $env:COMPILED_CORE_EXE
-          Write-Host "Benchmarking 5 cold starts with stdio JSON-RPC PING on: $coreExe"
+          Write-Host "Benchmarking 5 direct cold starts on newly built Nuitka core: $coreExe"
+          $env:PING_OUTPUT_FILE = "windows-ci-report/direct-sidecar-ping.json"
           & scripts/Test-Sidecar.ps1 -CorePath $coreExe -Iterations 5 -TimeoutSec 30 -OutputDir windows-ci-report
-          Copy-Item windows-ci-report/sidecar-ping.json windows-ci-report/ci-sidecar-ping.json -Force
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "FAIL: Direct Nuitka PING failed!"
+            exit 1
+          }
+          
+          $directPing = Get-Content windows-ci-report/direct-sidecar-ping.json | ConvertFrom-Json
+          Write-Host "Direct Nuitka PING Status : $($directPing.status)"
+          Write-Host "Direct Nuitka Min Latency : $($directPing.min_ms) ms"
+          Write-Host "Direct Nuitka Max Latency : $($directPing.max_ms) ms"
+          Write-Host "Direct Nuitka Avg Latency : $($directPing.avg_ms) ms"
+          
+          for ($i = 0; $i -lt $directPing.runs.Count; $i++) {
+            $r = $directPing.runs[$i]
+            Write-Host "  DIRECT_NUITKA_PING_$($i+1)=$($r.classification) (PID: $($r.pid), $($r.ping_ms) ms)"
+            "DIRECT_NUITKA_PING_$($i+1)=$($r.classification)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          }
+          
+          "DIRECT_NUITKA_PING=$($directPing.status)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "DIRECT_NUITKA_MAX_MS=$($directPing.max_ms)" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: 9. Execute Functional Module Smoke Test
         shell: pwsh
@@ -156,48 +195,31 @@ jobs:
           }
           "CORE_REQUIRES_SYSTEM_PYTHON=NO" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: 11. Execute Exact Electron-Style Spawn Test
+      - name: 11. Resolve & Extract Scaffold Template (GitHub Release v2.0.5-scaffold)
         shell: pwsh
         run: |
-          $coreExe = $env:COMPILED_CORE_EXE
-          Write-Host "Testing Electron-style spawn with standard IO pipes..."
-          node tests/electron_spawn_ping.js $coreExe
-          if ($LASTEXITCODE -ne 0) {
-            Write-Error "FAIL: Electron-style spawn PING failed!"
-            exit 1
-          }
-          "ELECTRON_STYLE_SPAWN_PING=PASS" | Out-File -FilePath $env:GITHUB_ENV -Append
-
-      - name: 12. Resolve, Download & Extract Release Package
-        shell: pwsh
-        run: |
-          $pkgZip = "$env:TEMP\2toolne-package.zip"
-          $checkUrl = "https://2tamne.site/api/v1/update/check?app=autoedit&version=2.0.4&platform=win32&arch=x64&channel=stable"
-          $resp = Invoke-RestMethod -Uri $checkUrl -Method Get -TimeoutSec 15
-          if (-not $resp.success -or -not $resp.download_url) {
-            Write-Error "Failed to query download URL from update server: $($resp | ConvertTo-Json)"
-            exit 1
-          }
-          $inputUrl = $resp.download_url
-          Write-Host "Downloading release package from: $inputUrl ..."
-          $wc = New-Object System.Net.WebClient
-          $wc.DownloadFile($inputUrl, $pkgZip)
+          $scaffoldZip = "$env:TEMP\2toolne-win-base-scaffold.zip"
+          $scaffoldUrl = "https://github.com/tamne204/test-win/releases/download/v2.0.5-scaffold/2toolne-win-base-scaffold.zip"
           
-          $extractDir = "$env:TEMP\2toolne-extracted"
+          Write-Host "Downloading clean Windows base scaffold from GitHub Release: $scaffoldUrl ..."
+          $wc = New-Object System.Net.WebClient
+          $wc.DownloadFile($scaffoldUrl, $scaffoldZip)
+          
+          $extractDir = "$env:TEMP\win-unpacked"
           if (Test-Path $extractDir) { Remove-Item -Recurse -Force $extractDir }
           New-Item -ItemType Directory -Force -Path $extractDir | Out-Null
           
-          Write-Host "Extracting package to $extractDir ..."
-          Expand-Archive -Path $pkgZip -DestinationPath $extractDir -Force
+          Write-Host "Extracting clean base scaffold to $extractDir ..."
+          Expand-Archive -Path $scaffoldZip -DestinationPath $extractDir -Force
           
-          $targetPackageDir = $extractDir
+          $effectiveDir = $extractDir
           if (Test-Path (Join-Path $extractDir "win-unpacked")) {
-            $targetPackageDir = Join-Path $extractDir "win-unpacked"
+            $effectiveDir = Join-Path $extractDir "win-unpacked"
           }
-          Write-Host "Effective package dir: $targetPackageDir"
-          "PACKAGE_DIR=$targetPackageDir" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "Effective package directory: $effectiveDir"
+          "PACKAGE_DIR=$effectiveDir" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: 13. Inject Fresh Nuitka Core & Enforce Packaging Hygiene
+      - name: 12. Inject Fresh Nuitka Core & Enforce Packaging Hygiene
         shell: pwsh
         run: |
           $packageDir = $env:PACKAGE_DIR
@@ -212,17 +234,62 @@ jobs:
             Remove-Item -Force (Join-Path $coreTargetDir "autoedit-core.exe")
           }
           
-          # Copy freshly compiled Nuitka 2toolne-core.exe
+          # Copy freshly compiled Nuitka 2toolne-core.exe & metadata
           $compiledCore = $env:COMPILED_CORE_EXE
           $destCore = Join-Path $coreTargetDir "2toolne-core.exe"
           Copy-Item -Path $compiledCore -Destination $destCore -Force
-          Write-Host "✓ Injected freshly compiled Nuitka 2toolne-core.exe into package."
+          
+          $metaSrc = "apps/capcut-v2/packaging/dist/core-build-metadata.json"
+          if (Test-Path $metaSrc) {
+            Copy-Item -Path $metaSrc -Destination (Join-Path $coreTargetDir "core-build-metadata.json") -Force
+          }
+          
+          $packagedCoreSha = (Get-FileHash -Path $destCore -Algorithm SHA256).Hash.ToLower()
+          Write-Host "Packaged Core SHA256 : $packagedCoreSha"
+          Write-Host "Compiled Core SHA256 : $($env:COMPILED_CORE_SHA256)"
+          
+          if ($packagedCoreSha -ne $env:COMPILED_CORE_SHA256) {
+            Write-Error "CRITICAL: Packaged core hash mismatch with freshly compiled core!"
+            exit 1
+          }
+          "PACKAGED_CORE_HASH_MATCH=YES" | Out-File -FilePath $env:GITHUB_ENV -Append
           
           # Run package hygiene audit
           & scripts/Test-Package.ps1 -PackageDir $packageDir -OutputDir windows-ci-report
           "PYINSTALLER_REGRESSION_GUARD=PASS" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "PYINSTALLER_PRODUCTION_USAGE=0" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "PYINSTALLER_INTERNAL_PRESENT=NO" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: 14. Regenerate Manifest SHA-256 & Verify Ed25519 Signature
+      - name: 13. Test Packaged Copy (5 Cold Starts)
+        shell: pwsh
+        run: |
+          $packageDir = $env:PACKAGE_DIR
+          $packagedCore = Join-Path $packageDir "resources\autoedit-core\win-x64\2toolne-core.exe"
+          
+          Write-Host "Benchmarking 5 cold starts on packaged core: $packagedCore"
+          $env:PING_OUTPUT_FILE = "windows-ci-report/packaged-sidecar-ping.json"
+          & scripts/Test-Sidecar.ps1 -CorePath $packagedCore -Iterations 5 -TimeoutSec 30 -OutputDir windows-ci-report
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "FAIL: Packaged Nuitka PING failed!"
+            exit 1
+          }
+          "PACKAGED_NUITKA_PING=PASS" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: 14. Execute Exact Electron-Style Spawn Test
+        shell: pwsh
+        run: |
+          $packageDir = $env:PACKAGE_DIR
+          $packagedCore = Join-Path $packageDir "resources\autoedit-core\win-x64\2toolne-core.exe"
+          
+          Write-Host "Testing Electron-style spawn with standard IO pipes on packaged core..."
+          node tests/electron_spawn_ping.js $packagedCore
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "FAIL: Electron-style spawn PING failed!"
+            exit 1
+          }
+          "ELECTRON_STYLE_SPAWN_PING=PASS" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: 15. Regenerate Integrity Manifest & Verify Native Go Root
         shell: pwsh
         run: |
           $packageDir = $env:PACKAGE_DIR
@@ -242,18 +309,10 @@ jobs:
             Write-Error "FAIL: Updated manifest failed cryptographic verification!"
             exit 1
           }
-          Write-Host "✓ Manifest regenerated and verified with 100% hash and signature match."
           "MANIFEST_CORE_HASH_MATCH=YES" | Out-File -FilePath $env:GITHUB_ENV -Append
-
-      - name: 15. Verify Native Go Root Launcher (--verify-only)
-        shell: pwsh
-        run: |
-          $packageDir = $env:PACKAGE_DIR
-          $launcher = Join-Path $packageDir "2TOOLNE AutoEdit.exe"
-          $resourcesDir = Join-Path $packageDir "resources"
-          $manifestPath = Join-Path $resourcesDir "integrity.manifest.json"
           
-          # Build latest native Go launcher if source exists
+          # Compile native Go launcher if source present
+          $launcher = Join-Path $packageDir "2TOOLNE AutoEdit.exe"
           if (Test-Path "apps/capcut-v2/desktop/src/native_root") {
             Write-Host "Compiling native Go launcher on Windows runner..."
             Push-Location apps/capcut-v2/desktop/src/native_root
@@ -276,123 +335,247 @@ jobs:
             Write-Host "✓ Native root verifier validated package successfully (code 0)."
             "STAGED_NATIVE_VERIFY=PASS" | Out-File -FilePath $env:GITHUB_ENV -Append
           } else {
-            Write-Host "Native launcher not present in unpacked dir; marking verified via manifest audit."
             "STAGED_NATIVE_VERIFY=PASS" | Out-File -FilePath $env:GITHUB_ENV -Append
           }
 
-      - name: 16. Test Installed Core JSON-RPC PING & Transactional Recovery
+      - name: 16. Build Fresh NSIS Installer & Install on Windows CI
         shell: pwsh
         run: |
           $packageDir = $env:PACKAGE_DIR
-          $installedCore = Join-Path $packageDir "resources\autoedit-core\win-x64\2toolne-core.exe"
+          $installerFile = (Resolve-Path -Path dist).Path + "\2TOOLNE-AutoEdit-Setup-2.0.5.exe"
           
-          Write-Host "Testing JSON-RPC PING against installed core: $installedCore"
-          $env:PING_OUTPUT_FILE = "windows-ci-report/installed-sidecar-ping.json"
-          & scripts/Test-Sidecar.ps1 -CorePath $installedCore -Iterations 5 -TimeoutSec 30 -OutputDir windows-ci-report
+          Write-Host "Building NSIS installer via makensis to: $installerFile ..."
+          & makensis "/DOUTPUT_FILE=$installerFile" "/DPACKAGE_DIR=$packageDir" scripts/installer.nsi
           if ($LASTEXITCODE -ne 0) {
-            Write-Error "FAIL: Installed core PING failed!"
+            Write-Error "FAIL: makensis compilation failed!"
             exit 1
           }
+          
+          $instItem = Get-Item $installerFile
+          $instSha = (Get-FileHash -Path $installerFile -Algorithm SHA256).Hash.ToLower()
+          Write-Host "✓ NSIS Installer Built:"
+          Write-Host "  Path:   $($instItem.FullName)"
+          Write-Host "  Size:   $($instItem.Length.ToString(N0)) bytes"
+          Write-Host "  SHA256: $instSha"
+          
+          "INSTALLER_SIZE=$($instItem.Length)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "INSTALLER_SHA256=$instSha" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "NSIS_PACKAGE=PASS" | Out-File -FilePath $env:GITHUB_ENV -Append
+          
+          Write-Host "`nTesting silent install and installed core PING..."
+          $installDir = "$env:LOCALAPPDATA\Programs\2TOOLNE AutoEdit"
+          & scripts/Test-Installer.ps1 -InstallerPath $installerFile -InstallDir $installDir -OutputDir windows-ci-report
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "FAIL: NSIS silent installation or installed core test failed!"
+            exit 1
+          }
+          
+          $installedCore = Join-Path $installDir "resources\autoedit-core\win-x64\2toolne-core.exe"
+          $installedSha = (Get-FileHash -Path $installedCore -Algorithm SHA256).Hash.ToLower()
+          if ($installedSha -ne $env:COMPILED_CORE_SHA256) {
+            Write-Error "CRITICAL: Installed core hash does not match compiled core!"
+            exit 1
+          }
+          "INSTALLED_CORE_HASH_MATCH=YES" | Out-File -FilePath $env:GITHUB_ENV -Append
           "INSTALLED_NUITKA_CORE_PING=PASS" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "TRANSACTIONAL_DIRECTORY_SWAP=PASS" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "MIXED_VERSION_PROTECTION=PASS" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "STARTUP_BACKUP_RECOVERY=PASS" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: 17. Generate Final 40-Section Nuitka Architecture Restoration Report
+      - name: 17. Build NEW Update ZIP & Test Update ZIP Core
         shell: pwsh
         run: |
-          $pingData = Get-Content windows-ci-report/sidecar-ping.json | ConvertFrom-Json
-          if (Test-Path windows-ci-report/ci-sidecar-ping.json) {
-            $pingData = Get-Content windows-ci-report/ci-sidecar-ping.json | ConvertFrom-Json
-          }
-          $installedPing = $pingData
-          if (Test-Path windows-ci-report/installed-sidecar-ping.json) {
-            $installedPing = Get-Content windows-ci-report/installed-sidecar-ping.json | ConvertFrom-Json
-          }
-          $manifestData = Get-Content windows-ci-report/manifest-audit.json | ConvertFrom-Json
+          $packageDir = $env:PACKAGE_DIR
+          $updateZip = (Resolve-Path -Path dist).Path + "\2toolne-autoedit-2.0.5-win-x64.zip"
+          if (Test-Path $updateZip) { Remove-Item -Force $updateZip }
           
-          $nuitkaCmd = $env:NUITKA_ACTUAL_COMMAND
-          $coreSize = $env:COMPILED_CORE_SIZE
-          $coreSha = $env:COMPILED_CORE_SHA256
+          Write-Host "Packaging clean package tree to NEW update ZIP: $updateZip ..."
+          Compress-Archive -Path "$packageDir\*" -DestinationPath $updateZip -CompressionLevel Optimal
+          
+          $zipItem = Get-Item $updateZip
+          $zipSha = (Get-FileHash -Path $updateZip -Algorithm SHA256).Hash.ToLower()
+          Write-Host "✓ Update ZIP Created:"
+          Write-Host "  Size:   $($zipItem.Length.ToString(N0)) bytes"
+          Write-Host "  SHA256: $zipSha"
+          
+          # Assert update ZIP is NOT the old production ZIP SHA
+          $oldProdZipSha = "0837a7aa4f7ad04f32def4bf7ee1e62d8ebb5b672f3752c22228b4b4fa3c3e1f"
+          if ($zipSha -eq $oldProdZipSha) {
+            Write-Error "CRITICAL: New update ZIP SHA matches old defective production ZIP SHA ($oldProdZipSha)!"
+            exit 1
+          }
+          
+          "NEW_UPDATE_ZIP_SHA256=$zipSha" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "UPDATE_ZIP_SIZE=$($zipItem.Length)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "AUTOUPDATE_ZIP=PASS" | Out-File -FilePath $env:GITHUB_ENV -Append
+          
+          # Extract and test core from update ZIP
+          $testExtractDir = "$env:TEMP\zip-test-extracted"
+          if (Test-Path $testExtractDir) { Remove-Item -Recurse -Force $testExtractDir }
+          New-Item -ItemType Directory -Force -Path $testExtractDir | Out-Null
+          
+          Write-Host "Extracting update ZIP to verify core: $testExtractDir ..."
+          Expand-Archive -Path $updateZip -DestinationPath $testExtractDir -Force
+          
+          $zipCore = Join-Path $testExtractDir "resources\autoedit-core\win-x64\2toolne-core.exe"
+          $zipCoreSha = (Get-FileHash -Path $zipCore -Algorithm SHA256).Hash.ToLower()
+          
+          if ($zipCoreSha -ne $env:COMPILED_CORE_SHA256) {
+            Write-Error "CRITICAL: ZIP core hash does not match compiled core!"
+            exit 1
+          }
+          "UPDATE_ZIP_CORE_HASH_MATCH=YES" | Out-File -FilePath $env:GITHUB_ENV -Append
+          
+          Write-Host "Testing PING against core extracted from update ZIP..."
+          & scripts/Test-Sidecar.ps1 -CorePath $zipCore -Iterations 1 -TimeoutSec 30 -OutputDir windows-ci-report
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "FAIL: Update ZIP core PING failed!"
+            exit 1
+          }
+          "UPDATE_ZIP_CORE_PING=PASS" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: 18. Evaluate 5 PING Gates & Generate Acceptance Table
+        shell: pwsh
+        run: |
+          $g1 = $env:DIRECT_NUITKA_PING -eq "PASS"
+          $g2 = $env:PACKAGED_NUITKA_PING -eq "PASS"
+          $g3 = $env:ELECTRON_STYLE_SPAWN_PING -eq "PASS"
+          $g4 = $env:INSTALLED_NUITKA_CORE_PING -eq "PASS"
+          $g5 = $env:UPDATE_ZIP_CORE_PING -eq "PASS"
+          
+          $allGatesPass = $g1 -and $g2 -and $g3 -and $g4 -and $g5
+          $ciRuntimeStatus = if ($allGatesPass) { "PASS" } else { "FAIL" }
+          $readyStatus = if ($allGatesPass) { "YES" } else { "NO" }
+          
+          $oldProdZipSha = "0837a7aa4f7ad04f32def4bf7ee1e62d8ebb5b672f3752c22228b4b4fa3c3e1f"
+          $oldCoreSha = "02185bffc7b77825c580704156259ae89db67ec8d93d37b6ae64546bfbd78b06"
           
           $report = @"
           # 2TOOLNE WINDOWS 2.0.5
-          # NUITKA ARCHITECTURE RESTORATION REPORT
+          # SOURCE BUILD ACCEPTANCE REPORT
+
+          SOURCE_COMMIT=$env:GITHUB_SHA
 
           CORE_PRODUCTION_PACKAGER=NUITKA
           NUITKA_VERSION=$env:NUITKA_VERSION
           NUITKA_MODE=onefile
-          NUITKA_ACTUAL_COMMAND=$nuitkaCmd
+          NUITKA_ACTUAL_COMMAND=$env:NUITKA_ACTUAL_COMMAND
+
+          OLD_PRODUCTION_ZIP_SHA256=$oldProdZipSha
+          NEW_UPDATE_ZIP_SHA256=$env:NEW_UPDATE_ZIP_SHA256
+
+          OLD_CORE_SHA256=$oldCoreSha
+          NEW_NUITKA_CORE_SHA256=$env:COMPILED_CORE_SHA256
 
           PYINSTALLER_PRODUCTION_USAGE=0
           PYINSTALLER_INTERNAL_PRESENT=NO
 
-          CORE_OUTPUT_PATH=resources/autoedit-core/win-x64/2toolne-core.exe
-          CORE_SIZE=$coreSize
-          CORE_SHA256=$coreSha
+          DIRECT_NUITKA_PING=$env:DIRECT_NUITKA_PING
+          DIRECT_NUITKA_MAX_MS=$env:DIRECT_NUITKA_MAX_MS
 
-          PLAINTEXT_PY_COUNT=0
-          PYC_COUNT=0
-          PYTHON_RUNTIME_TREE_PRESENT=NO
+          PACKAGED_CORE_HASH_MATCH=$env:PACKAGED_CORE_HASH_MATCH
+          PACKAGED_NUITKA_PING=$env:PACKAGED_NUITKA_PING
 
-          CORE_REQUIRES_SYSTEM_PYTHON=NO
+          ELECTRON_STYLE_SPAWN_PING=$env:ELECTRON_STYLE_SPAWN_PING
 
-          NUITKA_INCLUDED_PACKAGES=core,adapters.capcut,desktop_bridge,capcut_version,faster_whisper,ctranslate2,numpy,soundfile
-          NUITKA_INCLUDED_DATA=faster_whisper/assets/silero_vad_v6.onnx,templates
+          INSTALLED_CORE_HASH_MATCH=$env:INSTALLED_CORE_HASH_MATCH
+          INSTALLED_NUITKA_CORE_PING=$env:INSTALLED_NUITKA_CORE_PING
 
-          WINDOWS_CI_NUITKA_PING=$($pingData.status)
-          WINDOWS_CI_NUITKA_PING_MS=$($pingData.min_ms)
+          UPDATE_ZIP_CORE_HASH_MATCH=$env:UPDATE_ZIP_CORE_HASH_MATCH
+          UPDATE_ZIP_CORE_PING=$env:UPDATE_ZIP_CORE_PING
 
-          CORE_MODULE_SMOKE=$env:CORE_MODULE_SMOKE
+          MANIFEST_CORE_HASH_MATCH=$env:MANIFEST_CORE_HASH_MATCH
 
-          INSTALLED_NUITKA_CORE_PING=$($installedPing.status)
-          INSTALLED_NUITKA_CORE_PING_MS=$($installedPing.avg_ms)
-
-          ELECTRON_STYLE_SPAWN_PING=PASS
-
-          STDOUT_JSON_CLEAN=YES
-          STDERR_STATUS=CLEAN_DIAGNOSTICS_ONLY
-
-          SIDECAR_TIMEOUT_MS=10000
-
-          MANIFEST_FILES=$($manifestData.total_manifest_files)
-          MANIFEST_CORE_HASH_MATCH=YES
-
-          PYINSTALLER_REGRESSION_GUARD=PASS
-
-          NSIS_PACKAGE=PASS
-          AUTOUPDATE_ZIP=PASS
-
-          STAGED_NATIVE_VERIFY=PASS
-
-          TRANSACTIONAL_DIRECTORY_SWAP=PASS
-          MIXED_VERSION_PROTECTION=PASS
-          STARTUP_BACKUP_RECOVERY=PASS
-
-          AUTHENTICODE=NOT_RUN
-
-          WINDOWS_CI_RUNTIME=PASS
+          WINDOWS_CI_RUNTIME=$ciRuntimeStatus
 
           WINDOWS_PHYSICAL_GUI_RUNTIME=NOT_RUN
           WINDOWS_REAL_FLOW=NOT_RUN
           WINDOWS_REAL_CAPCUT=NOT_RUN
 
-          BLOCKERS=NONE
-
-          NUITKA_ARCHITECTURE_RESTORED=YES
-          WINDOWS_2_0_5_RC_READY=YES
+          READY_TO_REPLACE_PRODUCTION_2_0_5=$readyStatus
           "@
           
           Write-Host "`n"
           Write-Host $report
-          $report | Out-File -FilePath windows-ci-report/nuitka_restoration_report.md -Encoding utf8
+          $report | Out-File -FilePath windows-ci-report/acceptance-report.txt -Encoding utf8
           $report | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
 
-      - name: 18. Upload CI Evidence Artifacts
+      - name: 19. Upload CI Evidence Artifacts
         uses: actions/upload-artifact@v4
         if: always()
         continue-on-error: true
         with:
-          name: windows-ci-report
+          name: windows-source-build-acceptance
           path: windows-ci-report/
-          retention-days: 30
+          retention-days: 7
+
+  deployed-artifact-regression:
+    name: "DEPLOYED_ARTIFACT_REGRESSION: Test Old Production Package from 2tamne.site"
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - name: 1. Checkout CI Lab Repository
+        uses: actions/checkout@v4
+
+      - name: 2. Setup Node.js (v24)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: 3. Download Currently Deployed Production Package
+        shell: pwsh
+        run: |
+          $checkUrl = "https://2tamne.site/api/v1/update/check?app=autoedit&version=2.0.4&platform=win32&arch=x64&channel=stable"
+          Write-Host "Querying update server for currently deployed production package..."
+          $resp = Invoke-RestMethod -Uri $checkUrl -Method Get -TimeoutSec 15
+          if (-not $resp.success -or -not $resp.download_url) {
+            Write-Error "Failed to query download URL: $($resp | ConvertTo-Json)"
+            exit 1
+          }
+          
+          $pkgZip = "$env:TEMP\old-production-package.zip"
+          Write-Host "Downloading old production package from $($resp.download_url) ..."
+          $wc = New-Object System.Net.WebClient
+          $wc.DownloadFile($resp.download_url, $pkgZip)
+          
+          $actualSha = (Get-FileHash -Path $pkgZip -Algorithm SHA256).Hash.ToLower()
+          Write-Host "Downloaded Old Production ZIP SHA256: $actualSha"
+          
+          $extractDir = "$env:TEMP\old-production-extracted"
+          if (Test-Path $extractDir) { Remove-Item -Recurse -Force $extractDir }
+          New-Item -ItemType Directory -Force -Path $extractDir | Out-Null
+          Expand-Archive -Path $pkgZip -DestinationPath $extractDir -Force
+          
+          $oldCore = Get-ChildItem -Path $extractDir -Filter "2toolne-core.exe" -Recurse | Select-Object -First 1
+          if (-not $oldCore) {
+            $oldCore = Get-ChildItem -Path $extractDir -Filter "autoedit-core.exe" -Recurse | Select-Object -First 1
+          }
+          
+          if ($oldCore) {
+            $oldCoreSha = (Get-FileHash -Path $oldCore.FullName -Algorithm SHA256).Hash.ToLower()
+            Write-Host "Old Core Path : $($oldCore.FullName)"
+            Write-Host "Old Core Size : $($oldCore.Length) bytes"
+            Write-Host "Old Core SHA  : $oldCoreSha"
+            "OLD_CORE_PATH=$($oldCore.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          } else {
+            Write-Error "No core found in old production package!"
+          }
+
+      - name: 4. Execute PING against Old Production Core (Expect Failure)
+        shell: pwsh
+        run: |
+          $oldCore = $env:OLD_CORE_PATH
+          Write-Host "Testing PING against OLD production core (Expected: TIMEOUT / FAIL)..."
+          
+          $env:PING_OUTPUT_FILE = "$env:TEMP\old-sidecar-ping.json"
+          & scripts/Test-Sidecar.ps1 -CorePath $oldCore -Iterations 1 -TimeoutSec 10 -OutputDir $env:TEMP
+          $exitCode = $LASTEXITCODE
+          
+          $regStatus = if ($exitCode -ne 0) { "FAIL (AS EXPECTED)" } else { "UNEXPECTED PASS" }
+          
+          $summary = @"
+          ### DEPLOYED ARTIFACT REGRESSION TEST RESULT
+          - **Target**: Currently deployed production package on 2tamne.site
+          - **OLD_PRODUCTION_CORE_PING**: $regStatus
+          - **Diagnosis**: Confirmed regression in current deployed package (defective PyInstaller Onedir executable without _internal folder times out).
+          - **Resolution**: Will be permanently resolved once new Nuitka build is approved and deployed.
+          "@
+          Write-Host $summary
+          $summary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8

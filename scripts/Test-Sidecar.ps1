@@ -76,10 +76,6 @@ if ($isX64) {
 Write-Host "`n[2/4] Auditing Dependency Closure & Packaging Mode ..." -ForegroundColor Yellow
 $coreDir = Split-Path -Parent $CorePath
 $internalDir = Join-Path $coreDir "_internal"
-$nuitkaDistDir = Join-Path $coreDir "2toolne-core.dist"
-
-$nuitkaMode = "UNKNOWN"
-$dependencyCount = 0
 
 if (Test-Path $internalDir) {
   Write-Error "REGRESSION FAILURE: Found prohibited PyInstaller _internal/ directory in core package! Nuitka onefile architecture required."
@@ -94,9 +90,51 @@ if ($coreText.Contains("pyimod01_archive") -or $coreText.Contains("base_library.
   exit 1
 }
 
-$nuitkaMode = "NUITKA_ONEFILE"
-Write-Host "✓ Verified Packaging Mode: $nuitkaMode (Self-contained native onefile executable)" -ForegroundColor Green
-Write-Host "✓ PYINSTALLER_REGRESSION_GUARD=PASS (Zero _internal/ folder, zero PyInstaller bootloader)" -ForegroundColor Green
+# Authoritative Build Metadata Verification
+$metaCandidates = @(
+  (Join-Path $coreDir "core-build-metadata.json"),
+  "apps/capcut-v2/packaging/dist/core-build-metadata.json",
+  "build_out/core-build-metadata.json"
+)
+$metaPath = $null
+foreach ($m in $metaCandidates) {
+  if (Test-Path $m) {
+    $metaPath = (Resolve-Path $m).Path
+    break
+  }
+}
+
+if (-not $metaPath) {
+  Write-Error "CRITICAL: Authoritative core-build-metadata.json missing! Cannot verify Nuitka build provenance."
+  exit 1
+}
+
+$metadata = Get-Content -Raw -Path $metaPath | ConvertFrom-Json
+$actualHash = (Get-FileHash -Path $CorePath -Algorithm SHA256).Hash.ToLower()
+
+if ($metadata.packager.ToLower() -ne "nuitka") {
+  Write-Error "CRITICAL: Build metadata specifies non-Nuitka packager: $($metadata.packager)"
+  exit 1
+}
+
+if ($metadata.mode.ToLower() -ne "onefile") {
+  Write-Error "CRITICAL: Build metadata specifies non-onefile mode: $($metadata.mode)"
+  exit 1
+}
+
+if ($metadata.sha256.ToLower() -ne $actualHash) {
+  Write-Error "CRITICAL: Core SHA256 mismatch! Metadata: $($metadata.sha256) vs Actual: $actualHash"
+  exit 1
+}
+
+Write-Host "✓ Verified Authoritative Build Metadata from $metaPath:" -ForegroundColor Green
+Write-Host "  CORE_PACKAGER=NUITKA" -ForegroundColor Green
+Write-Host "  CORE_MODE=ONEFILE" -ForegroundColor Green
+Write-Host "  NUITKA_VERSION=$($metadata.nuitka_version)" -ForegroundColor Green
+Write-Host "  SOURCE_COMMIT=$($metadata.source_commit)" -ForegroundColor Green
+Write-Host "  CORE_SHA256=$actualHash" -ForegroundColor Green
+Write-Host "✓ PYINSTALLER_PRODUCTION_USAGE=0" -ForegroundColor Green
+Write-Host "✓ PYINSTALLER_INTERNAL_PRESENT=NO" -ForegroundColor Green
 
 # 4. Windows Defender / Environment Context
 Write-Host "`n[3/4] Recording System & Security Context ..." -ForegroundColor Yellow
