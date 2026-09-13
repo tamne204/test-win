@@ -251,11 +251,26 @@ jobs:
           $packageDir = $env:PACKAGE_DIR
           $launcher = Join-Path $packageDir "2TOOLNE AutoEdit.exe"
           $resourcesDir = Join-Path $packageDir "resources"
+          $manifestPath = Join-Path $resourcesDir "integrity.manifest.json"
+          
+          # Build latest native Go launcher if source exists
+          if (Test-Path "apps/capcut-v2/desktop/src/native_root") {
+            Write-Host "Compiling native Go launcher on Windows runner..."
+            Push-Location apps/capcut-v2/desktop/src/native_root
+            go build -ldflags "-s -w -H=windowsgui" -o $launcher .
+            Pop-Location
+          }
+          
           if (Test-Path $launcher) {
             Write-Host "Testing native Go launcher against new package..."
-            $proc = Start-Process -FilePath $launcher -ArgumentList "--verify-only", "--resources-dir=$resourcesDir", "--headless" -PassThru -Wait
-            if ($proc.ExitCode -ne 0) {
-              Write-Error "FAIL: Native root verifier exited with code $($proc.ExitCode)!"
+            $env:_2TOOLNE_HEADLESS_TEST = "1"
+            $env:_2TOOLNE_RESOURCES_PATH = $resourcesDir
+            $env:_2TOOLNE_MANIFEST_PATH = $manifestPath
+            
+            $launcherOutput = & $launcher --verify-only --resources-dir $resourcesDir --manifest $manifestPath --headless 2>&1
+            Write-Host $launcherOutput
+            if ($LASTEXITCODE -ne 0) {
+              Write-Error "FAIL: Native root verifier exited with code $LASTEXITCODE!"
               exit 1
             }
             Write-Host "✓ Native root verifier validated package successfully (code 0)."
