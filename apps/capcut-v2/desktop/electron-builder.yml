@@ -68,6 +68,13 @@ extraResources:
       - "!**/__pycache__/**"
   - from: "resources/integrity.manifest.json"
     to: "integrity.manifest.json"
+  - from: "assets"
+    to: "assets"
+    filter:
+      - "icon.ico"
+      - "icon.png"
+      - "installerIcon.ico"
+      - "uninstallerIcon.ico"
 
 mac:
   icon: assets/icon.icns

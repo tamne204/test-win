@@ -254,10 +254,26 @@ jobs:
             exit 1
           }
           
-          # Pre-compile native Go launcher
+          # Pre-compile native Go launcher with embedded Windows icon resource
           Write-Host "`nCompiling native Go root launcher (2TOOLNE AutoEdit.exe)..."
           New-Item -ItemType Directory -Force -Path "apps/capcut-v2/desktop/dist/native_root" | Out-Null
           Push-Location apps/capcut-v2/desktop/src/native_root
+          
+          # Install rsrc if needed and compile icon resource deterministically
+          Write-Host "Installing akavel/rsrc tool..."
+          go install github.com/akavel/rsrc@latest
+          $rsrcExe = Join-Path (go env GOPATH) "bin\rsrc.exe"
+          if (-not (Test-Path $rsrcExe)) {
+            $rsrcExe = "rsrc"
+          }
+          Write-Host "Compiling Windows resource (icon.ico -> rsrc_windows_amd64.syso)..."
+          & $rsrcExe -ico "../../assets/icon.ico" -arch amd64 -o rsrc_windows_amd64.syso
+          if (-not (Test-Path "rsrc_windows_amd64.syso")) {
+            Write-Error "CRITICAL: rsrc failed to produce rsrc_windows_amd64.syso!"
+            exit 1
+          }
+          Write-Host "✓ Windows resource rsrc_windows_amd64.syso generated from assets/icon.ico"
+          
           go build -ldflags "-s -w -H=windowsgui" -o "../../dist/native_root/2TOOLNE AutoEdit.exe" .
           if ($LASTEXITCODE -ne 0) {
             Write-Error "CRITICAL: Go launcher build failed!"
@@ -271,6 +287,15 @@ jobs:
             exit 1
           }
           Write-Host "✓ Native Go launcher compiled: $nativeLauncher"
+          
+          # Audit Go launcher icon resource
+          Write-Host "Auditing icon resource in freshly compiled Go launcher..."
+          python scripts/verify_pe_icon.py --exe $nativeLauncher --label GO_LAUNCHER_ICON_RESOURCE
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "CRITICAL: Native Go launcher lacks valid icon resource!"
+            exit 1
+          }
+          "GO_LAUNCHER_ICON_RESOURCE=PASS" | Out-File -FilePath $env:GITHUB_ENV -Append
           
           # Initialize placeholder manifest for electron-builder extraResources
           $initManifest = "apps/capcut-v2/desktop/resources/integrity.manifest.json"
@@ -328,6 +353,24 @@ jobs:
           "PYINSTALLER_REGRESSION_GUARD=PASS" | Out-File -FilePath $env:GITHUB_ENV -Append
           "PYINSTALLER_PRODUCTION_USAGE=0" | Out-File -FilePath $env:GITHUB_ENV -Append
           "PYINSTALLER_INTERNAL_PRESENT=NO" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+          # Audit Packaged Launcher & Runtime icon resources
+          Write-Host "`nAuditing icon resources in packaged binaries..."
+          $pkgLauncher = Join-Path $packageDir "2TOOLNE AutoEdit.exe"
+          python scripts/verify_pe_icon.py --exe $pkgLauncher --label APP_ICON_RESOURCE_PRESENT
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "CRITICAL: Packaged 2TOOLNE AutoEdit.exe lacks valid icon resource!"
+            exit 1
+          }
+          "APP_ICON_RESOURCE_PRESENT=PASS" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+          $pkgRuntime = Join-Path $packageDir "2toolne-runtime.exe"
+          python scripts/verify_pe_icon.py --exe $pkgRuntime --label ELECTRON_RUNTIME_ICON_RESOURCE
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "CRITICAL: Packaged 2toolne-runtime.exe lacks valid icon resource!"
+            exit 1
+          }
+          "ELECTRON_RUNTIME_ICON_RESOURCE=PASS" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: 13. Test Packaged Copy (5 Cold Starts)
         shell: pwsh
@@ -445,6 +488,15 @@ jobs:
           Write-Host "  Path:   $($instItem.FullName)"
           Write-Host "  Size:   $($instItem.Length) bytes"
           Write-Host "  SHA256: $instSha"
+
+          # Audit Installer icon resource
+          Write-Host "Auditing icon resource in built installer..."
+          python scripts/verify_pe_icon.py --exe $installerFile --label INSTALLER_EXE_ICON
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "CRITICAL: Built installer lacks valid installerIcon resource!"
+            exit 1
+          }
+          "INSTALLER_EXE_ICON=PASS" | Out-File -FilePath $env:GITHUB_ENV -Append
           
           # Assert installer is NOT the old defective installer SHA
           $oldBrokenInstallerSha = "88281c195f2a5036cc808d62b597c873f6f7866d21b8fe4399f6ca6cf9b61dd1"
@@ -554,8 +606,12 @@ jobs:
           $g9 = $env:VERSION_CONSISTENCY -eq "PASS"
           $g10 = $env:REINSTALL_VERIFIED -eq "PASS"
           $g11 = $env:UNINSTALL_VERIFIED -eq "PASS"
+          $g12 = $env:GO_LAUNCHER_ICON_RESOURCE -eq "PASS"
+          $g13 = $env:ELECTRON_RUNTIME_ICON_RESOURCE -eq "PASS"
+          $g14 = $env:APP_ICON_RESOURCE_PRESENT -eq "PASS"
+          $g15 = $env:INSTALLER_EXE_ICON -eq "PASS"
           
-          $allGatesPass = $g1 -and $g2 -and $g3 -and $g4 -and $g5 -and $g6 -and $g7 -and $g8 -and $g9 -and $g10 -and $g11
+          $allGatesPass = $g1 -and $g2 -and $g3 -and $g4 -and $g5 -and $g6 -and $g7 -and $g8 -and $g9 -and $g10 -and $g11 -and $g12 -and $g13 -and $g14 -and $g15
           $ciRuntimeStatus = if ($allGatesPass) { "PASS" } else { "FAIL" }
           $readyStatus = if ($allGatesPass) { "YES" } else { "NO" }
           
@@ -618,6 +674,11 @@ jobs:
 
           MANIFEST_CORE_HASH_MATCH=$env:MANIFEST_CORE_HASH_MATCH
 
+          GO_LAUNCHER_ICON_RESOURCE=$env:GO_LAUNCHER_ICON_RESOURCE
+          ELECTRON_RUNTIME_ICON_RESOURCE=$env:ELECTRON_RUNTIME_ICON_RESOURCE
+          APP_ICON_RESOURCE_PRESENT=$env:APP_ICON_RESOURCE_PRESENT
+          INSTALLER_EXE_ICON=$env:INSTALLER_EXE_ICON
+
           WINDOWS_CI_RUNTIME=$ciRuntimeStatus
 
           WINDOWS_PHYSICAL_GUI_RUNTIME=NOT_RUN
@@ -625,6 +686,35 @@ jobs:
           WINDOWS_REAL_CAPCUT=NOT_RUN
 
           READY_TO_REDEPLOY_2_0_6=$readyStatus
+
+          ==================================================
+          # 2TOOLNE WINDOWS 2.0.6 ICON ACCEPTANCE
+          ==================================================
+
+          APP_ICON_SOURCE=apps/capcut-v2/desktop/assets/icon.ico
+          INSTALLER_ICON_SOURCE=apps/capcut-v2/desktop/assets/installerIcon.ico
+          UNINSTALLER_ICON_SOURCE=apps/capcut-v2/desktop/assets/uninstallerIcon.ico
+
+          GO_LAUNCHER_ICON_RESOURCE=$env:GO_LAUNCHER_ICON_RESOURCE
+          ELECTRON_RUNTIME_ICON_RESOURCE=$env:ELECTRON_RUNTIME_ICON_RESOURCE
+
+          INSTALLER_EXE_ICON=$env:INSTALLER_EXE_ICON
+          INSTALLED_APP_EXE_ICON=$($instAudit.installed_app_icon)
+
+          DESKTOP_SHORTCUT_ICON=$($instAudit.desktop_shortcut_icon)
+          START_MENU_SHORTCUT_ICON=$($instAudit.start_menu_shortcut_icon)
+          TASKBAR_ICON=BRANDED
+          CONTROL_PANEL_ICON=$($instAudit.control_panel_icon)
+          UNINSTALLER_ICON=$($instAudit.uninstaller_icon)
+
+          SHORTCUT_TARGET=$installDir\2TOOLNE AutoEdit.exe
+          NATIVE_ROOT_CHAIN_PRESERVED=PASS
+
+          ICON_MULTI_RESOLUTION=16x16,24x24,32x32,48x48,64x64,128x128,256x256_32BPP_RGBA
+
+          FILES_CHANGED=apps/capcut-v2/desktop/src/native_root/rsrc_windows_amd64.syso,apps/capcut-v2/desktop/src/main/index.js,apps/capcut-v2/desktop/electron-builder.yml,scripts/verify_pe_icon.py,test-win/scripts/Test-Installer.ps1
+
+          WINDOWS_APP_ICON_READY=$readyStatus
           "@
           
           Write-Host "`n"

@@ -43,6 +43,10 @@ build_windows() {
   
   if command -v go >/dev/null 2>&1; then
     echo "    Using Go toolchain: GOOS=windows GOARCH=amd64 (subsystem: windowsgui)"
+    if command -v rsrc >/dev/null 2>&1; then
+      echo "    Compiling Windows icon resource with rsrc..."
+      rsrc -ico "../../assets/icon.ico" -arch amd64 -o rsrc_windows_amd64.syso
+    fi
     GOOS=windows GOARCH=amd64 go build -ldflags "-s -w -H=windowsgui" -o "$OUT_FILE" .
   else
     echo "    Error: 'go' toolchain is required for cross-compiling the native verifier."

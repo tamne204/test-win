@@ -25,6 +25,15 @@ The Native Root of Trust verifier is the primary native executable entrypoint (`
 5. **Ephemeral Bootstrap Handshake**:
    Upon 100% verification pass, generates an unforgeable, ephemeral handshake token (`_2TOOLNE_BOOTSTRAP_TOKEN` with a 60-second TTL) bound to `manifest.signature` and passed via process environment to the Electron runtime.
 
+## Windows PE Icon Resource (`rsrc_windows_amd64.syso`)
+To ensure the compiled Windows launcher (`2TOOLNE AutoEdit.exe`) displays the branded application icon on Desktop shortcuts, Start Menu, taskbar, and Add/Remove Programs:
+- The resource object `rsrc_windows_amd64.syso` is compiled from `apps/capcut-v2/desktop/assets/icon.ico` using `rsrc`:
+  ```bash
+  go install github.com/akavel/rsrc@latest
+  rsrc -ico ../../assets/icon.ico -arch amd64 -o rsrc_windows_amd64.syso
+  ```
+- The Go linker automatically links `rsrc_windows_amd64.syso` when building with `GOOS=windows GOARCH=amd64`. When building for macOS, the file is ignored.
+
 ## Compilation
 ```bash
 # Build both Windows PE32+ and macOS Mach-O

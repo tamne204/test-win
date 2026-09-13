@@ -657,7 +657,29 @@ function getJson(endpoint, token = null) {
   });
 }
 
+function getBrandedWindowIcon() {
+  if (process.platform === 'darwin') {
+    return undefined; // macOS manages dock icon natively via .app bundle
+  }
+  const candidates = [
+    path.join(__dirname, '../renderer/assets/icon.png'), // Packaged inside app.asar
+    path.join(process.resourcesPath || '', 'assets', 'icon.ico'),
+    path.join(process.resourcesPath || '', 'assets', 'icon.png'),
+    path.join(__dirname, '../../assets/icon.ico'), // Dev mode
+    path.join(__dirname, '../../assets/icon.png'), // Dev mode
+  ];
+  for (const candidate of candidates) {
+    try {
+      if (candidate && fs.existsSync(candidate)) {
+        return candidate;
+      }
+    } catch (_) {}
+  }
+  return undefined;
+}
+
 async function createWindow() {
+  const windowIcon = getBrandedWindowIcon();
   mainWindow = new BrowserWindow({
     width: 1240,
     height: 840,
@@ -665,7 +687,7 @@ async function createWindow() {
     minHeight: 700,
     title: '2TOOLNE AutoEdit',
     backgroundColor: '#0E0F11',
-    icon: path.join(__dirname, '../../assets/icon.png'),
+    icon: windowIcon,
     show: false,
     webPreferences: {
       contextIsolation: true,

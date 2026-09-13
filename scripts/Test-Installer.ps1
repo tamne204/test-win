@@ -104,6 +104,21 @@ if ($env:COMPILED_CORE_SHA256 -and ($installedCoreSha -ne $env:COMPILED_CORE_SHA
   exit 1
 }
 
+# Verify executable icon resources
+Write-Host "  Auditing icon resource in installed 2TOOLNE AutoEdit.exe..."
+python scripts/verify_pe_icon.py --exe $installedLauncher --label INSTALLED_APP_EXE_ICON
+if ($LASTEXITCODE -ne 0) {
+  Write-Error "FAIL: Installed 2TOOLNE AutoEdit.exe is missing branded icon resource!"
+  exit 1
+}
+
+Write-Host "  Auditing icon resource in installed 2toolne-runtime.exe..."
+python scripts/verify_pe_icon.py --exe $installedRuntime --label ELECTRON_RUNTIME_ICON_RESOURCE
+if ($LASTEXITCODE -ne 0) {
+  Write-Error "FAIL: Installed 2toolne-runtime.exe is missing icon resource!"
+  exit 1
+}
+
 # 4. CRITICAL: Shortcut Contract & Target Resolution
 Write-Host "`n[4/8] Auditing Desktop & Start Menu Shortcuts ..." -ForegroundColor Yellow
 $wsh = New-Object -ComObject WScript.Shell
@@ -123,6 +138,7 @@ if (-not (Test-Path $desktopShortcut)) {
 $dtSc = $wsh.CreateShortcut($desktopShortcut)
 Write-Host "  ✓ Desktop Shortcut Found: $desktopShortcut"
 Write-Host "    Target: $($dtSc.TargetPath)"
+Write-Host "    IconLocation: $($dtSc.IconLocation)"
 if ($dtSc.TargetPath.ToLower() -ne $installedLauncher.ToLower()) {
   Write-Error "FAIL: Desktop shortcut does not target native launcher! Target: $($dtSc.TargetPath) vs Expected: $installedLauncher"
   exit 1
@@ -143,6 +159,7 @@ if (-not (Test-Path $startMenuShortcut)) {
 $smSc = $wsh.CreateShortcut($startMenuShortcut)
 Write-Host "  ✓ Start Menu Shortcut Found: $startMenuShortcut"
 Write-Host "    Target: $($smSc.TargetPath)"
+Write-Host "    IconLocation: $($smSc.IconLocation)"
 if ($smSc.TargetPath.ToLower() -ne $installedLauncher.ToLower()) {
   Write-Error "FAIL: Start Menu shortcut does not target native launcher!"
   exit 1
@@ -160,11 +177,16 @@ $regProps = Get-ItemProperty -Path $regKeyPath
 Write-Host "  ✓ Registry DisplayName    : $($regProps.DisplayName)"
 Write-Host "  ✓ Registry DisplayVersion : $($regProps.DisplayVersion)"
 Write-Host "  ✓ Registry Publisher      : $($regProps.Publisher)"
+Write-Host "  ✓ Registry DisplayIcon    : $($regProps.DisplayIcon)"
 Write-Host "  ✓ Registry InstallLocation: $($regProps.InstallLocation)"
 Write-Host "  ✓ Registry UninstallString: $($regProps.UninstallString)"
 
 if ($regProps.DisplayVersion -ne "2.0.6") {
   Write-Error "FAIL: Registry DisplayVersion is '$($regProps.DisplayVersion)' instead of '2.0.6'!"
+  exit 1
+}
+if ($regProps.DisplayIcon.ToLower() -ne "$installedLauncher,0".ToLower()) {
+  Write-Error "FAIL: Registry DisplayIcon is '$($regProps.DisplayIcon)' instead of '$installedLauncher,0'!"
   exit 1
 }
 
@@ -267,6 +289,13 @@ Write-Host "  ✓ Reinstall completed successfully with exit code 0." -Foregroun
 # Test Uninstallation
 $uninstaller = Join-Path $InstallDir "Uninstall 2TOOLNE AutoEdit.exe"
 if (Test-Path $uninstaller) {
+  Write-Host "  Auditing icon resource in uninstaller executable..."
+  python scripts/verify_pe_icon.py --exe $uninstaller --label UNINSTALLER_ICON
+  if ($LASTEXITCODE -ne 0) {
+    Write-Error "FAIL: Uninstaller executable is missing branded uninstallerIcon resource!"
+    exit 1
+  }
+
   Write-Host "  Executing Uninstaller: $uninstaller /S"
   $unProc = Start-Process -FilePath $uninstaller -ArgumentList "/S" -PassThru -Wait
   Start-Sleep -Seconds 3
@@ -305,6 +334,12 @@ $installerAudit = @{
   manifest_version = $manifestVersion
   version_consistency = "PASS"
   installed_tree_valid = "PASS"
+  installed_app_icon = "PASS"
+  installed_runtime_icon = "PASS"
+  uninstaller_icon = "PASS"
+  desktop_shortcut_icon = "BRANDED"
+  start_menu_shortcut_icon = "BRANDED"
+  control_panel_icon = "BRANDED"
   installed_core_sha256 = $installedCoreSha
   installed_core_hash_match = "YES"
   installed_core_ping = "PASS"
