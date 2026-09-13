@@ -10,6 +10,9 @@ jobs:
   nuitka-build-and-audit:
     name: Windows Nuitka Onefile Core Build & Full Release Audit
     runs-on: windows-latest
+    env:
+      PYTHONIOENCODING: "utf-8"
+      PYTHONUNBUFFERED: "1"
 
     steps:
       - name: 1. Checkout CI Lab Repository

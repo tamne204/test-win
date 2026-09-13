@@ -22,6 +22,15 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+# Ensure stdout and stderr handle UTF-8 cleanly on Windows runners
+try:
+    if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if sys.stderr and hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 # Path resolution: find V2_ROOT and REPO_ROOT robustly
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 if os.path.basename(SCRIPT_DIR) == "packaging":
@@ -275,7 +284,7 @@ def verify_post_build(dist_dir: str, bin_name: str, target_os: str, mode: str = 
 
     report["binary_verified"] = True
     report["binary_size_bytes"] = bin_size
-    print(f"✓ Target binary verified: {bin_path} ({bin_size:,} bytes)")
+    print(f"[OK] Target binary verified: {bin_path} ({bin_size:,} bytes)")
 
     # Windows PE header verification
     if target_os == "windows":
@@ -283,13 +292,13 @@ def verify_post_build(dist_dir: str, bin_name: str, target_os: str, mode: str = 
             header = f.read(2)
             if header != b"MZ":
                 raise RuntimeError(f"POST-BUILD FAILURE: Windows binary lacks valid PE MZ header: {header}")
-        print("✓ Windows PE (MZ) binary header signature valid")
+        print("[OK] Windows PE (MZ) binary header signature valid")
     else:
         if not os.access(bin_path, os.X_OK):
             os.chmod(bin_path, 0o755)
         if not os.access(bin_path, os.X_OK):
             raise RuntimeError(f"POST-BUILD FAILURE: Binary at {bin_path} is not executable.")
-        print("✓ Executable permissions valid (0755)")
+        print("[OK] Executable permissions valid (0755)")
 
     if mode == "onefile":
         # In onefile mode, Silero VAD and templates are embedded in the self-extracting archive
@@ -297,7 +306,7 @@ def verify_post_build(dist_dir: str, bin_name: str, target_os: str, mode: str = 
         report["templates_verified"] = True
         report["zero_loose_py_verified"] = True
         report["total_bundle_size_bytes"] = bin_size
-        print("✓ Onefile bundle verification passed: self-contained native executable")
+        print("[OK] Onefile bundle verification passed: self-contained native executable")
         return report
 
     # Standalone directory checks
@@ -318,7 +327,7 @@ def verify_post_build(dist_dir: str, bin_name: str, target_os: str, mode: str = 
     vad_size = os.path.getsize(vad_found)
     report["vad_verified"] = True
     report["vad_size_bytes"] = vad_size
-    print(f"✓ Silero VAD asset verified: {vad_found} ({vad_size:,} bytes)")
+    print(f"[OK] Silero VAD asset verified: {vad_found} ({vad_size:,} bytes)")
 
     # Templates
     templates_src = os.path.join(V2_ROOT, "templates")
@@ -327,7 +336,7 @@ def verify_post_build(dist_dir: str, bin_name: str, target_os: str, mode: str = 
         if not os.path.isdir(templates_dest):
             raise RuntimeError(f"POST-BUILD FAILURE: templates directory missing in dist: {templates_dest}")
         report["templates_verified"] = True
-        print(f"✓ Templates directory verified: {templates_dest}")
+        print(f"[OK] Templates directory verified: {templates_dest}")
 
     # Anti-Tamper Invariant: Assert zero loose .py files in protected modules
     loose_py = []
@@ -344,7 +353,7 @@ def verify_post_build(dist_dir: str, bin_name: str, target_os: str, mode: str = 
             f"SECURITY ANTI-TAMPER VIOLATION: Found {len(loose_py)} loose .py files in protected modules: {loose_py}"
         )
     report["zero_loose_py_verified"] = True
-    print("✓ Anti-tamper invariant verified: ZERO loose .py files in protected modules")
+    print("[OK] Anti-tamper invariant verified: ZERO loose .py files in protected modules")
 
     total_size = sum(
         os.path.getsize(os.path.join(dirpath, filename))
@@ -352,7 +361,7 @@ def verify_post_build(dist_dir: str, bin_name: str, target_os: str, mode: str = 
         for filename in filenames
     )
     report["total_bundle_size_bytes"] = total_size
-    print(f"✓ Standalone bundle size: {total_size / (1024 * 1024):.2f} MB")
+    print(f"[OK] Standalone bundle size: {total_size / (1024 * 1024):.2f} MB")
 
     return report
 
@@ -384,7 +393,7 @@ def stage_to_resources(dist_dir: str, target_os: str, bin_name: str, resources_d
                     os.remove(entry_path)
                     print(f"Purged obsolete companion file: {entry_path}")
 
-        print(f"✓ Successfully staged onefile binary: {dest_bin} ({os.path.getsize(dest_bin):,} bytes)")
+        print(f"[OK] Successfully staged onefile binary: {dest_bin} ({os.path.getsize(dest_bin):,} bytes)")
         return
 
     # Sync standalone folder
@@ -405,8 +414,8 @@ def stage_to_resources(dist_dir: str, target_os: str, bin_name: str, resources_d
     if not os.path.isfile(staged_bin):
         raise RuntimeError(f"STAGING FAILURE: Staged binary missing at {staged_bin}")
 
-    print(f"✓ Successfully staged {copied_count} updated files to {target_dest}")
-    print(f"✓ Staged binary ready for Electron: {staged_bin}")
+    print(f"[OK] Successfully staged {copied_count} updated files to {target_dest}")
+    print(f"[OK] Staged binary ready for Electron: {staged_bin}")
 
 
 def get_nuitka_version_str() -> str:
