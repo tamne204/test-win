@@ -423,7 +423,17 @@ jobs:
           }
           
           Write-Host "Building NSIS installer via makensis to: $installerFile ..."
-          & makensis "/DOUTPUT_FILE=$installerFile" "/DPACKAGE_DIR=$packageDir" scripts/installer.nsi
+          $makensisArgs = @("/DOUTPUT_FILE=$installerFile", "/DPACKAGE_DIR=$packageDir")
+          $iconFile = "apps/capcut-v2/desktop/assets/installerIcon.ico"
+          $uniconFile = "apps/capcut-v2/desktop/assets/uninstallerIcon.ico"
+          if (Test-Path $iconFile) {
+            $makensisArgs += "/DICON_FILE=$((Resolve-Path $iconFile).Path)"
+          }
+          if (Test-Path $uniconFile) {
+            $makensisArgs += "/DUNICON_FILE=$((Resolve-Path $uniconFile).Path)"
+          }
+          $makensisArgs += "scripts/installer.nsi"
+          & makensis @makensisArgs
           if ($LASTEXITCODE -ne 0) {
             Write-Error "FAIL: makensis compilation failed!"
             exit 1
