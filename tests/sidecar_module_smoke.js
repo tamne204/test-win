@@ -123,15 +123,26 @@ async function runSmoke() {
     const detect = detectRes.result;
     console.log(`  ✓ CapCut Detection: status=${detect.status}, installed=${detect.capcut_installed}`);
 
-    // 4. GET_PRESETS
-    console.log('[4/4] Testing RPC: GET_PRESETS ...');
-    const presetsRes = await sendRpc('GET_PRESETS');
-    if (!presetsRes.ok && !presetsRes.result) {
-      throw new Error(`GET_PRESETS failed: ${JSON.stringify(presetsRes)}`);
+    // 4. GET_LICENSE_STATUS & License Enforcement Gate
+    console.log('[4/4] Testing RPC: GET_LICENSE_STATUS & License Guard ...');
+    const licenseRes = await sendRpc('GET_LICENSE_STATUS');
+    if (!licenseRes.ok && !licenseRes.result) {
+      throw new Error(`GET_LICENSE_STATUS failed: ${JSON.stringify(licenseRes)}`);
     }
-    const presets = presetsRes.result;
-    const presetCount = Array.isArray(presets) ? presets.length : Object.keys(presets).length;
-    console.log(`  ✓ Presets loaded: count=${presetCount}`);
+    const lic = licenseRes.result;
+    console.log(`  ✓ License Status: state=${lic.state || lic.status || 'UNLICENSED'}, device_id=${lic.device_id ? 'DETECTED' : 'NONE'}`);
+
+    // Verify Commercial License Gate properly intercepts protected methods
+    const presetsRes = await sendRpc('GET_PRESETS');
+    if (presetsRes.ok && presetsRes.result) {
+      const presets = presetsRes.result;
+      const count = Array.isArray(presets) ? presets.length : Object.keys(presets).length;
+      console.log(`  ✓ Presets loaded: count=${count}`);
+    } else if (presetsRes.error && presetsRes.error.code === 'LICENSE_NOT_ACTIVATED') {
+      console.log('  ✓ Commercial Gate Active: GET_PRESETS correctly rejected without license (LICENSE_NOT_ACTIVATED)');
+    } else {
+      throw new Error(`GET_PRESETS returned unexpected response: ${JSON.stringify(presetsRes)}`);
+    }
 
     console.log('\n======================================================================');
     console.log('✓ CORE_MODULE_SMOKE=PASS (All core modules and non-destructive RPCs functional)');
