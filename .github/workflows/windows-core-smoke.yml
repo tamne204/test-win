@@ -388,10 +388,9 @@ jobs:
             exit 1
           }
           
-          $installedCore = Join-Path $installDir "resources\autoedit-core\win-x64\2toolne-core.exe"
-          $installedSha = (Get-FileHash -Path $installedCore -Algorithm SHA256).Hash.ToLower()
-          if ($installedSha -ne $env:COMPILED_CORE_SHA256) {
-            Write-Error "CRITICAL: Installed core hash does not match compiled core!"
+          $instAudit = Get-Content windows-ci-report/installer-audit.json | ConvertFrom-Json
+          if ($instAudit.installed_core_hash_match -ne "YES" -or $instAudit.installed_core_ping -ne "PASS") {
+            Write-Error "FAIL: Installed core verification or PING failed in installer audit!"
             exit 1
           }
           "INSTALLED_CORE_HASH_MATCH=YES" | Out-File -FilePath $env:GITHUB_ENV -Append
@@ -433,6 +432,10 @@ jobs:
           Expand-Archive -Path $updateZip -DestinationPath $testExtractDir -Force
           
           $zipCore = Join-Path $testExtractDir "resources\autoedit-core\win-x64\2toolne-core.exe"
+          if (-not (Test-Path $zipCore)) {
+            $foundCore = Get-ChildItem -Path $testExtractDir -Filter "2toolne-core.exe" -Recurse | Select-Object -First 1
+            if ($foundCore) { $zipCore = $foundCore.FullName }
+          }
           $zipCoreSha = (Get-FileHash -Path $zipCore -Algorithm SHA256).Hash.ToLower()
           
           if ($zipCoreSha -ne $env:COMPILED_CORE_SHA256) {

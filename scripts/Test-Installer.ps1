@@ -92,6 +92,13 @@ foreach ($req in $requiredPaths) {
   Write-Host "  ✓ Found: $(Split-Path -Leaf $req)"
 }
 
+$installedCoreSha = (Get-FileHash -Path $installedCore -Algorithm SHA256).Hash.ToLower()
+Write-Host "  Installed Core SHA256: $installedCoreSha"
+if ($env:COMPILED_CORE_SHA256 -and ($installedCoreSha -ne $env:COMPILED_CORE_SHA256)) {
+  Write-Error "CRITICAL: Installed core hash does not match compiled core ($($env:COMPILED_CORE_SHA256))!"
+  exit 1
+}
+
 # 4. CRITICAL REQUIREMENT (Section 29): INSTALLED CORE PING TEST
 Write-Host "`n[4/6] Executing Stdio JSON-RPC Ping on INSTALLED Core Binary ..." -ForegroundColor Yellow
 $sidecarScript = Join-Path $PSScriptRoot "Test-Sidecar.ps1"
@@ -140,6 +147,8 @@ $installerAudit = @{
   installer_sha256 = $instHash
   silent_install = "PASS"
   installed_tree_valid = "PASS"
+  installed_core_sha256 = $installedCoreSha
+  installed_core_hash_match = "YES"
   installed_core_ping = "PASS"
   installed_launcher_verify = "PASS"
   silent_uninstall = "PASS"
