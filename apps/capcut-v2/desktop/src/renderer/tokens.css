@@ -1,0 +1,151 @@
+/**
+ * 2TOOLNE Design Tokens Layer
+ * Dark Professional Creative Software Theme (Authoritative)
+ * Canonical Brand System for Desktop & Web
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* ════════ Canonical 2TOOLNE Design System Tokens ════════ */
+  --bg-app: #0E0F11;
+  --bg-sidebar: #111214;
+  --bg-header: #141518;
+
+  --surface-1: #15171A;
+  --surface-2: #1A1C20;
+  --surface-3: #202228;
+  --input-bg: #121316;
+
+  --border: #292C31;
+  --border-default: #292C31;
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border-hover: #383C44;
+
+  --brand: #FF7A00;
+  --brand-hover: #FF8A1F;
+  --brand-active: #E96F00;
+  --brand-soft: rgba(255, 122, 0, 0.12);
+  --brand-border: rgba(255, 122, 0, 0.32);
+
+  --brand-primary: var(--brand);
+  --brand-primary-hover: var(--brand-hover);
+  --brand-primary-active: var(--brand-active);
+  --brand-secondary: var(--brand-hover);
+  --brand-soft-border: var(--brand-border);
+
+  --text-primary: #F4F5F6;
+  --text-secondary: #A2A5AB;
+  --text-muted: #696D74;
+  --text-main: var(--text-primary);
+  --text-dim: var(--text-muted);
+
+  --success: #35C889;
+  --success-soft: rgba(53, 200, 137, 0.12);
+  --success-bg: var(--success-soft);
+  --success-border: rgba(53, 200, 137, 0.28);
+
+  --warning: #F5A623;
+  --warning-soft: rgba(245, 166, 35, 0.12);
+  --warning-bg: var(--warning-soft);
+  --warning-border: rgba(245, 166, 35, 0.28);
+
+  --danger: #F05252;
+  --danger-soft: rgba(240, 82, 82, 0.12);
+  --danger-bg: var(--danger-soft);
+  --danger-border: rgba(240, 82, 82, 0.28);
+
+  --info: #696D74;
+  --info-bg: rgba(255, 255, 255, 0.06);
+  --info-border: rgba(255, 255, 255, 0.12);
+
+  /* ════════ Typography & Font Stack ════════ */
+  --font-sans: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Consolas", "SF Mono", "JetBrains Mono", Menlo, monospace;
+  --font-family: var(--font-sans);
+  --font-size-title: 22px;
+  --font-size-section: 15px;
+  --font-size-card: 14px;
+  --font-size-body: 13px;
+  --font-size-caption: 11.5px;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* ════════ Spacing System ════════ */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* ════════ Radii ════════ */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+  --radius-pill: 9999px;
+
+  /* ════════ Shadows ════════ */
+  --shadow-subtle: 0 1px 3px rgba(0, 0, 0, 0.25);
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-hover: 0 4px 14px rgba(0, 0, 0, 0.45);
+  --shadow-modal: 0 16px 40px rgba(0, 0, 0, 0.65), 0 0 0 1px var(--border-default);
+
+  /* ════════ Transitions ════════ */
+  --transition-fast: 120ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 160ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ════════ Component Mappings (Dark Default) ════════ */
+  --surface-page: var(--bg-app);
+  --surface-sidebar: var(--bg-sidebar);
+  --surface-header: var(--surface-1);
+  --surface-card: var(--surface-1);
+  --surface-card-hover: var(--surface-2);
+  --surface-elevated: var(--surface-2);
+  --surface-input: var(--input-bg);
+  --surface-muted: var(--surface-2);
+
+  --border-soft: var(--border-default);
+  --border-subtle: var(--border-default);
+  --border-card: var(--border-default);
+  --border-color: var(--border-default);
+  --border-highlight: var(--brand-primary);
+
+  --text-main: var(--text-primary);
+  --text-dim: var(--text-secondary);
+  --text-on-primary: #FFFFFF;
+
+  --primary: var(--brand-primary);
+  --primary-hover: var(--brand-primary-hover);
+  --primary-active: var(--brand-primary-active);
+  --primary-gradient: linear-gradient(135deg, var(--brand-primary), #E96E00);
+  --accent-cyan: #38BDF8;
+
+  --status-success: var(--success);
+  --status-success-bg: var(--success-bg);
+  --status-success-border: var(--success-border);
+
+  --status-warning: var(--warning);
+  --status-warning-bg: var(--warning-bg);
+  --status-warning-border: var(--warning-border);
+
+  --status-danger: var(--danger);
+  --status-danger-bg: var(--danger-bg);
+  --status-danger-border: var(--danger-border);
+
+  --sidebar-width: 230px;
+  --shell-header-height: 76px;
+  --page-padding-x: 24px;
+  --page-padding-y: 20px;
+  --page-padding-bottom: 24px;
+  --section-gap: 16px;
+  --panel-radius: 14px;
+  --section-radius: 12px;
+  --card-radius: 10px;
+  --control-radius: 8px;
+}

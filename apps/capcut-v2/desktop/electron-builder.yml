@@ -1,0 +1,108 @@
+appId: site.2tamne.autoedit
+productName: 2TOOLNE AutoEdit
+copyright: Copyright © 2026 2TOOLNE Team
+
+protocols:
+  - name: 2TOOLNE Protocol
+    schemes:
+      - toolne
+      - 2toolne
+      - twotoolne
+
+directories:
+  output: dist
+  buildResources: assets
+
+afterPack: scripts/after_pack_integrity.js
+
+files:
+  - "**/*"
+  - "!resources/**"
+  - "!dist/**"
+  - "!tests/**"
+  - "!reports/**"
+  - "!diagnostics/**"
+  - "!physical_validator/**"
+  - "!test_workspace/**"
+  - "!scripts/**"
+  - "!**/.pytest_cache/**"
+  - "!**/__pycache__/**"
+  - "!**/*.py"
+  - "!**/*.pyc"
+  - "!**/*.pyo"
+  - "!**/*.map"
+  - "!**/*.cpp"
+  - "!**/*.h"
+  - "!**/*.zip"
+  - "!**/*.mp4"
+  - "!**/*.wav"
+  - "!**/.DS_Store"
+
+extraResources:
+  - from: "resources/autoedit-core"
+    to: "autoedit-core"
+    filter:
+      - "**/*"
+      - "!**/*.py"
+      - "!**/*.pyc"
+      - "!**/*.pyo"
+      - "!**/__pycache__/**"
+      - "!**/.pytest_cache/**"
+      - "!**/reports/**"
+      - "!**/diagnostics/**"
+  - from: "resources/bin"
+    to: "bin"
+    filter:
+      - "**/*"
+      - "!**/*.py"
+      - "!**/*.pyc"
+      - "!**/*.pyo"
+      - "!**/__pycache__/**"
+  - from: "resources/engine"
+    to: "engine"
+    filter:
+      - "**/*"
+      - "!**/*.py"
+      - "!**/*.pyc"
+      - "!**/*.pyo"
+      - "!**/__pycache__/**"
+  - from: "resources/integrity.manifest.json"
+    to: "integrity.manifest.json"
+
+mac:
+  icon: assets/icon.icns
+  category: public.app-category.video
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+    - target: zip
+      arch:
+        - arm64
+        - x64
+  hardenedRuntime: true
+  gatekeeperAssess: false
+
+win:
+  icon: assets/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+  requestedExecutionLevel: asInvoker
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: 2TOOLNE AutoEdit
+  uninstallDisplayName: 2TOOLNE AutoEdit
+  installerIcon: assets/installerIcon.ico
+  uninstallerIcon: assets/uninstallerIcon.ico
+  installerHeaderIcon: assets/icon.ico
+  artifactName: "2TOOLNE-AutoEdit-Setup-${version}.${ext}"

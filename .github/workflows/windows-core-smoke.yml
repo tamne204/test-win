@@ -23,6 +23,11 @@ jobs:
         with:
           node-version: 24
 
+      - name: 2b. Setup Go (1.22) for Native Root Launcher
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
       - name: 3. Setup Python 3.12 for Native Nuitka Compilation
         uses: actions/setup-python@v5
         with:
@@ -198,55 +203,112 @@ jobs:
           }
           "CORE_REQUIRES_SYSTEM_PYTHON=NO" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: 11. Resolve & Extract Scaffold Template (GitHub Release v2.0.5-scaffold)
+      - name: 11. Stage External Binaries & Pre-compile Native Root Launcher
         shell: pwsh
         run: |
-          $scaffoldZip = "$env:TEMP\2toolne-win-base-scaffold.zip"
-          $scaffoldUrl = "https://github.com/tamne204/test-win/releases/download/v2.0.5-scaffold/2toolne-win-base-scaffold.zip"
+          $scaffoldZip = "$env:TEMP\windows-scaffold-tools.zip"
+          $scaffoldUrl = "https://github.com/tamne204/test-win/releases/download/v2.0.5-scaffold/windows-scaffold-tools.zip"
           
-          Write-Host "Downloading clean Windows base scaffold from GitHub Release: $scaffoldUrl ..."
+          Write-Host "Downloading external binaries package (ffmpeg, realesrgan, probe) from: $scaffoldUrl ..."
           $wc = New-Object System.Net.WebClient
           $wc.DownloadFile($scaffoldUrl, $scaffoldZip)
           
-          $extractDir = "$env:TEMP\win-unpacked"
-          if (Test-Path $extractDir) { Remove-Item -Recurse -Force $extractDir }
-          New-Item -ItemType Directory -Force -Path $extractDir | Out-Null
+          Write-Host "Extracting external binaries into repository root..."
+          Expand-Archive -Path $scaffoldZip -DestinationPath . -Force
           
-          Write-Host "Extracting clean base scaffold to $extractDir ..."
-          Expand-Archive -Path $scaffoldZip -DestinationPath $extractDir -Force
+          # Assert all required external binaries are present
+          $binDir = "apps/capcut-v2/desktop/resources/bin/win-x64"
+          $engineDir = "apps/capcut-v2/desktop/resources/engine/win-x64"
+          $coreDir = "apps/capcut-v2/desktop/resources/autoedit-core/win-x64"
+          New-Item -ItemType Directory -Force -Path $coreDir | Out-Null
           
-          $effectiveDir = $extractDir
-          if (Test-Path (Join-Path $extractDir "win-unpacked")) {
-            $effectiveDir = Join-Path $extractDir "win-unpacked"
-          }
-          Write-Host "Effective package directory: $effectiveDir"
-          "PACKAGE_DIR=$effectiveDir" | Out-File -FilePath $env:GITHUB_ENV -Append
-
-      - name: 12. Inject Fresh Nuitka Core & Enforce Packaging Hygiene
-        shell: pwsh
-        run: |
-          $packageDir = $env:PACKAGE_DIR
-          $coreTargetDir = Join-Path $packageDir "resources\autoedit-core\win-x64"
-          New-Item -ItemType Directory -Force -Path $coreTargetDir | Out-Null
-          
-          # Remove obsolete PyInstaller files, legacy autoedit-core.exe, and _internal/
-          if (Test-Path (Join-Path $coreTargetDir "_internal")) {
-            Remove-Item -Recurse -Force (Join-Path $coreTargetDir "_internal")
-          }
-          if (Test-Path (Join-Path $coreTargetDir "autoedit-core.exe")) {
-            Remove-Item -Force (Join-Path $coreTargetDir "autoedit-core.exe")
+          $requiredFiles = @(
+            (Join-Path $binDir "ffmpeg.exe"),
+            (Join-Path $binDir "ffprobe.exe"),
+            (Join-Path $binDir "CapCutUiProbe.exe"),
+            (Join-Path $engineDir "realesrgan-ncnn-vulkan.exe"),
+            (Join-Path $engineDir "vcomp140.dll")
+          )
+          foreach ($rf in $requiredFiles) {
+            if (-not (Test-Path $rf)) {
+              Write-Error "CRITICAL: Required external tool missing after extraction: $rf"
+              exit 1
+            }
+            Write-Host "  ✓ Staged external tool: $rf"
           }
           
-          # Copy freshly compiled Nuitka 2toolne-core.exe & metadata
+          # Stage freshly compiled Nuitka core
           $compiledCore = $env:COMPILED_CORE_EXE
-          $destCore = Join-Path $coreTargetDir "2toolne-core.exe"
+          $destCore = Join-Path $coreDir "2toolne-core.exe"
           Copy-Item -Path $compiledCore -Destination $destCore -Force
           
           $metaSrc = "apps/capcut-v2/packaging/dist/core-build-metadata.json"
           if (Test-Path $metaSrc) {
-            Copy-Item -Path $metaSrc -Destination (Join-Path $coreTargetDir "core-build-metadata.json") -Force
+            Copy-Item -Path $metaSrc -Destination (Join-Path $coreDir "core-build-metadata.json") -Force
           }
           
+          $stagedCoreSha = (Get-FileHash -Path $destCore -Algorithm SHA256).Hash.ToLower()
+          Write-Host "Staged Core SHA256 : $stagedCoreSha"
+          if ($stagedCoreSha -ne $env:COMPILED_CORE_SHA256) {
+            Write-Error "CRITICAL: Staged core hash does not match compiled Nuitka core!"
+            exit 1
+          }
+          
+          # Pre-compile native Go launcher
+          Write-Host "`nCompiling native Go root launcher (2TOOLNE AutoEdit.exe)..."
+          New-Item -ItemType Directory -Force -Path "apps/capcut-v2/desktop/dist/native_root" | Out-Null
+          Push-Location apps/capcut-v2/desktop/src/native_root
+          go build -ldflags "-s -w -H=windowsgui" -o "../../dist/native_root/2TOOLNE AutoEdit.exe" .
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "CRITICAL: Go launcher build failed!"
+            exit 1
+          }
+          Pop-Location
+          
+          $nativeLauncher = "apps/capcut-v2/desktop/dist/native_root/2TOOLNE AutoEdit.exe"
+          if (-not (Test-Path $nativeLauncher)) {
+            Write-Error "CRITICAL: Native launcher not found at $nativeLauncher"
+            exit 1
+          }
+          Write-Host "✓ Native Go launcher compiled: $nativeLauncher"
+          
+          # Initialize placeholder manifest for electron-builder extraResources
+          $initManifest = "apps/capcut-v2/desktop/resources/integrity.manifest.json"
+          "{}" | Out-File -FilePath $initManifest -Encoding utf8
+
+      - name: 12. Build Canonical 2.0.6 Electron Application via electron-builder
+        shell: pwsh
+        run: |
+          Write-Host "=================================================="
+          Write-Host "BUILDING FRESH 2.0.6 ELECTRON APP & ASAR FROM SOURCE"
+          Write-Host "=================================================="
+          
+          Push-Location apps/capcut-v2/desktop
+          Write-Host "Installing npm dependencies in apps/capcut-v2/desktop..."
+          npm ci
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "CRITICAL: npm ci failed!"
+            exit 1
+          }
+          
+          Write-Host "Running electron-builder --win --dir..."
+          npx electron-builder --win --dir
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "CRITICAL: electron-builder failed!"
+            exit 1
+          }
+          Pop-Location
+          
+          $packageDir = (Resolve-Path "apps/capcut-v2/desktop/dist/win-unpacked").Path
+          Write-Host "Effective package directory: $packageDir"
+          "PACKAGE_DIR=$packageDir" | Out-File -FilePath $env:GITHUB_ENV -Append
+          
+          # Assert packaged core hash matches compiled core
+          $destCore = Join-Path $packageDir "resources\autoedit-core\win-x64\2toolne-core.exe"
+          if (-not (Test-Path $destCore)) {
+            Write-Error "CRITICAL: Packaged core missing at $destCore"
+            exit 1
+          }
           $packagedCoreSha = (Get-FileHash -Path $destCore -Algorithm SHA256).Hash.ToLower()
           Write-Host "Packaged Core SHA256 : $packagedCoreSha"
           Write-Host "Compiled Core SHA256 : $($env:COMPILED_CORE_SHA256)"
@@ -259,6 +321,10 @@ jobs:
           
           # Run package hygiene audit
           & scripts/Test-Package.ps1 -PackageDir $packageDir -OutputDir windows-ci-report
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "CRITICAL: Package hygiene audit failed!"
+            exit 1
+          }
           "PYINSTALLER_REGRESSION_GUARD=PASS" | Out-File -FilePath $env:GITHUB_ENV -Append
           "PYINSTALLER_PRODUCTION_USAGE=0" | Out-File -FilePath $env:GITHUB_ENV -Append
           "PYINSTALLER_INTERNAL_PRESENT=NO" | Out-File -FilePath $env:GITHUB_ENV -Append
@@ -303,7 +369,7 @@ jobs:
           $manifestPath = Join-Path $resourcesDir "integrity.manifest.json"
           
           Write-Host "Regenerating integrity manifest for updated package ($resourcesDir)..."
-          node scripts/generate_integrity_manifest.js --resources-dir $resourcesDir --output $manifestPath
+          node scripts/generate_integrity_manifest.js --resources-dir $resourcesDir --output $manifestPath --app-version 2.0.6
           if ($LASTEXITCODE -ne 0) {
             Write-Error "FAIL: generate_integrity_manifest.js exited with code $LASTEXITCODE!"
             exit 1
@@ -317,32 +383,26 @@ jobs:
           }
           "MANIFEST_CORE_HASH_MATCH=YES" | Out-File -FilePath $env:GITHUB_ENV -Append
           
-          # Compile native Go launcher if source present
+          # Verify native Go launcher against package
           $launcher = Join-Path $packageDir "2TOOLNE AutoEdit.exe"
-          if (Test-Path "apps/capcut-v2/desktop/src/native_root") {
-            Write-Host "Compiling native Go launcher on Windows runner..."
-            Push-Location apps/capcut-v2/desktop/src/native_root
-            go build -ldflags "-s -w -H=windowsgui" -o $launcher .
-            Pop-Location
+          if (-not (Test-Path $launcher)) {
+            Write-Error "CRITICAL: Native Go launcher not found at $launcher"
+            exit 1
           }
           
-          if (Test-Path $launcher) {
-            Write-Host "Testing native Go launcher against new package..."
-            $env:_2TOOLNE_HEADLESS_TEST = "1"
-            $env:_2TOOLNE_RESOURCES_PATH = $resourcesDir
-            $env:_2TOOLNE_MANIFEST_PATH = $manifestPath
-            
-            $launcherOutput = & $launcher --verify-only --resources-dir $resourcesDir --manifest $manifestPath --headless 2>&1
-            Write-Host $launcherOutput
-            if ($LASTEXITCODE -ne 0) {
-              Write-Error "FAIL: Native root verifier exited with code $LASTEXITCODE!"
-              exit 1
-            }
-            Write-Host "✓ Native root verifier validated package successfully (code 0)."
-            "STAGED_NATIVE_VERIFY=PASS" | Out-File -FilePath $env:GITHUB_ENV -Append
-          } else {
-            "STAGED_NATIVE_VERIFY=PASS" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "Testing native Go launcher against new package..."
+          $env:_2TOOLNE_HEADLESS_TEST = "1"
+          $env:_2TOOLNE_RESOURCES_PATH = $resourcesDir
+          $env:_2TOOLNE_MANIFEST_PATH = $manifestPath
+          
+          $launcherOutput = & $launcher --verify-only --resources-dir $resourcesDir --manifest $manifestPath --headless 2>&1
+          Write-Host $launcherOutput
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "FAIL: Native root verifier exited with code $LASTEXITCODE!"
+            exit 1
           }
+          Write-Host "✓ Native root verifier validated package successfully (code 0)."
+          "STAGED_NATIVE_VERIFY=PASS" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: 16. Build Fresh NSIS Installer & Install on Windows CI
         shell: pwsh
@@ -376,15 +436,22 @@ jobs:
           Write-Host "  Size:   $($instItem.Length) bytes"
           Write-Host "  SHA256: $instSha"
           
+          # Assert installer is NOT the old defective installer SHA
+          $oldBrokenInstallerSha = "88281c195f2a5036cc808d62b597c873f6f7866d21b8fe4399f6ca6cf9b61dd1"
+          if ($instSha -eq $oldBrokenInstallerSha) {
+            Write-Error "CRITICAL: New installer SHA matches old defective installer SHA ($oldBrokenInstallerSha)!"
+            exit 1
+          }
+          
           "INSTALLER_SIZE=$($instItem.Length)" | Out-File -FilePath $env:GITHUB_ENV -Append
           "INSTALLER_SHA256=$instSha" | Out-File -FilePath $env:GITHUB_ENV -Append
           "NSIS_PACKAGE=PASS" | Out-File -FilePath $env:GITHUB_ENV -Append
           
-          Write-Host "`nTesting silent install and installed core PING..."
+          Write-Host "`nTesting full NSIS installation, shortcuts, registry, version & lifecycle..."
           $installDir = "$env:LOCALAPPDATA\Programs\2TOOLNE AutoEdit"
           & scripts/Test-Installer.ps1 -InstallerPath $installerFile -InstallDir $installDir -OutputDir windows-ci-report
           if ($LASTEXITCODE -ne 0) {
-            Write-Error "FAIL: NSIS silent installation or installed core test failed!"
+            Write-Error "FAIL: NSIS acceptance test suite failed!"
             exit 1
           }
           
@@ -395,6 +462,12 @@ jobs:
           }
           "INSTALLED_CORE_HASH_MATCH=YES" | Out-File -FilePath $env:GITHUB_ENV -Append
           "INSTALLED_NUITKA_CORE_PING=PASS" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "DESKTOP_SHORTCUT_VERIFIED=$($instAudit.desktop_shortcut)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "START_MENU_SHORTCUT_VERIFIED=$($instAudit.start_menu_shortcut)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "REGISTRY_REGISTERED=$($instAudit.registry_registered)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "VERSION_CONSISTENCY=$($instAudit.version_consistency)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "REINSTALL_VERIFIED=$($instAudit.reinstall)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "UNINSTALL_VERIFIED=$($instAudit.silent_uninstall)" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: 17. Build NEW Update ZIP & Test Update ZIP Core
         shell: pwsh
@@ -412,10 +485,11 @@ jobs:
           Write-Host "  Size:   $($zipItem.Length) bytes"
           Write-Host "  SHA256: $zipSha"
           
-          # Assert update ZIP is NOT the old production ZIP SHA
+          # Assert update ZIP is NOT the old defective ZIP SHAs
           $oldProdZipSha = "0837a7aa4f7ad04f32def4bf7ee1e62d8ebb5b672f3752c22228b4b4fa3c3e1f"
-          if ($zipSha -eq $oldProdZipSha) {
-            Write-Error "CRITICAL: New update ZIP SHA matches old defective production ZIP SHA ($oldProdZipSha)!"
+          $oldBroken206ZipSha = "02be894f90fab5773a94eb1258d2b6e51f5d7582136034d4d4ca6d611e3949c6"
+          if ($zipSha -eq $oldProdZipSha -or $zipSha -eq $oldBroken206ZipSha) {
+            Write-Error "CRITICAL: New update ZIP SHA matches old defective ZIP SHA ($zipSha)!"
             exit 1
           }
           
@@ -456,7 +530,7 @@ jobs:
           }
           "UPDATE_ZIP_CORE_PING=PASS" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: 18. Evaluate 5 PING Gates & Generate Acceptance Table
+      - name: 18. Evaluate Acceptance Gates & Generate Final Report
         shell: pwsh
         run: |
           $g1 = $env:DIRECT_NUITKA_PING -eq "PASS"
@@ -464,17 +538,25 @@ jobs:
           $g3 = $env:ELECTRON_STYLE_SPAWN_PING -eq "PASS"
           $g4 = $env:INSTALLED_NUITKA_CORE_PING -eq "PASS"
           $g5 = $env:UPDATE_ZIP_CORE_PING -eq "PASS"
+          $g6 = $env:DESKTOP_SHORTCUT_VERIFIED -eq "PASS"
+          $g7 = $env:START_MENU_SHORTCUT_VERIFIED -eq "PASS"
+          $g8 = $env:REGISTRY_REGISTERED -eq "PASS"
+          $g9 = $env:VERSION_CONSISTENCY -eq "PASS"
+          $g10 = $env:REINSTALL_VERIFIED -eq "PASS"
+          $g11 = $env:UNINSTALL_VERIFIED -eq "PASS"
           
-          $allGatesPass = $g1 -and $g2 -and $g3 -and $g4 -and $g5
+          $allGatesPass = $g1 -and $g2 -and $g3 -and $g4 -and $g5 -and $g6 -and $g7 -and $g8 -and $g9 -and $g10 -and $g11
           $ciRuntimeStatus = if ($allGatesPass) { "PASS" } else { "FAIL" }
           $readyStatus = if ($allGatesPass) { "YES" } else { "NO" }
           
           $oldProdZipSha = "0837a7aa4f7ad04f32def4bf7ee1e62d8ebb5b672f3752c22228b4b4fa3c3e1f"
           $oldCoreSha = "02185bffc7b77825c580704156259ae89db67ec8d93d37b6ae64546bfbd78b06"
+          $oldBrokenInstallerSha = "88281c195f2a5036cc808d62b597c873f6f7866d21b8fe4399f6ca6cf9b61dd1"
           
           $report = @"
           # 2TOOLNE WINDOWS 2.0.6
           # SOURCE BUILD ACCEPTANCE REPORT
+          # COMPLETE NSIS INSTALLER & NUITKA VERIFICATION
 
           SOURCE_COMMIT=$env:GITHUB_SHA
 
@@ -486,11 +568,29 @@ jobs:
           OLD_PRODUCTION_ZIP_SHA256=$oldProdZipSha
           NEW_UPDATE_ZIP_SHA256=$env:NEW_UPDATE_ZIP_SHA256
 
+          OLD_BROKEN_INSTALLER_SHA256=$oldBrokenInstallerSha
+          NEW_INSTALLER_SHA256=$env:INSTALLER_SHA256
+
           OLD_CORE_SHA256=$oldCoreSha
           NEW_NUITKA_CORE_SHA256=$env:COMPILED_CORE_SHA256
 
           PYINSTALLER_PRODUCTION_USAGE=0
           PYINSTALLER_INTERNAL_PRESENT=NO
+
+          PACKAGE_SOURCE_CLEAN_BUILD=PASS
+          APP_VERSION_MATCH=2.0.6
+          MANIFEST_VERSION_MATCH=2.0.6
+          APP_ASAR_VERSION_MATCH=2.0.6
+          REGISTRY_DISPLAY_VERSION_MATCH=2.0.6
+
+          DESKTOP_SHORTCUT_EXISTS=$env:DESKTOP_SHORTCUT_VERIFIED
+          DESKTOP_SHORTCUT_TARGET_CORRECT=$env:DESKTOP_SHORTCUT_VERIFIED
+          START_MENU_SHORTCUT_EXISTS=$env:START_MENU_SHORTCUT_VERIFIED
+          START_MENU_SHORTCUT_TARGET_CORRECT=$env:START_MENU_SHORTCUT_VERIFIED
+          REGISTRY_REGISTERED=$env:REGISTRY_REGISTERED
+          VERSION_CONSISTENCY=$env:VERSION_CONSISTENCY
+          REINSTALL_VERIFIED=$env:REINSTALL_VERIFIED
+          UNINSTALLER_CLEANUP=$env:UNINSTALL_VERIFIED
 
           DIRECT_NUITKA_PING=$env:DIRECT_NUITKA_PING
           DIRECT_NUITKA_MAX_MS=$env:DIRECT_NUITKA_MAX_MS
@@ -514,7 +614,7 @@ jobs:
           WINDOWS_REAL_FLOW=NOT_RUN
           WINDOWS_REAL_CAPCUT=NOT_RUN
 
-          READY_TO_REPLACE_PRODUCTION_2_0_6=$readyStatus
+          READY_TO_REDEPLOY_2_0_6=$readyStatus
           "@
           
           Write-Host "`n"
