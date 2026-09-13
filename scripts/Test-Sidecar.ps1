@@ -127,7 +127,7 @@ if ($metadata.sha256.ToLower() -ne $actualHash) {
   exit 1
 }
 
-Write-Host "✓ Verified Authoritative Build Metadata from $metaPath:" -ForegroundColor Green
+Write-Host "✓ Verified Authoritative Build Metadata from ${metaPath}:" -ForegroundColor Green
 Write-Host "  CORE_PACKAGER=NUITKA" -ForegroundColor Green
 Write-Host "  CORE_MODE=ONEFILE" -ForegroundColor Green
 Write-Host "  NUITKA_VERSION=$($metadata.nuitka_version)" -ForegroundColor Green

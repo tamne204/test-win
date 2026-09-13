@@ -121,7 +121,7 @@ jobs:
           
           Write-Host "✓ Nuitka compilation successful!"
           Write-Host "  Path:   $($coreItem.FullName)"
-          Write-Host "  Size:   $($coreItem.Length.ToString(N0)) bytes"
+          Write-Host "  Size:   $($coreItem.Length) bytes"
           Write-Host "  SHA256: $coreSha"
           
           "COMPILED_CORE_EXE=$($coreItem.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
@@ -355,7 +355,7 @@ jobs:
           $instSha = (Get-FileHash -Path $installerFile -Algorithm SHA256).Hash.ToLower()
           Write-Host "✓ NSIS Installer Built:"
           Write-Host "  Path:   $($instItem.FullName)"
-          Write-Host "  Size:   $($instItem.Length.ToString(N0)) bytes"
+          Write-Host "  Size:   $($instItem.Length) bytes"
           Write-Host "  SHA256: $instSha"
           
           "INSTALLER_SIZE=$($instItem.Length)" | Out-File -FilePath $env:GITHUB_ENV -Append
@@ -392,7 +392,7 @@ jobs:
           $zipItem = Get-Item $updateZip
           $zipSha = (Get-FileHash -Path $updateZip -Algorithm SHA256).Hash.ToLower()
           Write-Host "✓ Update ZIP Created:"
-          Write-Host "  Size:   $($zipItem.Length.ToString(N0)) bytes"
+          Write-Host "  Size:   $($zipItem.Length) bytes"
           Write-Host "  SHA256: $zipSha"
           
           # Assert update ZIP is NOT the old production ZIP SHA
@@ -565,8 +565,14 @@ jobs:
           Write-Host "Testing PING against OLD production core (Expected: TIMEOUT / FAIL)..."
           
           $env:PING_OUTPUT_FILE = "$env:TEMP\old-sidecar-ping.json"
-          & scripts/Test-Sidecar.ps1 -CorePath $oldCore -Iterations 1 -TimeoutSec 10 -OutputDir $env:TEMP
-          $exitCode = $LASTEXITCODE
+          $exitCode = 0
+          try {
+            & scripts/Test-Sidecar.ps1 -CorePath $oldCore -Iterations 1 -TimeoutSec 10 -OutputDir $env:TEMP
+            $exitCode = $LASTEXITCODE
+          } catch {
+            Write-Host "Caught expected sidecar failure: $_"
+            $exitCode = 1
+          }
           
           $regStatus = if ($exitCode -ne 0) { "FAIL (AS EXPECTED)" } else { "UNEXPECTED PASS" }
           
