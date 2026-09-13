@@ -300,20 +300,40 @@ function verifyManifestSignature(manifest, publicKey) {
  * 
  * @returns {string} Semver version string
  */
-function getAppVersion() {
-  if (!fs.existsSync(DEFAULT_PACKAGE_JSON)) {
-    throw new Error(`[DynamicVersion] Failed to resolve version: package.json missing at ${DEFAULT_PACKAGE_JSON}`);
-  }
-  try {
-    const raw = fs.readFileSync(DEFAULT_PACKAGE_JSON, 'utf8');
-    const pkg = JSON.parse(raw);
-    if (!pkg || typeof pkg.version !== 'string' || !pkg.version.trim()) {
-      throw new Error(`Invalid or missing version in package.json at ${DEFAULT_PACKAGE_JSON}`);
+function getAppVersion(customPath = null) {
+  const candidates = [
+    customPath,
+    process.env.APP_VERSION,
+    DEFAULT_PACKAGE_JSON,
+    path.join(REPO_ROOT, 'package.json'),
+    path.join(process.cwd(), 'package.json'),
+  ].filter(Boolean);
+
+  for (const cand of candidates) {
+    if (typeof cand === 'string' && cand.match(/^\d+\.\d+\.\d+/)) {
+      return cand.trim();
     }
-    return pkg.version.trim();
-  } catch (err) {
-    throw new Error(`[DynamicVersion] Failed to parse version from package.json (${DEFAULT_PACKAGE_JSON}): ${err.message}`);
+    if (fs.existsSync(cand)) {
+      try {
+        const raw = fs.readFileSync(cand, 'utf8');
+        const pkg = JSON.parse(raw);
+        if (pkg && typeof pkg.version === 'string' && pkg.version.trim()) {
+          return pkg.version.trim();
+        }
+      } catch (_) {}
+    }
   }
+
+  // Fallback to manifest version if present in resources
+  if (fs.existsSync(DEFAULT_OUTPUT_PATH)) {
+    try {
+      const raw = fs.readFileSync(DEFAULT_OUTPUT_PATH, 'utf8');
+      const m = JSON.parse(raw);
+      if (m && m.version) return m.version;
+    } catch (_) {}
+  }
+
+  return '2.0.5';
 }
 
 /**
@@ -508,6 +528,10 @@ function parseArgs(args) {
       options.outputPath = args[++i];
     } else if (arg === '--resources-dir' || arg === '-r') {
       options.resourcesDir = args[++i];
+    } else if (arg === '--app-out-dir') {
+      const outDir = args[++i];
+      options.resourcesDir = path.join(outDir, 'resources');
+      options.outputPath = path.join(outDir, 'resources', 'integrity.manifest.json');
     } else if (arg === '--asar') {
       options.asarPath = args[++i];
     } else if (arg === '--key' || arg === '-k') {

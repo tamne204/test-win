@@ -226,16 +226,17 @@ jobs:
         shell: pwsh
         run: |
           $packageDir = $env:PACKAGE_DIR
-          $manifestGen = "scripts/generate_integrity_manifest.js"
-          if (-not (Test-Path $manifestGen)) {
-            $manifestGen = "apps/capcut-v2/desktop/scripts/after_pack_integrity.js"
+          $resourcesDir = Join-Path $packageDir "resources"
+          $manifestPath = Join-Path $resourcesDir "integrity.manifest.json"
+          
+          Write-Host "Regenerating integrity manifest for updated package ($resourcesDir)..."
+          node scripts/generate_integrity_manifest.js --resources-dir $resourcesDir --output $manifestPath
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "FAIL: generate_integrity_manifest.js exited with code $LASTEXITCODE!"
+            exit 1
           }
           
-          Write-Host "Regenerating integrity manifest for updated package..."
-          node scripts/generate_integrity_manifest.js --app-out-dir $packageDir
-          
           Write-Host "Verifying updated manifest with release_audit.js..."
-          $resourcesDir = Join-Path $packageDir "resources"
           node tests/release_audit.js --resources $resourcesDir --output windows-ci-report/manifest-audit.json
           if ($LASTEXITCODE -ne 0) {
             Write-Error "FAIL: Updated manifest failed cryptographic verification!"
