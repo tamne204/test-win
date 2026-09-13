@@ -408,6 +408,21 @@ def stage_to_resources(dist_dir: str, target_os: str, bin_name: str, resources_d
     print(f"✓ Staged binary ready for Electron: {staged_bin}")
 
 
+def get_nuitka_version_str() -> str:
+    try:
+        from nuitka.Version import getNuitkaVersion
+        return getNuitkaVersion()
+    except Exception:
+        pass
+    try:
+        import nuitka
+        if hasattr(nuitka, "__version__"):
+            return str(nuitka.__version__)
+    except Exception:
+        pass
+    return "available"
+
+
 def main():
     parser = argparse.ArgumentParser(description="2TOOLNE Python Core Nuitka Standalone Compiler")
     parser.add_argument(
@@ -524,7 +539,7 @@ def main():
     try:
         import nuitka
         nuitka_found = True
-        print(f"[Pre-Flight] Nuitka version: {nuitka.__version__}")
+        print(f"[Pre-Flight] Nuitka version: {get_nuitka_version_str()}")
     except ImportError:
         print("[Pre-Flight] Nuitka package not found in current environment.")
         if not args.dry_run:
@@ -532,7 +547,7 @@ def main():
             subprocess.check_call([sys.executable, "-m", "pip", "install", "nuitka>=2.0"])
             import nuitka
             nuitka_found = True
-            print(f"[Pre-Flight] Installed Nuitka: {nuitka.__version__}")
+            print(f"[Pre-Flight] Installed Nuitka: {get_nuitka_version_str()}")
 
     # 3. Clean directories if requested
     if args.clean and not args.dry_run:
