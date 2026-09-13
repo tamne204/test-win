@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	LauncherVersion = "2.0.5"
+	LauncherVersion = "2.0.6"
 	AppName         = "2TOOLNE AutoEdit"
 )
 

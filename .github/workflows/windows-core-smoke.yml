@@ -348,7 +348,7 @@ jobs:
         shell: pwsh
         run: |
           $packageDir = $env:PACKAGE_DIR
-          $installerFile = (Resolve-Path -Path dist).Path + "\2TOOLNE-AutoEdit-Setup-2.0.5.exe"
+          $installerFile = (Resolve-Path -Path dist).Path + "\2TOOLNE-AutoEdit-Setup-2.0.6.exe"
           
           # Ensure makensis is in PATH
           if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) {
@@ -400,7 +400,7 @@ jobs:
         shell: pwsh
         run: |
           $packageDir = $env:PACKAGE_DIR
-          $updateZip = (Resolve-Path -Path dist).Path + "\2toolne-autoedit-2.0.5-win-x64.zip"
+          $updateZip = (Resolve-Path -Path dist).Path + "\2toolne-autoedit-2.0.6-win-x64.zip"
           if (Test-Path $updateZip) { Remove-Item -Force $updateZip }
           
           Write-Host "Packaging clean package tree to NEW update ZIP: $updateZip ..."
@@ -473,7 +473,7 @@ jobs:
           $oldCoreSha = "02185bffc7b77825c580704156259ae89db67ec8d93d37b6ae64546bfbd78b06"
           
           $report = @"
-          # 2TOOLNE WINDOWS 2.0.5
+          # 2TOOLNE WINDOWS 2.0.6
           # SOURCE BUILD ACCEPTANCE REPORT
 
           SOURCE_COMMIT=$env:GITHUB_SHA
@@ -514,7 +514,7 @@ jobs:
           WINDOWS_REAL_FLOW=NOT_RUN
           WINDOWS_REAL_CAPCUT=NOT_RUN
 
-          READY_TO_REPLACE_PRODUCTION_2_0_5=$readyStatus
+          READY_TO_REPLACE_PRODUCTION_2_0_6=$readyStatus
           "@
           
           Write-Host "`n"
@@ -529,6 +529,17 @@ jobs:
         with:
           name: windows-source-build-acceptance
           path: windows-ci-report/
+          retention-days: 7
+
+      - name: 19b. Upload Windows 2.0.6 Release Distributables
+        uses: actions/upload-artifact@v4
+        if: always()
+        continue-on-error: true
+        with:
+          name: windows-release-2.0.6
+          path: |
+            dist/2TOOLNE-AutoEdit-Setup-2.0.6.exe
+            dist/2toolne-autoedit-2.0.6-win-x64.zip
           retention-days: 7
 
   deployed-artifact-regression:

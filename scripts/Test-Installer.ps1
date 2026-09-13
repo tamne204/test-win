@@ -16,9 +16,11 @@ Write-Host "====================================================================
 
 if (-not $InstallerPath) {
   $cands = @(
+    "2TOOLNE-AutoEdit-Setup-2.0.6.exe",
+    "dist/2TOOLNE-AutoEdit-Setup-2.0.6.exe",
+    "build_windows_release/2TOOLNE-AutoEdit-Setup-2.0.6.exe",
     "2TOOLNE-AutoEdit-Setup-2.0.5.exe",
-    "dist/2TOOLNE-AutoEdit-Setup-2.0.5.exe",
-    "build_windows_release/2TOOLNE-AutoEdit-Setup-2.0.5.exe"
+    "dist/2TOOLNE-AutoEdit-Setup-2.0.5.exe"
   )
   foreach ($c in $cands) {
     if (Test-Path $c) { $InstallerPath = (Resolve-Path $c).Path; break }
