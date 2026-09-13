@@ -16,18 +16,14 @@ ShowUninstDetails show
 
 ; Branding Icons
 !ifndef ICON_FILE
-  !define ICON_FILE "apps\capcut-v2\desktop\assets\installerIcon.ico"
+  !define ICON_FILE "${__DIR__}\..\apps\capcut-v2\desktop\assets\installerIcon.ico"
 !endif
 !ifndef UNICON_FILE
-  !define UNICON_FILE "apps\capcut-v2\desktop\assets\uninstallerIcon.ico"
+  !define UNICON_FILE "${__DIR__}\..\apps\capcut-v2\desktop\assets\uninstallerIcon.ico"
 !endif
 
-!ifFileExists "${ICON_FILE}"
-  !define MUI_ICON "${ICON_FILE}"
-!endif
-!ifFileExists "${UNICON_FILE}"
-  !define MUI_UNICON "${UNICON_FILE}"
-!endif
+!define MUI_ICON "${ICON_FILE}"
+!define MUI_UNICON "${UNICON_FILE}"
 
 ; Installer Pages
 !insertmacro MUI_PAGE_WELCOME
