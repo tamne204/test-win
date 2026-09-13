@@ -68,6 +68,29 @@ if ($violations.Count -gt 0) {
 }
 Write-Host "✓ Release content hygiene verified: ZERO .py, ZERO .env, ZERO private keys or source maps." -ForegroundColor Green
 
+# 2.1 Single Authoritative Core & No _internal Check
+Write-Host "`n[2.1/3] Enforcing Canonical Core Invariant & PyInstaller Regression Guard ..." -ForegroundColor Yellow
+$coreWinDir = Join-Path $PackageDir "resources\autoedit-core\win-x64"
+if (Test-Path $coreWinDir) {
+  $internalFolder = Join-Path $coreWinDir "_internal"
+  if (Test-Path $internalFolder) {
+    Write-Error "REGRESSION FAILURE: Found prohibited PyInstaller _internal/ folder in $coreWinDir!"
+    exit 1
+  }
+  $legacyCore = Join-Path $coreWinDir "autoedit-core.exe"
+  if (Test-Path $legacyCore) {
+    Write-Error "REGRESSION FAILURE: Found legacy autoedit-core.exe alongside 2toolne-core.exe! Exactly one authoritative production core permitted."
+    exit 1
+  }
+  $canonicalCore = Join-Path $coreWinDir "2toolne-core.exe"
+  if (-not (Test-Path $canonicalCore)) {
+    Write-Error "CRITICAL: Canonical 2toolne-core.exe missing in $coreWinDir!"
+    exit 1
+  }
+  Write-Host "✓ Verified exact single authoritative core binary: $canonicalCore" -ForegroundColor Green
+  Write-Host "✓ Verified ZERO companion _internal/ directory and ZERO legacy autoedit-core.exe" -ForegroundColor Green
+}
+
 # 3. Zip Parity Audit
 if ($ZipPath -and (Test-Path $ZipPath)) {
   Write-Host "`n[3/3] Auditing Package Parity with Update Archive ($ZipPath) ..." -ForegroundColor Yellow

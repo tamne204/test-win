@@ -166,7 +166,7 @@ function runSinglePing(runIndex) {
         runResult.raw_stdout = trimmed;
 
         // Check if response corresponds to PING
-        const isPong = parsed.ok && (parsed.result?.pong === true || parsed.result === 'PONG');
+        const isPong = (parsed.pong === true) || (parsed.result?.pong === true) || (parsed.ok && (parsed.result?.pong === true || parsed.result === 'PONG'));
         if (isPong) {
           runResult.pong_received_at = new Date().toISOString();
           runResult.ping_ms = now - startTime;
@@ -269,6 +269,12 @@ async function main() {
   if (minMs !== null) {
     console.log(`Cold Start : ${summary.cold_start_ms} ms`);
     console.log(`Min Latency: ${minMs} ms | Max: ${maxMs} ms | Avg: ${avgMs} ms`);
+    for (let i = 0; i < results.length; i++) {
+      console.log(`RUN_${i + 1}_MS=${results[i].ping_ms}`);
+    }
+    console.log(`MIN_MS=${minMs}`);
+    console.log(`MAX_MS=${maxMs}`);
+    console.log(`AVG_MS=${avgMs}`);
   }
   console.log(`Report written to: ${outputFile}`);
   console.log('======================================================================\n');

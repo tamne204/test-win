@@ -82,25 +82,21 @@ $nuitkaMode = "UNKNOWN"
 $dependencyCount = 0
 
 if (Test-Path $internalDir) {
-  $nuitkaMode = "PYINSTALLER_ONEDIR_STANDALONE"
-  $deps = Get-ChildItem -Path $internalDir -Recurse -File
-  $dependencyCount = $deps.Count
-  Write-Host "✓ Detected Packaging Mode: $nuitkaMode ($dependencyCount bundled runtime files in _internal)" -ForegroundColor Green
-  
-  # Check for silero_vad asset
-  $vadAsset = Join-Path $internalDir "faster_whisper\assets\silero_vad_v6.onnx"
-  if (Test-Path $vadAsset) {
-    Write-Host "✓ Bundled VAD asset verified: $vadAsset ($( (Get-Item $vadAsset).Length.ToString('N0') ) bytes)" -ForegroundColor Green
-  }
-} elseif (Test-Path $nuitkaDistDir) {
-  $nuitkaMode = "NUITKA_STANDALONE_DIR"
-  $deps = Get-ChildItem -Path $nuitkaDistDir -Recurse -File
-  $dependencyCount = $deps.Count
-  Write-Host "✓ Detected Packaging Mode: $nuitkaMode ($dependencyCount bundled files)" -ForegroundColor Green
-} else {
-  $nuitkaMode = "STANDALONE_SINGLE_EXE"
-  Write-Host "✓ Detected Packaging Mode: $nuitkaMode (Self-contained binary)" -ForegroundColor Green
+  Write-Error "REGRESSION FAILURE: Found prohibited PyInstaller _internal/ directory in core package! Nuitka onefile architecture required."
+  exit 1
 }
+
+# Check for PyInstaller bootloader markers in binary
+$coreBytes = [System.IO.File]::ReadAllBytes($CorePath)
+$coreText = [System.Text.Encoding]::ASCII.GetString($coreBytes)
+if ($coreText.Contains("pyimod01_archive") -or $coreText.Contains("base_library.zip")) {
+  Write-Error "REGRESSION FAILURE: Found PyInstaller bootloader signatures in 2toolne-core.exe! Production requires Nuitka onefile."
+  exit 1
+}
+
+$nuitkaMode = "NUITKA_ONEFILE"
+Write-Host "✓ Verified Packaging Mode: $nuitkaMode (Self-contained native onefile executable)" -ForegroundColor Green
+Write-Host "✓ PYINSTALLER_REGRESSION_GUARD=PASS (Zero _internal/ folder, zero PyInstaller bootloader)" -ForegroundColor Green
 
 # 4. Windows Defender / Environment Context
 Write-Host "`n[3/4] Recording System & Security Context ..." -ForegroundColor Yellow
