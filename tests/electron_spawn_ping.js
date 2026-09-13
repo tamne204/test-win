@@ -60,14 +60,15 @@ const pingPayload = JSON.stringify({
   params: {},
 }) + '\n';
 
+const timeoutMs = parseInt(process.env.SPAWN_TIMEOUT_MS || '30000', 10);
 const timer = setTimeout(() => {
   if (!receivedPong) {
-    console.error(`[ElectronSpawnPing][FAIL] Timeout (10000ms) waiting for PING response.`);
+    console.error(`[ElectronSpawnPing][FAIL] Timeout (${timeoutMs}ms) waiting for PING response.`);
     if (stderrData) console.error(`Stderr:\n${stderrData}`);
     try { child.stdin.end(); child.kill('SIGKILL'); } catch (_) {}
     process.exit(1);
   }
-}, 10000);
+}, timeoutMs);
 
 rl.on('line', (line) => {
   const trimmed = line.trim();
