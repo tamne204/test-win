@@ -67,8 +67,10 @@ Write-Host "  ✓ Clean complete."
 # ----------------------------------------------------------------------
 Write-Host "`n[3/19] Installing build and test dependencies..." -ForegroundColor Yellow
 python -m pip install --upgrade pip
-python -m pip install -r apps/capcut-v2/requirements.txt
-python -m pip install "nuitka>=2.4" zstandard ordered-set cryptography requests pytest
+if (Test-Path requirements.txt) {
+    python -m pip install -r requirements.txt
+}
+python -m pip install "nuitka>=2.4" "ordered-set" zstandard pytest pillow cryptography requests psutil opencv-python-headless faster-whisper soundfile numpy pefile
 
 Push-Location apps/capcut-v2/desktop
 npm ci
@@ -140,17 +142,16 @@ python -m pytest @suites -q -p no:cacheprovider 2>&1 | Tee-Object -Variable pyte
 $pytestRc = $LASTEXITCODE
 $pytestOut | ForEach-Object { Write-Host $_ }
 
-$summary = ($pytestOut | Select-String -Pattern '^=+ .*(passed|failed|error).* =+$' | Select-Object -Last 1)
-if (-not $summary) {
-    $summary = ($pytestOut | Select-String -Pattern '(passed|failed|error)' | Select-Object -Last 1)
-}
-$summaryText = if ($summary) { $summary.ToString() } else { "" }
-
 $passed = 0
-if ($summaryText -match '(\d+)\s+passed') { $passed = [int]$Matches[1] }
 $failed = 0
-if ($summaryText -match '(\d+)\s+failed') { $failed = [int]$Matches[1] }
-if ($summaryText -match '(\d+)\s+error')  { $failed += [int]$Matches[1] }
+$summaryText = ""
+foreach ($line in $pytestOut) {
+    $lineStr = $line.ToString()
+    if ($lineStr -match '(\d+)\s+passed') { $passed = [int]$Matches[1] }
+    if ($lineStr -match '(\d+)\s+failed') { $failed = [int]$Matches[1] }
+    if ($lineStr -match '(\d+)\s+errors?') { $failed += [int]$Matches[1] }
+    if ($lineStr -match 'passed|failed|error') { $summaryText = $lineStr }
+}
 
 Write-Host "PYTEST_EXECUTED=YES"
 Write-Host "PYTEST_PASSED=$passed"
