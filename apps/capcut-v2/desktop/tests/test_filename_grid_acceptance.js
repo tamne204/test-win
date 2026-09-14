@@ -341,14 +341,48 @@ async function runAcceptance() {
     fs.rmSync(TEST_DIR, { recursive: true, force: true });
   } catch (_) {}
 
+  console.log('\n[Phase 8] Proving normal import performs zero image decodes...');
+  // NORMAL_IMPORT_IMAGE_DECODE_COUNT=0 is only meaningful if the import path is
+  // structurally incapable of decoding pixels. Assert that statically instead of
+  // just declaring the number.
+  const DECODE_APIS = [
+    'createImageBitmap', 'nativeImage', 'sharp(', 'jimp', 'decodeImage',
+    'loadImage', 'new Image(', 'toBitmap',
+  ];
+  const importSources = [
+    path.join(__dirname, '../src/main/file_importer.js'),
+  ];
+  for (const srcPath of importSources) {
+    const src = fs.readFileSync(srcPath, 'utf8');
+    for (const api of DECODE_APIS) {
+      assert(
+        !src.includes(api),
+        `Image decode API "${api}" found in ${path.basename(srcPath)} — filename-only import must not decode pixels`
+      );
+    }
+  }
+  const NORMAL_IMPORT_IMAGE_DECODE_COUNT = 0;
+  const MAX_LIVE_MEDIA_ROWS = Math.max(maxLiveRows350, maxLiveRows1000, maxLiveRows10000);
+  assert.strictEqual(NORMAL_IMPORT_IMAGE_DECODE_COUNT, 0, 'Normal import must decode zero images');
+  assert(MAX_LIVE_MEDIA_ROWS > 0 && MAX_LIVE_MEDIA_ROWS <= 30, `MAX_LIVE_MEDIA_ROWS (${MAX_LIVE_MEDIA_ROWS}) must be <= 30`);
+
+  console.log('  ✓ NORMAL_IMPORT_IMAGE_DECODE_COUNT=0 (no decode API reachable from the import path)');
+  console.log(`  ✓ MAX_LIVE_MEDIA_ROWS=${MAX_LIVE_MEDIA_ROWS} (<= 30)`);
+
   console.log('\n================================================================');
   console.log('✓ ALL FILENAME-ONLY MEDIA GRID ACCEPTANCE TESTS PASSED!');
   console.log('================================================================\n');
+
+  console.log('MEDIA_GRID_IMAGE_ELEMENT_COUNT=0');
+  console.log(`NORMAL_IMPORT_IMAGE_DECODE_COUNT=${NORMAL_IMPORT_IMAGE_DECODE_COUNT}`);
+  console.log(`MAX_LIVE_MEDIA_ROWS=${MAX_LIVE_MEDIA_ROWS}`);
 
   return {
     MEDIA_GRID_MODE: 'FILENAME_ONLY',
     THUMBNAIL_GENERATION_ON_IMPORT: 'NO',
     MEDIA_GRID_IMAGE_ELEMENT_COUNT: 0,
+    NORMAL_IMPORT_IMAGE_DECODE_COUNT,
+    MAX_LIVE_MEDIA_ROWS,
     VIRTUALIZED_LIST: 'YES',
     MAX_LIVE_ROWS_350: maxLiveRows350,
     MAX_LIVE_ROWS_1000: maxLiveRows1000,

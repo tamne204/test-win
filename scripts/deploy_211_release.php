@@ -3,7 +3,7 @@
  * scripts/deploy_211_release.php
  * Deploys UpdateController.php, DownloadEntitlementService.php, index.php, views/v3_workspace.php,
  * downloads/release_metadata.json, and 2.1.1 packages (Windows setup, portable zip, macOS dmg & zip)
- * to production host 43.129.165.150.
+ * to production host.
  * Relocates to C:/2TOOLNE-Private/packages/, verifies exact SHA256 and byte lengths,
  * and verifies live auto-update discovery for Windows and macOS, download gate, and homepage badges.
  */
@@ -11,10 +11,18 @@
 declare(strict_types=1);
 
 $credsFile = __DIR__ . '/../deployment_migration/20260909_004300/creds.secret.json';
-if (!file_exists($credsFile)) {
-    die("FATAL: Credentials missing at $credsFile\n");
+if (getenv('FTP_HOST') && getenv('FTP_USERNAME') && getenv('FTP_PASSWORD')) {
+    $creds = [
+        'host' => getenv('FTP_HOST'),
+        'port' => (int)(getenv('FTP_PORT') ?: 21),
+        'user' => getenv('FTP_USERNAME'),
+        'pass' => getenv('FTP_PASSWORD'),
+    ];
+} elseif (file_exists($credsFile)) {
+    $creds = json_decode(file_get_contents($credsFile), true)['new_ftp'];
+} else {
+    die("FATAL: Deployment credentials missing (FTP_HOST/FTP_USERNAME/FTP_PASSWORD env vars or $credsFile required)\n");
 }
-$creds = json_decode(file_get_contents($credsFile), true)['new_ftp'];
 
 // Package specifications for 2.1.1
 $packages = [

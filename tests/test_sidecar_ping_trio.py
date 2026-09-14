@@ -71,14 +71,17 @@ def _resolve(candidates):
 def _ping_once(exe_path, label, spawn_options):
     """
     Spawns the core with the given options, sends PING, expects PONG.
-    Returns (ok: bool, detail: str).
+    Returns (ok: bool, detail: str, elapsed_ms: Optional[int]).
+
+    elapsed_ms measures spawn -> PONG and is reported by CI (mandate §19).
     """
     stderr_buf = []
+    started = time.time()
 
     try:
         proc = subprocess.Popen([exe_path], **spawn_options)
     except Exception as exc:  # noqa: BLE001 - report any spawn failure verbatim
-        return False, f"spawn failed: {exc}"
+        return False, f"spawn failed: {exc}", None
 
     def _drain_stderr():
         try:
@@ -143,7 +146,7 @@ def _ping_once(exe_path, label, spawn_options):
     if stderr_buf:
         sys.stderr.write(f"  [{label}] stderr: {''.join(stderr_buf)[:600]}\n")
 
-    return result_ok, result_detail
+    return result_ok, result_detail, int((time.time() - started) * 1000)
 
 
 def _base_stdio_options():
@@ -183,6 +186,7 @@ def _electron_style_options(exe_path):
 
 def main():
     results = {}
+    timings = {}
 
     print("==============================================================================")
     print("THREE-MODE SIDECAR PING ACCEPTANCE (build mandate §20)")
@@ -195,12 +199,16 @@ def main():
     if direct_exe:
         print(f"\n[1/3] DIRECT_NUITKA_PING")
         print(f"      binary: {direct_exe}")
-        ok, detail = _ping_once(direct_exe, "direct", _base_stdio_options())
+        ok, detail, elapsed_ms = _ping_once(direct_exe, "direct", _base_stdio_options())
         results["DIRECT_NUITKA_PING"] = ok
+        timings["DIRECT_NUITKA_PING"] = elapsed_ms
         print(f"      {'✓' if ok else '✗'} {detail}")
+        print(f"      DIRECT_NUITKA_PING_MS={elapsed_ms if elapsed_ms is not None else 'N/A'}")
     else:
         results["DIRECT_NUITKA_PING"] = None
+        timings["DIRECT_NUITKA_PING"] = None
         print("\n[1/3] DIRECT_NUITKA_PING — SKIPPED (no freshly built core binary found)")
+        print("      DIRECT_NUITKA_PING_MS=N/A")
 
     # -------------------------------------------------------------------------
     # 2. PACKAGED
@@ -209,12 +217,16 @@ def main():
     if packaged_exe:
         print(f"\n[2/3] PACKAGED_NUITKA_PING")
         print(f"      binary: {packaged_exe}")
-        ok, detail = _ping_once(packaged_exe, "packaged", _base_stdio_options())
+        ok, detail, elapsed_ms = _ping_once(packaged_exe, "packaged", _base_stdio_options())
         results["PACKAGED_NUITKA_PING"] = ok
+        timings["PACKAGED_NUITKA_PING"] = elapsed_ms
         print(f"      {'✓' if ok else '✗'} {detail}")
+        print(f"      PACKAGED_NUITKA_PING_MS={elapsed_ms if elapsed_ms is not None else 'N/A'}")
     else:
         results["PACKAGED_NUITKA_PING"] = None
+        timings["PACKAGED_NUITKA_PING"] = None
         print("\n[2/3] PACKAGED_NUITKA_PING — SKIPPED (no packaged win-unpacked tree found)")
+        print("      PACKAGED_NUITKA_PING_MS=N/A")
 
     # -------------------------------------------------------------------------
     # 3. ELECTRON-STYLE SPAWN
@@ -223,12 +235,16 @@ def main():
     if electron_target:
         print(f"\n[3/3] ELECTRON_STYLE_SPAWN_PING")
         print(f"      binary: {electron_target}")
-        ok, detail = _ping_once(electron_target, "electron-style", _electron_style_options(electron_target))
+        ok, detail, elapsed_ms = _ping_once(electron_target, "electron-style", _electron_style_options(electron_target))
         results["ELECTRON_STYLE_SPAWN_PING"] = ok
+        timings["ELECTRON_STYLE_SPAWN_PING"] = elapsed_ms
         print(f"      {'✓' if ok else '✗'} {detail}")
+        print(f"      ELECTRON_STYLE_SPAWN_PING_MS={elapsed_ms if elapsed_ms is not None else 'N/A'}")
     else:
         results["ELECTRON_STYLE_SPAWN_PING"] = None
+        timings["ELECTRON_STYLE_SPAWN_PING"] = None
         print("\n[3/3] ELECTRON_STYLE_SPAWN_PING — SKIPPED (no binary to test)")
+        print("      ELECTRON_STYLE_SPAWN_PING_MS=N/A")
 
     # -------------------------------------------------------------------------
     # Report
@@ -246,7 +262,8 @@ def main():
             ran += 1
         elif value is False:
             failed += 1
-        print(f"  {key} = {status}")
+        elapsed = timings.get(key)
+        print(f"  {key} = {status} ({elapsed if elapsed is not None else 'N/A'} ms)")
 
     print("------------------------------------------------------------------------------")
 

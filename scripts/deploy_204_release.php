@@ -1,17 +1,25 @@
 <?php
 /**
  * scripts/deploy_204_release.php
- * Deploys UpdateController.php and 2toolne-autoedit-2.0.4-win-x64.zip to production host 43.129.165.150
+ * Deploys UpdateController.php and 2toolne-autoedit-2.0.4-win-x64.zip to production host.
  * Relocates to C:/2TOOLNE-Private/packages/, verifies exact SHA256 and byte length.
  */
 
 declare(strict_types=1);
 
 $credsFile = __DIR__ . '/../deployment_migration/20260909_004300/creds.secret.json';
-if (!file_exists($credsFile)) {
-    die("FATAL: Credentials missing at $credsFile\n");
+if (getenv('FTP_HOST') && getenv('FTP_USERNAME') && getenv('FTP_PASSWORD')) {
+    $creds = [
+        'host' => getenv('FTP_HOST'),
+        'port' => (int)(getenv('FTP_PORT') ?: 21),
+        'user' => getenv('FTP_USERNAME'),
+        'pass' => getenv('FTP_PASSWORD'),
+    ];
+} elseif (file_exists($credsFile)) {
+    $creds = json_decode(file_get_contents($credsFile), true)['new_ftp'];
+} else {
+    die("FATAL: Deployment credentials missing (FTP_HOST/FTP_USERNAME/FTP_PASSWORD env vars or $credsFile required)\n");
 }
-$creds = json_decode(file_get_contents($credsFile), true)['new_ftp'];
 
 $expectedBytes = 706037910;
 $expectedSha256 = 'd561055f02db95150e831d1039533a19315b37d8dbcaa437ea37e31899e01459';

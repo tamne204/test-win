@@ -10,19 +10,26 @@
        on a dedicated, fixed Windows build machine using supported Python 3.12 and PyInstaller.
     3. GitHub is used strictly for source code, history, and backup.
     4. Release packages are uploaded directly from the Windows build machine to the
-       2TOOLNE server (43.129.165.150) into C:/2TOOLNE-Private/packages/.
+       2TOOLNE production server into C:/2TOOLNE-Private/packages/.
 #>
 
 [CmdletBinding()]
 param(
-    [string]$Version = "2.0.4",
-    [string]$ServerHost = "43.129.165.150",
-    [string]$FtpUser = "2tamne_site_code",
-    [string]$FtpPass = "eKZ8ZN5tsd7D",
+    [string]$Version = "2.1.2",
+    [string]$ServerHost = $env:FTP_HOST,
+    [string]$FtpUser = $env:FTP_USERNAME,
+    [string]$FtpPass = $env:FTP_PASSWORD,
     [switch]$SkipUpload = $false
 )
 
 $ErrorActionPreference = "Stop"
+
+if (-not $SkipUpload) {
+    if (-not $ServerHost -or -not $FtpUser -or -not $FtpPass) {
+        Write-Error "FATAL: Deployment credentials missing. FTP_HOST, FTP_USERNAME, and FTP_PASSWORD environment variables or parameters must be provided."
+        exit 1
+    }
+}
 
 Write-Host "========================================================================" -ForegroundColor Cyan
 Write-Host "2TOOLNE NATIVE WINDOWS RELEASE BUILD PIPELINE (v$Version)" -ForegroundColor Cyan
