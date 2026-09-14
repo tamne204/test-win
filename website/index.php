@@ -2427,7 +2427,7 @@ if (isset($_GET['registered'])) {
                                     <div style="flex:1;min-width:280px">
                                         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
                                             <span class="badge" style="background:#ff7a00;color:#fff;font-weight:800">🔥 SẢN PHẨM CHÍNH THỨC 2026</span>
-                                            <span class="badge" style="background:rgba(255, 122, 0, 0.2);color:#ff9e42;border:1px solid rgba(255, 122, 0, 0.4)">v2.1.1 Stable</span>
+                                            <span class="badge" style="background:rgba(255, 122, 0, 0.2);color:#ff9e42;border:1px solid rgba(255, 122, 0, 0.4)">v2.1.2 Stable</span>
                                             <span class="badge badge-info">Tương thích chính xác CapCut 9.3.0.3970</span>
                                         </div>
                                         <h3 style="font-size:22px;margin:0 0 6px">2TOOLNE AutoEdit for CapCut (Native Desktop Suite)</h3>
@@ -2452,13 +2452,13 @@ if (isset($_GET['registered'])) {
                                         <div style="display:flex;align-items:center;gap:6px;font-weight:700;color:var(--foreground);font-size:13px;margin-bottom:6px">
                                             <span>🪟</span> Bản Dành Cho Windows (10/11 64-bit):
                                         </div>
-                                        <p style="font-size:12px;color:var(--muted-foreground);margin-bottom:10px">Phiên bản v2.1.1: Tối ưu hóa bảo mật Native Root of Trust với khóa Ed25519 sản xuất, loại bỏ dev fallback khi đóng gói, xác thực Staged Launcher, tối ưu Media Grid tên tệp tin không decode thumbnail chống tràn RAM, Native Nuitka Onefile Engine, tương thích CapCut Desktop 9.3.0.3970.</p>
+                                        <p style="font-size:12px;color:var(--muted-foreground);margin-bottom:10px">Phiên bản v2.1.2: Khắc phục triệt để lỗi màn hình đen khi nhập ảnh có tên tệp dài bất thường, duy trì bảo mật Native Root of Trust với khóa Ed25519 sản xuất, xác thực Staged Launcher, tối ưu Media Grid tên tệp tin không decode thumbnail chống tràn RAM, Native Nuitka Onefile Engine, tương thích CapCut Desktop 9.3.0.3970.</p>
                                         <div style="display:flex;gap:8px;flex-wrap:wrap">
                                             <button type="button" class="btn btn-accent btn-sm" style="flex:1;text-align:center;background:#ff7a00;border-color:#ff7a00" onclick="requestSecureDownload('AUTOEDIT', 'windows-x64', 'installer')">
-                                                ⚙️ Bộ cài đặt .exe (v2.1.1)
+                                                ⚙️ Bộ cài đặt .exe (v2.1.2)
                                             </button>
                                             <button type="button" class="btn btn-outline btn-sm" style="flex:1;text-align:center;border-color:#ff7a00;color:#ff9e42" onclick="requestSecureDownload('AUTOEDIT', 'windows-x64', 'portable')">
-                                                📦 Bản Portable .zip (v2.1.1)
+                                                📦 Bản Portable .zip (v2.1.2)
                                             </button>
                                             <?php if ($user_info && in_array($user_info['role'] ?? '', ['admin', 'super_admin'], true)): ?>
                                                 <button type="button" class="btn btn-outline btn-sm" style="flex:1;text-align:center;border-color:#ff7a00;color:#ff9e42" onclick="requestSecureDownload('AUTOEDIT', 'windows-x64', 'customer_test')">

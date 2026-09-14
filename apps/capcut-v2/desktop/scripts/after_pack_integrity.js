@@ -8,18 +8,32 @@
  * 1. Executes immediately after electron-builder packages app.asar and stages extraResources.
  * 2. Computes streaming SHA-256 digests for sealed app.asar and all 6 native binaries in appOutDir.
  * 3. Derives application version dynamically from package.json (APP_VERSION == MANIFEST_VERSION).
- * 4. Signs integrity.manifest.json with Ed25519 and writes to <appOutDir>/resources/ (and syncs to repo).
+ * 4. Signs integrity.manifest.json with Ed25519 and writes to <appOutDir>/resources/ ONLY.
+ *    The manifest and app.asar are NEVER written back into the tracked source tree
+ *    (Release Standard §12 — BUILD_DIRTIES_SOURCE_TREE must be NO).
  * 5. Decouples launcher:
  *    - Windows: Renames Electron executable (2TOOLNE AutoEdit.exe -> 2toolne-runtime.exe)
  *      and stages compiled native verifier binary as 2TOOLNE AutoEdit.exe.
  *    - macOS: Renames Electron executable (Contents/MacOS/2TOOLNE AutoEdit -> Contents/MacOS/2toolne-runtime)
  *      and stages compiled native verifier binary as Contents/MacOS/2TOOLNE AutoEdit.
+ * 6. HARD GATE (Release Standard §7): in a production build, a missing native root launcher
+ *    is a FATAL error, not a warning. Continuing would ship a renamed Electron runtime under
+ *    the launcher name (ROOT_OF_TRUST_BYPASS=YES). Set NATIVE_ROOT_OPTIONAL=1 for local dev only.
  */
 
 'use strict';
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
+
+/**
+ * Synchronous SHA-256 of a file, used for launcher/runtime identity assertions
+ * inside the otherwise-synchronous decoupleLauncher step.
+ */
+function sha256FileSync(filePath) {
+  return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+}
 
 function findRepoRoot() {
   let cur = __dirname;
@@ -113,12 +127,39 @@ function decoupleLauncher(appOutDir, electronPlatformName) {
       }
     }
 
-    if (fs.existsSync(nativeRootSrc)) {
+    if (process.env.NATIVE_ROOT_OPTIONAL === '1') {
+      // Explicit local-dev opt-out. Never valid for a release build.
+      console.warn(`[afterPack][DEV-ONLY] Native root Windows binary not found at ${nativeRootSrc} (NATIVE_ROOT_OPTIONAL=1)`);
+    } else if (fs.existsSync(nativeRootSrc)) {
       fs.copyFileSync(nativeRootSrc, electronExe);
       const stagedStats = fs.statSync(electronExe);
       console.log(`[afterPack] Staged native root launcher -> ${path.basename(electronExe)} (${(stagedStats.size / 1024 / 1024).toFixed(2)} MB)`);
+
+      // Release Standard §8: launcher must equal the built native root byte-for-byte and the
+      // runtime must be a DIFFERENT binary. Ship-blocking if either assertion fails.
+      const nativeRootSha256 = sha256FileSync(nativeRootSrc);
+      const packagedLauncherSha256 = sha256FileSync(electronExe);
+      const electronRuntimeSha256 = fs.existsSync(runtimeExe) ? sha256FileSync(runtimeExe) : null;
+
+      console.log(`[afterPack] NATIVE_ROOT_SHA256          = ${nativeRootSha256}`);
+      console.log(`[afterPack] PACKAGED_LAUNCHER_SHA256   = ${packagedLauncherSha256}`);
+      console.log(`[afterPack] ELECTRON_RUNTIME_SHA256    = ${electronRuntimeSha256 || '(absent)'}`);
+      console.log(`[afterPack] NATIVE_ROOT_HASH_MATCH     = ${nativeRootSha256 === packagedLauncherSha256 ? 'YES' : 'NO'}`);
+      console.log(`[afterPack] LAUNCHER_RUNTIME_SAME_BINARY = ${electronRuntimeSha256 && electronRuntimeSha256 === packagedLauncherSha256 ? 'YES' : 'NO'}`);
+
+      if (nativeRootSha256 !== packagedLauncherSha256) {
+        throw new Error('[afterPack] NATIVE_ROOT_HASH_MATCH=NO — staged launcher does not match the built native root.');
+      }
+      if (electronRuntimeSha256 && electronRuntimeSha256 === packagedLauncherSha256) {
+        throw new Error('[afterPack] LAUNCHER_RUNTIME_SAME_BINARY=YES — launcher is the renamed Electron runtime, not the native root.');
+      }
     } else {
-      console.warn(`[afterPack][WARN] Native root Windows binary not found at ${nativeRootSrc}`);
+      throw new Error(
+        `[afterPack] Native root Windows binary not found at ${nativeRootSrc}. ` +
+        'Production packaging requires the Go native root build (Release Standard §7). ' +
+        'Refusing to ship a renamed Electron runtime as the launcher. ' +
+        'Set NATIVE_ROOT_OPTIONAL=1 only for local development.'
+      );
     }
   }
 
@@ -150,8 +191,15 @@ function decoupleLauncher(appOutDir, electronPlatformName) {
             fs.chmodSync(electronBin, 0o755);
             const stagedStats = fs.statSync(electronBin);
             console.log(`[afterPack] Staged native root macOS launcher -> ${path.basename(electronBin)} (${(stagedStats.size / 1024 / 1024).toFixed(2)} MB)`);
+          } else if (process.env.NATIVE_ROOT_OPTIONAL === '1') {
+            console.warn(`[afterPack][DEV-ONLY] Native root macOS binary not found at ${nativeRootSrc} (NATIVE_ROOT_OPTIONAL=1)`);
           } else {
-            console.warn(`[afterPack][WARN] Native root macOS binary not found at ${nativeRootSrc}`);
+            throw new Error(
+              `[afterPack] Native root macOS binary not found at ${nativeRootSrc}. ` +
+              'Production packaging requires the Go native root build (Release Standard §7). ' +
+              'Refusing to ship a renamed Electron runtime as the launcher. ' +
+              'Set NATIVE_ROOT_OPTIONAL=1 only for local development.'
+            );
           }
         }
       }
@@ -256,26 +304,15 @@ async function afterPackIntegrity(context) {
     throw new Error('[afterPack] Self-verification failed for generated manifest signature!');
   }
 
-  // 6. Write Signed Manifest to Packaged Resources and Sync to Repo
+  // 6. Write Signed Manifest to Packaged Resources ONLY
+  // The manifest/app.asar are generated build outputs. Writing them back into the tracked
+  // source tree would dirty the working tree on every build (Release Standard §12).
   const manifestDestPackaged = path.join(resourcesDir, 'integrity.manifest.json');
-  const manifestDestRepo = path.join(repoResourcesDir, 'integrity.manifest.json');
   const manifestJsonStr = JSON.stringify(manifest, null, 2) + '\n';
 
   fs.writeFileSync(manifestDestPackaged, manifestJsonStr, 'utf8');
   console.log(`\n✓ Written signed manifest to: ${manifestDestPackaged}`);
-
-  try {
-    fs.writeFileSync(manifestDestRepo, manifestJsonStr, 'utf8');
-    console.log(`✓ Synced signed manifest to repo: ${manifestDestRepo}`);
-    const packagedAsar = path.join(resourcesDir, 'app.asar');
-    const repoAsar = path.join(repoResourcesDir, 'app.asar');
-    if (fs.existsSync(packagedAsar)) {
-      fs.copyFileSync(packagedAsar, repoAsar);
-      console.log(`✓ Synced sealed app.asar to repo: ${repoAsar}`);
-    }
-  } catch (syncErr) {
-    console.warn(`[afterPack][WARN] Could not sync manifest/asar to repo resources: ${syncErr.message}`);
-  }
+  console.log('  (packaged artifact only — source tree intentionally left untouched)');
 
   console.log('========================================================================');
   console.log('  AFTER-PACK INTEGRITY SYNCHRONIZATION COMPLETED SUCCESSFULLY');

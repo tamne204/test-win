@@ -3,8 +3,6 @@ on:
   push:
     branches:
       - main
-    tags:
-      - 'v2.*'
 
 permissions:
   contents: read
@@ -70,11 +68,12 @@ jobs:
         run: |
           Write-Host "Installing Python build and testing dependencies..."
           python -m pip install --upgrade pip
-          python -m pip install "pyinstaller>=6.0" pytest pillow cryptography requests psutil opencv-python-headless faster-whisper soundfile numpy
+          # Nuitka is the ONLY permitted production compiler (Release Standard §11).
+          python -m pip install "nuitka>=2.4" "ordered-set" zstandard pytest pillow cryptography requests psutil opencv-python-headless faster-whisper soundfile numpy
           
-          $pyinstVer = pyinstaller --version
-          Write-Host "PyInstaller Version: $pyinstVer"
-          "PYINSTALLER_VERSION=$pyinstVer" | Out-File -FilePath reports/windows_rc/ci_environment.txt -Append -Encoding utf8
+          $nuitkaVer = python -m nuitka --version
+          Write-Host "Nuitka Version: $nuitkaVer"
+          "NUITKA_VERSION=$nuitkaVer" | Out-File -FilePath reports/windows_rc/ci_environment.txt -Append -Encoding utf8
           
           Write-Host "Installing Electron desktop application dependencies..."
           cd apps/capcut-v2/desktop
@@ -95,37 +94,24 @@ jobs:
             tests/test_a0_collapse_healing.py `
             -v --junitxml=reports/windows_rc/pytest_report.xml | Tee-Object -FilePath reports/windows_rc/ci_pytest_output.txt
 
-      - name: 7. Build Windows Sidecar Natively (autoedit-core.exe)
+      - name: 7. Build Python Core Natively via Nuitka (2toolne-core.exe)
         shell: pwsh
         run: |
-          Write-Host "Building Windows native Python sidecar via PyInstaller on Windows runner..."
-          python apps/capcut-v2/packaging/build_sidecar.py
+          Write-Host "Building native Python core via Nuitka on Windows runner..."
+          python apps/capcut-v2/packaging/build_nuitka_core.py --target-os windows --mode onefile --console-mode force --clean
           
-          $sidecarBin = "apps/capcut-v2/packaging/dist/autoedit-core/autoedit-core.exe"
-          if (-not (Test-Path $sidecarBin)) {
-            Write-Error "Sidecar build failed: $sidecarBin not found!"
+          $coreBin = "apps/capcut-v2/desktop/resources/autoedit-core/win-x64/2toolne-core.exe"
+          if (-not (Test-Path $coreBin)) {
+            Write-Error "Core build failed: $coreBin not found!"
             exit 1
           }
-          $vadAsset = "apps/capcut-v2/packaging/dist/autoedit-core/_internal/faster_whisper/assets/silero_vad_v6.onnx"
-          if (-not (Test-Path $vadAsset)) {
-            Write-Error "Packaging bug detected: $vadAsset not found in built bundle!"
+          # Hard gate: no PyInstaller _internal or loose bytecode may exist (Release Standard §11).
+          $internalDir = Get-ChildItem -Path apps/capcut-v2/desktop/resources/autoedit-core -Recurse -Directory -Filter "_internal" -ErrorAction SilentlyContinue
+          if ($internalDir) {
+            Write-Error "PYINSTALLER_PRODUCTION_USAGE != 0 — _internal directory present: $internalDir"
             exit 1
           }
-          Write-Host "✓ Windows sidecar built successfully: $sidecarBin"
-          Write-Host "✓ Windows faster-whisper VAD asset verified: $vadAsset"
-          
-          # Sync full sidecar bundle to desktop resources win-x64 directory
-          $targetDir = "apps/capcut-v2/desktop/resources/autoedit-core/win-x64"
-          Remove-Item -Recurse -Force $targetDir -ErrorAction SilentlyContinue
-          New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
-          Get-ChildItem -Force "apps/capcut-v2/packaging/dist/autoedit-core" | Copy-Item -Destination $targetDir -Recurse -Force
-          
-          $targetInternal = Join-Path $targetDir "_internal"
-          if (-not (Test-Path $targetInternal)) {
-            Write-Error "Packaging error: $targetInternal does not exist!"
-            exit 1
-          }
-          Write-Host "✓ Verified _internal bundle copied to desktop resources."
+          Write-Host "✓ Windows core built successfully: $coreBin"
 
       - name: 7b. Ensure Windows External Binaries & CapCutUiProbe
         shell: pwsh
@@ -173,7 +159,7 @@ jobs:
           Write-Host "Running comprehensive Windows CI validation suite..."
           $env:PYTHONIOENCODING = "utf-8"
           $env:PYTHONPATH = "apps/capcut-v2;.;$env:PYTHONPATH"
-          $env:SIDECAR_EXE_PATH = "apps/capcut-v2/desktop/resources/autoedit-core/win-x64/autoedit-core.exe"
+          $env:SIDECAR_EXE_PATH = "apps/capcut-v2/desktop/resources/autoedit-core/win-x64/2toolne-core.exe"
           $env:WIN_BIN_DIR = "apps/capcut-v2/desktop/resources/bin/win-x64"
           $env:WIN_ENGINE_DIR = "apps/capcut-v2/desktop/resources/engine/win-x64"
           python tests/ci_windows_validation.py | Tee-Object -FilePath reports/windows_rc/ci_validation_output.txt
@@ -184,6 +170,14 @@ jobs:
           Write-Host "Testing Electron SafeStorage / DPAPI behavior in runner session..."
           cd apps/capcut-v2/desktop
           npx electron ../../../tests/test_electron_safestorage.js --headless | Tee-Object -FilePath ../../../reports/windows_rc/ci_safestorage_output.txt
+
+      - name: 9b. Setup Go Toolchain & Build Native Root Launcher
+        shell: bash
+        run: |
+          # Required before electron-builder: afterPack hard-fails without a real native root
+          # launcher and refuses to ship the renamed Electron runtime (Release Standard §7).
+          apps/capcut-v2/desktop/src/native_root/build.sh --windows
+          ls -la apps/capcut-v2/desktop/dist/native_root/
 
       - name: 10. Build Electron Windows App & NSIS Installer
         shell: pwsh
@@ -202,7 +196,7 @@ jobs:
             node apps/capcut-v2/desktop/scripts/verify_windows_package.js
             
             $binariesToAudit = @(
-              "$unpackedDir/resources/autoedit-core/autoedit-core.exe",
+              "$unpackedDir/resources/autoedit-core/win-x64/2toolne-core.exe",
               "$unpackedDir/resources/bin/win-x64/ffmpeg.exe",
               "$unpackedDir/resources/bin/win-x64/ffprobe.exe",
               "$unpackedDir/resources/bin/win-x64/CapCutUiProbe.exe"
@@ -226,7 +220,10 @@ jobs:
         shell: pwsh
         run: |
           Write-Host "Assembling Release Candidate 2 (RC2) immutable ZIP..."
-          $zipTarget = "apps/capcut-v2/desktop/dist/2toolne-autoedit-windows-rc2-2.0.0-win-x64.zip"
+          # Version comes from the single authoritative source; never hardcode a stale one.
+          $rcVer = (Get-Content "apps/capcut-v2/desktop/package.json" -Raw | ConvertFrom-Json).version
+          $rcName = "2toolne-autoedit-windows-rc2-$rcVer-win-x64.zip"
+          $zipTarget = "apps/capcut-v2/desktop/dist/$rcName"
           if (Test-Path $zipTarget) { Remove-Item $zipTarget -Force }
           
           # Compress win-unpacked directly
@@ -236,12 +233,14 @@ jobs:
           $rc2Sha = $hashObj.Hash
           $rc2Size = (Get-Item $zipTarget).Length
           
-          Write-Host "RC2 Archive: 2toolne-autoedit-windows-rc2-2.0.0-win-x64.zip"
+          Write-Host "RC2 Archive: $rcName"
           Write-Host "RC2 SHA-256: $rc2Sha"
           Write-Host "RC2 Size   : $rc2Size bytes"
           
-          "$rc2Sha  2toolne-autoedit-windows-rc2-2.0.0-win-x64.zip" | Out-File -FilePath SHA256SUMS.txt -Encoding utf8
+          "$rc2Sha  $rcName" | Out-File -FilePath SHA256SUMS.txt -Encoding utf8
           Copy-Item SHA256SUMS.txt -Destination reports/windows_rc/SHA256SUMS.txt
+          "$rcName" | Out-File -FilePath reports/windows_rc/rc_artifact_name.txt -Encoding utf8
+          "$rcVer"  | Out-File -FilePath reports/windows_rc/rc_version.txt -Encoding utf8
           
           Write-Host "--------------------------------------------------"
           Write-Host "EXECUTING CLEAN MACHINE RETEST FROM EXTRACTED RC2"
@@ -252,7 +251,7 @@ jobs:
           Expand-Archive -Path $zipTarget -DestinationPath $cleanExtract -Force
           
           # Verify extracted sidecar exists and is PE32+
-          $cleanSidecar = "$cleanExtract/resources/autoedit-core/autoedit-core.exe"
+          $cleanSidecar = "$cleanExtract/resources/autoedit-core/win-x64/2toolne-core.exe"
           if (-not (Test-Path $cleanSidecar)) {
             Write-Error "CLEAN MACHINE RETEST FAILED: Extracted sidecar missing at $cleanSidecar"
             exit 1
@@ -348,11 +347,13 @@ jobs:
         shell: pwsh
         run: |
           Write-Host "Assembling artifact package for distribution..."
-          $distPkg = "2toolne-autoedit-windows-rc2-2.0.0"
+          $rcName = (Get-Content "reports/windows_rc/rc_artifact_name.txt" -Raw).Trim()
+          $rcVer  = (Get-Content "reports/windows_rc/rc_version.txt" -Raw).Trim()
+          $distPkg = "2toolne-autoedit-windows-rc2-$rcVer"
           New-Item -ItemType Directory -Force -Path $distPkg | Out-Null
           
           # Copy RC2 ZIP
-          Copy-Item "apps/capcut-v2/desktop/dist/2toolne-autoedit-windows-rc2-2.0.0-win-x64.zip" -Destination $distPkg
+          Copy-Item "apps/capcut-v2/desktop/dist/$rcName" -Destination $distPkg
           
           # Copy Installer
           Get-ChildItem -Path "apps/capcut-v2/desktop/dist" -Filter "*.exe" | ForEach-Object {

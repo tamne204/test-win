@@ -22,6 +22,10 @@ def find_autoedit_core_exe():
         return env_path
     
     candidates = [
+        # Canonical Nuitka production binary (Release Standard §3: CORE_PRODUCTION_PACKAGER=NUITKA).
+        os.path.join(REPO_ROOT, "apps", "capcut-v2", "desktop", "resources", "autoedit-core", "win-x64", "2toolne-core.exe"),
+        os.path.join(REPO_ROOT, "apps", "capcut-v2", "packaging", "dist", "autoedit-core", "2toolne-core.exe"),
+        # Legacy naming, retained only so older working trees still resolve.
         os.path.join(REPO_ROOT, "apps", "capcut-v2", "packaging", "dist", "autoedit-core", "autoedit-core.exe"),
         os.path.join(REPO_ROOT, "apps", "capcut-v2", "desktop", "resources", "autoedit-core", "win-x64", "autoedit-core.exe"),
         os.path.join(REPO_ROOT, "dist", "customer_package_staging", "2TOOLNE", "resources", "autoedit-core", "autoedit-core.exe"),
@@ -29,7 +33,7 @@ def find_autoedit_core_exe():
     for c in candidates:
         if os.path.isfile(c):
             return c
-    raise FileNotFoundError(f"Could not find autoedit-core.exe. Checked: {candidates}")
+    raise FileNotFoundError(f"Could not find 2toolne-core.exe. Checked: {candidates}")
 
 
 def main():

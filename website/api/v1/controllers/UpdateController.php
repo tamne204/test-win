@@ -16,11 +16,33 @@ class UpdateController {
     private const UPDATE_SECRET = '2TOOLNE_SECURE_UPDATE_SALT_2026';
     private const CANARY_CHANNEL = 'windows-canary';
     private const STABLE_CHANNEL = 'stable';
-    private const CANARY_VERSION = '2.1.1';
+    private const CANARY_VERSION = '2.1.2';
     private const TOKEN_TTL_SECONDS = 900; // Strictly 15 minutes
+
+    // Sentinel marking a release whose CI artifact digest has not been produced yet.
+    // A value equal to this sentinel is NEVER advertised as a downloadable artifact
+    // (2TOOLNE Release Standard §11 — never forge or hand-write an artifact hash).
+    private const PENDING_ARTIFACT = 'PENDING_CI_ARTIFACT';
 
     // Durable private storage outside Apache webroot
     private const PRIVATE_PACKAGES_DIR = 'C:/2TOOLNE-Private/packages';
+
+    // 2.1.2 Authoritative Package Metadata (Single Source of Truth)
+    // NOTE: sha256 values remain PENDING_ARTIFACT until the CI acceptance build
+    // publishes real digests (Release Standard §11 — never forge a manifest/hash).
+    private const RELEASE_212_PACKAGE = '2toolne-autoedit-2.1.2-win-x64.zip';
+    private const RELEASE_212_SIZE_BYTES = 0;
+    private const RELEASE_212_SIZE_MB = 0.0;
+    private const RELEASE_212_SHA256 = self::PENDING_ARTIFACT;
+    private const RELEASE_212_MAC_ARM64_PACKAGE = '2toolne-autoedit-2.1.2-mac-arm64.zip';
+    private const RELEASE_212_MAC_ARM64_SIZE_BYTES = 0;
+    private const RELEASE_212_MAC_ARM64_SIZE_MB = 0.0;
+    private const RELEASE_212_MAC_ARM64_SHA256 = self::PENDING_ARTIFACT;
+    private const RELEASE_212_MAC_X64_PACKAGE = '2toolne-autoedit-2.1.2-mac-x64.zip';
+    private const RELEASE_212_MAC_X64_SIZE_BYTES = 0;
+    private const RELEASE_212_MAC_X64_SIZE_MB = 0.0;
+    private const RELEASE_212_MAC_X64_SHA256 = self::PENDING_ARTIFACT;
+    private const RELEASE_212_NOTES = '2TOOLNE AutoEdit v2.1.2: Sửa lỗi màn hình đen khi nhập ảnh có tên tệp dài bất thường (giới hạn Media Index span), đồng bộ phiên bản trên toàn bộ PipelineJob, tương thích CapCut Desktop v9.3.0.3970.';
 
     // 2.1.1 Authoritative Package Metadata (Single Source of Truth)
     private const RELEASE_211_PACKAGE = '2toolne-autoedit-2.1.1-win-x64.zip';
@@ -553,27 +575,58 @@ class UpdateController {
 
         // Resolve Target Release Metadata
         if ($appName === 'autoedit') {
-            $latestVersion = self::CANARY_VERSION; // Strictly '2.1.1'
-            $releaseNotes = self::RELEASE_211_NOTES;
+            $latestVersion = self::CANARY_VERSION;
+            $releaseNotes = self::RELEASE_212_NOTES;
             $isMandatory = false;
-            $publishedAt = '2026-09-14 01:25:00';
+            $publishedAt = null;
             if ($isWin) {
-                $filename = self::RELEASE_211_PACKAGE;
-                $sizeBytes = self::RELEASE_211_SIZE_BYTES;
-                $fileSizeMb = self::RELEASE_211_SIZE_MB;
-                $sha256 = self::RELEASE_211_SHA256;
+                $filename = self::RELEASE_212_PACKAGE;
+                $sizeBytes = self::RELEASE_212_SIZE_BYTES;
+                $fileSizeMb = self::RELEASE_212_SIZE_MB;
+                $sha256 = self::RELEASE_212_SHA256;
             } else {
                 if ($arch === 'x64') {
-                    $filename = self::RELEASE_211_MAC_X64_PACKAGE;
-                    $sizeBytes = self::RELEASE_211_MAC_X64_SIZE_BYTES;
-                    $fileSizeMb = self::RELEASE_211_MAC_X64_SIZE_MB;
-                    $sha256 = self::RELEASE_211_MAC_X64_SHA256;
+                    $filename = self::RELEASE_212_MAC_X64_PACKAGE;
+                    $sizeBytes = self::RELEASE_212_MAC_X64_SIZE_BYTES;
+                    $fileSizeMb = self::RELEASE_212_MAC_X64_SIZE_MB;
+                    $sha256 = self::RELEASE_212_MAC_X64_SHA256;
                 } else {
-                    $filename = self::RELEASE_211_MAC_ARM64_PACKAGE;
-                    $sizeBytes = self::RELEASE_211_MAC_ARM64_SIZE_BYTES;
-                    $fileSizeMb = self::RELEASE_211_MAC_ARM64_SIZE_MB;
-                    $sha256 = self::RELEASE_211_MAC_ARM64_SHA256;
+                    $filename = self::RELEASE_212_MAC_ARM64_PACKAGE;
+                    $sizeBytes = self::RELEASE_212_MAC_ARM64_SIZE_BYTES;
+                    $fileSizeMb = self::RELEASE_212_MAC_ARM64_SIZE_MB;
+                    $sha256 = self::RELEASE_212_MAC_ARM64_SHA256;
                 }
+            }
+
+            // Guard: an artifact whose CI digest has not been produced yet must never be
+            // advertised as downloadable (Release Standard §11). Discovery still reports the
+            // version, but no token/URL is issued and no placeholder hash is exposed.
+            if ($sha256 === self::PENDING_ARTIFACT) {
+                Router::json([
+                    'success' => true,
+                    'has_update' => false,
+                    'current_version' => $clientVersion,
+                    'latest_version' => $latestVersion,
+                    'channel' => $channel,
+                    'release_notes' => $releaseNotes,
+                    'mandatory' => false,
+                    'file_size_mb' => null,
+                    'filename' => $filename,
+                    'sha256' => null,
+                    'download_url' => null,
+                    'auth_required' => false,
+                    'authorized' => true,
+                    'pending_artifact' => true,
+                    'message' => 'Bản cập nhật v' . $latestVersion . ' đang được đóng gói và sẽ sớm sẵn sàng.',
+                    'package' => [
+                        'filename' => $filename,
+                        'url' => null,
+                        'sha256' => null,
+                        'size_bytes' => null,
+                    ],
+                    'published_at' => null,
+                ]);
+                return;
             }
         } else {
             $latestVersion = '1.0.2';

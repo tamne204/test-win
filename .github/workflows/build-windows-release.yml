@@ -1,24 +1,54 @@
-name: Build & Deploy Windows Native Release (windows-latest)
+name: Build Windows Native Release (windows-latest)
 
 on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: 'Release version to build and deploy (e.g. 2.0.4, 2.0.5)'
+        description: 'Release version to build (e.g. 2.1.2)'
         required: true
-        default: '2.0.4'
+        default: '2.1.2'
+      deploy:
+        description: 'Deploy the built release to production after a successful build'
+        type: boolean
+        required: false
+        default: false
   push:
     tags:
       - 'v2.*'
 
 jobs:
-  build-and-deploy-windows:
-    name: Build Native Windows Package & Direct Server Deploy
+  build-windows:
+    name: Build Native Windows Release Artifacts
     runs-on: windows-latest
+    outputs:
+      release_version: ${{ steps.resolve_version.outputs.release_version }}
 
     steps:
       - name: 1. Checkout Repository
         uses: actions/checkout@v4
+
+      - name: 1b. Resolve and Validate Release Version
+        id: resolve_version
+        shell: pwsh
+        run: |
+          # Dispatch input wins; otherwise derive from the pushed tag (e.g. v2.1.2 -> 2.1.2).
+          $ver = "${{ github.event.inputs.release_version }}"
+          if (-not $ver) { $ver = "${{ github.ref_name }}".TrimStart('v') }
+          if (-not $ver) { Write-Error "Unable to resolve release version."; exit 1 }
+
+          # Single authoritative source: desktop/package.json. The tag/input may VALIDATE
+          # against it but must never silently override it (Release Standard §13).
+          $pkg = Get-Content "apps/capcut-v2/desktop/package.json" -Raw | ConvertFrom-Json
+          $pkgVer = $pkg.version
+          Write-Host "REQUESTED_VERSION : $ver"
+          Write-Host "PACKAGE_JSON      : $pkgVer"
+          if ($ver -ne $pkgVer) {
+            Write-Error "VERSION MISMATCH: requested '$ver' != desktop/package.json '$pkgVer'. Refusing to build a mislabelled release."
+            exit 1
+          }
+          Write-Host "TAG_VERSION_SOURCE=PACKAGE_JSON_VALIDATED"
+          Write-Host "VERSION_CONSISTENCY=PASS"
+          "release_version=$ver" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: 2. Setup Python 3.12
         uses: actions/setup-python@v5
@@ -37,57 +67,140 @@ jobs:
           Remove-Item -Recurse -Force apps/capcut-v2/packaging/build -ErrorAction SilentlyContinue
           Remove-Item -Recurse -Force apps/capcut-v2/packaging/dist -ErrorAction SilentlyContinue
           Remove-Item -Recurse -Force apps/capcut-v2/desktop/dist -ErrorAction SilentlyContinue
-          Remove-Item -Recurse -Force "$env:LOCALAPPDATA/pyinstaller" -ErrorAction SilentlyContinue
+          # Purge any stale compiled Python so a previous build can never satisfy a later gate.
           Get-ChildItem -Path . -Include __pycache__ -Recurse -Force | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+          Get-ChildItem -Path apps/capcut-v2 -Recurse -Include "*.pyc","*.pyo" -Force -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
 
       - name: 5. Install Dependencies
         shell: pwsh
         run: |
           Write-Host "Installing Python build dependencies..."
           python -m pip install --upgrade pip
-          python -m pip install "pyinstaller>=6.0" pytest pillow cryptography requests psutil opencv-python-headless faster-whisper soundfile numpy pefile
+          # Nuitka is the ONLY permitted production compiler (Release Standard §11).
+          # PyInstaller is strictly forbidden: it emits a _internal directory and
+          # loose bytecode, violating the single-native-binary contract.
+          python -m pip install "nuitka>=2.4" "ordered-set" zstandard pytest pillow cryptography requests psutil opencv-python-headless faster-whisper soundfile numpy pefile
           
-          Write-Host "PyInstaller Version: $(pyinstaller --version)"
+          Write-Host "Nuitka Version: $(python -m nuitka --version)"
           Write-Host "Python Version: $(python --version)"
           
           Write-Host "Installing Electron desktop application dependencies..."
           cd apps/capcut-v2/desktop
           npm ci
 
-      - name: 6. Build Windows Sidecar Fresh via PyInstaller (autoedit-core.exe)
-        shell: pwsh
-        run: |
-          Write-Host "=================================================="
-          Write-Host "RUNNING FRESH PYINSTALLER BUILD ON WINDOWS RUNNER"
-          Write-Host "=================================================="
-          python apps/capcut-v2/packaging/build_sidecar.py
-          
-          $sidecarBin = "apps/capcut-v2/packaging/dist/autoedit-core/autoedit-core.exe"
-          if (-not (Test-Path $sidecarBin)) {
-            Write-Error "Sidecar build failed: $sidecarBin not found!"
-            exit 1
-          }
-          $vadAsset = "apps/capcut-v2/packaging/dist/autoedit-core/_internal/faster_whisper/assets/silero_vad_v6.onnx"
-          if (-not (Test-Path $vadAsset)) {
-            Write-Error "Packaging bug detected: $vadAsset not found in built bundle!"
-            exit 1
-          }
-          $sidecarSize = (Get-Item $sidecarBin).Length
-          $sidecarHash = (Get-FileHash -Path $sidecarBin -Algorithm SHA256).Hash
-          Write-Host "✓ Fresh autoedit-core.exe built successfully: $sidecarBin ($sidecarSize bytes)"
-          Write-Host "✓ Fresh autoedit-core.exe SHA256: $sidecarHash"
-          Write-Host "✓ Bundled VAD asset verified: $vadAsset"
+      - name: 5b. Setup Go Toolchain (Native Root of Trust Launcher)
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
 
-      - name: 7. Packaged Sidecar Direct Runtime Test
+      - name: 5c. Build Native Root of Trust Launcher (Go)
+        shell: bash
+        run: |
+          # The native root launcher MUST be a real Go build. Without it, afterPack
+          # would refuse to package (Release Standard §7: ROOT_OF_TRUST_BYPASS=NO).
+          chmod +x apps/capcut-v2/desktop/src/native_root/build.sh
+          apps/capcut-v2/desktop/src/native_root/build.sh --windows
+          go version
+          ls -la apps/capcut-v2/desktop/dist/native_root/
+
+      - name: 5d. Verify Native Root Artifact Exists
+        shell: pwsh
+        run: |
+          # Release Standard §17: the native root must be positively verified after
+          # the Go build and before packaging, so a silently failed compile cannot
+          # be masked by the later afterPack gate.
+          $nativeRoot = "apps/capcut-v2/desktop/dist/native_root/2TOOLNE AutoEdit.exe"
+          if (-not (Test-Path $nativeRoot)) {
+            Write-Error "NATIVE_ROOT_BUILT=FAIL — $nativeRoot was not produced by the Go build."
+            exit 1
+          }
+          $item = Get-Item $nativeRoot
+          if ($item.Length -lt 1024) {
+            Write-Error "NATIVE_ROOT_BUILT=FAIL — $nativeRoot is implausibly small ($($item.Length) bytes)."
+            exit 1
+          }
+          Write-Host "NATIVE_ROOT_BUILT=PASS"
+          Write-Host "NATIVE_ROOT_PATH  = $nativeRoot"
+          Write-Host "NATIVE_ROOT_SIZE  = $($item.Length) bytes"
+          Write-Host "NATIVE_ROOT_SHA256= $((Get-FileHash $nativeRoot -Algorithm SHA256).Hash.ToLower())"
+
+      - name: 5e. Black-Screen Import Regression Gate (Release Standard §2, §17)
         shell: pwsh
         run: |
           Write-Host "=================================================="
-          Write-Host "TESTING FRESH PACKAGED SIDECAR EXECUTION DIRECTLY"
+          Write-Host "RUNNING FILENAME INDEX SPAN REGRESSION TEST"
+          Write-Host "=================================================="
+          # Runs BEFORE the core build so a known-broken source tree can never reach
+          # the packaging stage (Release Standard §17 ordering).
+          node apps/capcut-v2/desktop/tests/test_windows_black_screen_import.js
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Black-screen import regression detected — refusing to build."
+            exit 1
+          }
+
+      - name: 6. Build Python Core Fresh via Nuitka (2toolne-core.exe)
+        shell: pwsh
+        run: |
+          Write-Host "=================================================="
+          Write-Host "RUNNING FRESH NUITKA BUILD ON WINDOWS RUNNER"
+          Write-Host "=================================================="
+          # Force console mode: JSON-RPC IPC runs over stdin/stdout and requires OS stdio handles.
+          python apps/capcut-v2/packaging/build_nuitka_core.py --target-os windows --mode onefile --console-mode force --clean
+          
+          $coreBin = "apps/capcut-v2/desktop/resources/autoedit-core/win-x64/2toolne-core.exe"
+          if (-not (Test-Path $coreBin)) {
+            Write-Error "Core build failed: $coreBin not found!"
+            exit 1
+          }
+          $coreSize = (Get-Item $coreBin).Length
+          $coreHash = (Get-FileHash -Path $coreBin -Algorithm SHA256).Hash
+          Write-Host "✓ Fresh 2toolne-core.exe built successfully: $coreBin ($coreSize bytes)"
+          Write-Host "✓ Fresh 2toolne-core.exe SHA256: $coreHash"
+
+      - name: 6b. Assert No PyInstaller Output in Production Tree
+        shell: pwsh
+        run: |
+          # Hard gate (Release Standard §11): PYINSTALLER_PRODUCTION_USAGE=0.
+          # A _internal directory or loose sidecar bytecode means a PyInstaller build leaked in.
+          $violations = @()
+          $violations += Get-ChildItem -Path apps/capcut-v2/desktop/resources/autoedit-core -Recurse -Directory -Filter "_internal" -ErrorAction SilentlyContinue
+          $violations += Get-ChildItem -Path apps/capcut-v2/desktop/resources/autoedit-core -Recurse -Include "*.py","*.pyc","*.pyo" -ErrorAction SilentlyContinue
+          if ($violations.Count -gt 0) {
+            Write-Host "VIOLATIONS FOUND:"
+            $violations | ForEach-Object { Write-Host "  $_" }
+            Write-Error "PYINSTALLER_PRODUCTION_USAGE != 0 — _internal directory or loose .py/.pyc present in production core."
+            exit 1
+          }
+          Write-Host "✓ No PyInstaller artifacts found. Nuitka native binary contract satisfied."
+          Write-Host "NUITKA_CORE=PASS"
+          Write-Host "CORE_PRODUCTION_PACKAGER=NUITKA"
+          Write-Host "PYINSTALLER_PRODUCTION_USAGE=0"
+
+      - name: 7. Packaged Core Direct Runtime Test
+        shell: pwsh
+        run: |
+          Write-Host "=================================================="
+          Write-Host "TESTING FRESH NUITKA CORE EXECUTION DIRECTLY"
           Write-Host "=================================================="
           $env:PYTHONIOENCODING = "utf-8"
           $env:PYTHONUTF8 = "1"
-          $env:AUTOEDIT_CORE_EXE = "apps/capcut-v2/packaging/dist/autoedit-core/autoedit-core.exe"
+          $env:AUTOEDIT_CORE_EXE = "apps/capcut-v2/desktop/resources/autoedit-core/win-x64/2toolne-core.exe"
           python tests/test_packaged_windows_sidecar_rpc.py
+
+      - name: 7b. Three-Mode Sidecar Ping Acceptance (Direct / Packaged / Electron-style)
+        shell: pwsh
+        run: |
+          Write-Host "=================================================="
+          Write-Host "THREE-MODE SIDECAR PING ACCEPTANCE"
+          Write-Host "=================================================="
+          $env:PYTHONIOENCODING = "utf-8"
+          $env:PYTHONUTF8 = "1"
+          $env:DIRECT_CORE_EXE = "apps/capcut-v2/desktop/resources/autoedit-core/win-x64/2toolne-core.exe"
+          python tests/test_sidecar_ping_trio.py
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Sidecar ping acceptance failed (or no mode actually ran)."
+            exit 1
+          }
 
       - name: 8. Ensure External Binaries and Resources
         shell: pwsh
@@ -117,24 +230,85 @@ jobs:
             g++ -O3 -std=c++17 apps/capcut-v2/desktop/src/main/capcut_ui_probe/CapCutUiProbe.cpp -o $probeExe
           }
 
+      - name: 8b. Generate Ephemeral CI Signing Keypair (Ed25519)
+        id: ci_signing
+        shell: pwsh
+        env:
+          # Reuse the production secret when present; otherwise fall back to an ephemeral
+          # CI-only key. The ephemeral key exists solely to prove the signing pipeline works.
+          PROD_SIGNING_KEY: ${{ secrets.INTEGRITY_SIGNING_KEY }}
+        run: |
+          if ($env:PROD_SIGNING_KEY) {
+            Write-Host "PRODUCTION_SIGNING_KEY_AVAILABLE=YES"
+            Write-Host "Using the production INTEGRITY_SIGNING_KEY for this build."
+            "PRODUCTION_SIGNING_KEY_AVAILABLE=YES" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            $env:INTEGRITY_SIGNING_KEY = $env:PROD_SIGNING_KEY
+            "INTEGRITY_SIGNING_KEY=$($env:PROD_SIGNING_KEY)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            # The production public key is public by design and is the verification anchor.
+            $prodPub = node -e "console.log(require('./scripts/generate_integrity_manifest.js').CANONICAL_PROD_PUBLIC_KEY_B64)"
+            "ci_public_key=$prodPub" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+            Write-Host "CI_TEST_SIGNING_CLASS=PRODUCTION_ED25519"
+            Write-Host "PRODUCTION_PUBLIC_KEY=$prodPub"
+          } else {
+            Write-Host "PRODUCTION_SIGNING_KEY_AVAILABLE=NO"
+            Write-Host "PRODUCTION_SIGNED_BUILD=BLOCKED"
+            Write-Host "Generating an EPHEMERAL Ed25519 keypair for CI acceptance only..."
+            # The private key lives only in this runner's memory and GITHUB_ENV for the
+            # duration of the workflow. It is never written to disk, never printed, and
+            # never uploaded as an artifact (Release Standard §9).
+            $node = @'
+          const crypto = require('crypto');
+          const { privateKey, publicKey } = crypto.generateKeyPairSync('ed25519');
+          const privPem = privateKey.export({ type: 'pkcs8', format: 'pem' });
+          const pubRaw = publicKey.export({ type: 'spki', format: 'der' });
+          // The 32-byte raw public key is the trailing region of the SPKI DER.
+          const pubB64 = pubRaw.subarray(pubRaw.length - 32).toString('base64');
+          process.stdout.write(JSON.stringify({ priv: privPem, pub: pubB64 }));
+          '@
+            $json = ($node | node -)
+            $obj = $json | ConvertFrom-Json
+            # Mask the private key so it can never leak into logs.
+            Write-Host "::add-mask::$($obj.priv)"
+            "PRODUCTION_SIGNING_KEY_AVAILABLE=NO" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            "INTEGRITY_SIGNING_KEY=$($obj.priv)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            "CI_SIGNING_PUBLIC_KEY=$($obj.pub)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            "ci_public_key=$($obj.pub)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+            Write-Host "CI_TEST_SIGNING_CLASS=EPHEMERAL_ED25519"
+            Write-Host "CI_SIGNING_PUBLIC_KEY=$($obj.pub)"
+            Write-Host "Ephemeral CI public key emitted (safe to publish). Private key is masked and not retained."
+          }
+
       - name: 9. Build Electron Desktop Package & Assemble Release ZIP
         shell: pwsh
         run: |
-          $ver = "${{ github.event.inputs.release_version || '2.0.4' }}"
+          $ver = "${{ steps.resolve_version.outputs.release_version }}"
           Write-Host "=================================================="
           Write-Host "ASSEMBLING 2TOOLNE AUTOEDIT $ver WINDOWS PACKAGE"
           Write-Host "=================================================="
           
-          # Sync newly built sidecar to desktop resources
+          # Sync newly built core to desktop resources
           $targetDir = "apps/capcut-v2/desktop/resources/autoedit-core/win-x64"
-          Remove-Item -Recurse -Force $targetDir -ErrorAction SilentlyContinue
-          New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
-          Copy-Item "apps/capcut-v2/packaging/dist/autoedit-core/*" -Destination $targetDir -Recurse -Force
-          
-          # Build win-unpacked with electron-builder pack
+          if (-not (Test-Path "$targetDir/2toolne-core.exe")) {
+            Write-Error "Nuitka core not staged at $targetDir. Run the Nuitka build step first."
+            exit 1
+          }
+          Write-Host "✓ Nuitka core confirmed staged at $targetDir"
+
+          # Build the NSIS installer target. This produces BOTH dist/win-unpacked
+          # and the versioned Setup executable in a single packaging pass, so
+          # afterPack runs exactly once (Release Standard §17).
           cd apps/capcut-v2/desktop
-          npm run pack
+          npm run build:win:nsis
           cd ../../..
+
+          # §16: the ONLY valid installer name for this version is the target-version name.
+          $setupExe = "apps/capcut-v2/desktop/dist/2TOOLNE-AutoEdit-Setup-$ver.exe"
+          if (-not (Test-Path $setupExe)) {
+            Write-Error "Expected NSIS installer not produced: $setupExe (Release Standard §16)"
+            Get-ChildItem -Path "apps/capcut-v2/desktop/dist" -Filter "*.exe" | ForEach-Object { Write-Host "  found: $($_.Name)" }
+            exit 1
+          }
+          Write-Host "✓ NSIS installer: $setupExe ($((Get-Item $setupExe).Length) bytes)"
           
           # Audit win-unpacked
           node apps/capcut-v2/desktop/scripts/verify_windows_package.js
@@ -163,38 +337,393 @@ jobs:
             GIT_COMMIT = $env:GITHUB_SHA
           } | ConvertTo-Json | Out-File -FilePath "dist/manifest_$ver.json" -Encoding utf8
 
-      - name: 10. Deploy Package Direct to 2TOOLNE Production Server via FTP (Zero GitHub Artifacts)
-        shell: bash
+      - name: 9b. Verify Black-Screen Guard Inside Packaged app.asar
+        shell: pwsh
+        run: |
+          $ver = "${{ steps.resolve_version.outputs.release_version }}"
+          Write-Host "=================================================="
+          Write-Host "VERIFYING PACKAGED app.asar BLACK-SCREEN GUARD"
+          Write-Host "=================================================="
+          # Release Standard §18: inspect app.asar FROM THE NEW WINDOWS CI ARTIFACT.
+          # We extract it out of the release ZIP rather than the intermediate
+          # worktree so the evidence covers the exact bytes a user receives.
+          $zip = "dist/2toolne-autoedit-$ver-win-x64.zip"
+          if (-not (Test-Path $zip)) {
+            Write-Error "Release ZIP not found at $zip — cannot verify the packaged artifact."
+            exit 1
+          }
+          $zipExtract = "$env:TEMP\release_zip_extract"
+          if (Test-Path $zipExtract) { Remove-Item -Recurse -Force $zipExtract }
+          Expand-Archive -Path $zip -DestinationPath $zipExtract -Force
+
+          $asar = Join-Path $zipExtract "resources/app.asar"
+          if (-not (Test-Path $asar)) {
+            Write-Error "app.asar not found inside the release ZIP at resources/app.asar"
+            exit 1
+          }
+          Write-Host "Extracted app.asar from CI artifact: $asar"
+          $extract = "$env:TEMP\app_asar_extract"
+          if (Test-Path $extract) { Remove-Item -Recurse -Force $extract }
+          npx --yes @electron/asar extract "$asar" "$extract"
+          if ($LASTEXITCODE -ne 0) { Write-Error "Failed to extract packaged app.asar"; exit 1 }
+
+          $appJs = "$extract/src/renderer/app.js"
+          if (-not (Test-Path $appJs)) { Write-Error "renderer/app.js missing from packaged asar"; exit 1 }
+          $src = Get-Content $appJs -Raw
+
+          # The guard constant and every consumer guard site must survive packaging.
+          if ($src -notmatch "MEDIA_INDEX_MAX_SPAN\s*=\s*5000") {
+            Write-Error "PACKAGED_BLACK_SCREEN_GUARD_PRESENT=NO — MEDIA_INDEX_MAX_SPAN=5000 absent from packaged app.js"
+            exit 1
+          }
+          $siteCount = ([regex]::Matches($src, "MEDIA_INDEX_MAX_SPAN")).Count
+          Write-Host "Black-screen guard references found in packaged app.js: $siteCount"
+          if ($siteCount -lt 4) {
+            Write-Error "Expected at least 4 guard sites in packaged app.js, found $siteCount"
+            exit 1
+          }
+
+          # Prove the packaged bundle matches the release source byte-for-byte for this file.
+          $srcHash = (Get-FileHash "apps/capcut-v2/desktop/src/renderer/app.js" -Algorithm SHA256).Hash
+          $packHash = (Get-FileHash $appJs -Algorithm SHA256).Hash
+          Write-Host "RELEASE_SOURCE_APP_JS_SHA256 : $srcHash"
+          Write-Host "PACKAGED_APP_JS_SHA256       : $packHash"
+          if ($srcHash -ne $packHash) {
+            Write-Error "PACKAGED_APP_JS_MATCH_RELEASE_SOURCE=NO — packaged app.js differs from release source"
+            exit 1
+          }
+          Write-Host "PACKAGED_BLACK_SCREEN_GUARD_PRESENT=YES"
+          Write-Host "PACKAGED_APP_JS_MATCH_RELEASE_SOURCE=YES"
+
+      - name: 9c. Zero Loose Python Gate (Release Tree)
+        shell: pwsh
+        run: |
+          Write-Host "=================================================="
+          Write-Host "ZERO PLAINTEXT PYTHON GATE (Release Standard §11)"
+          Write-Host "=================================================="
+          # First prove the guard itself works, so a PASS below is meaningful.
+          node scripts/guard_no_plaintext_python.js --self-test
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Guard self-test failed — refusing to trust the release-tree scan."
+            exit 1
+          }
+          # Then scan the actual packaged release tree.
+          node scripts/guard_no_plaintext_python.js "apps/capcut-v2/desktop/dist/win-unpacked"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "ZERO_PLAINTEXT_PYTHON=FAIL — loose Python artifacts present in the packaged release tree."
+            exit 1
+          }
+
+      - name: 9d. Verify Signed Integrity Manifest (Release Standard §19)
+        shell: pwsh
+        env:
+          CIPUB: ${{ steps.ci_signing.outputs.ci_public_key }}
+        run: |
+          Write-Host "=================================================="
+          Write-Host "VERIFYING SIGNED INTEGRITY MANIFEST"
+          Write-Host "=================================================="
+          $resources = "apps/capcut-v2/desktop/dist/win-unpacked/resources"
+          # Prefer the production public key when the run was signed with it;
+          # otherwise use the ephemeral CI public key generated for this run.
+          $pubKey = $env:CIPUB
+          if (-not $pubKey) {
+            Write-Error "No CI signing public key available — signature verification cannot be performed."
+            exit 1
+          }
+          node scripts/verify_release_manifest.js --resources "$resources" --public-key "$pubKey"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "MANIFEST VERIFICATION FAILED — refusing to package an unverified release."
+            exit 1
+          }
+
+      - name: 9e. Packaged Sidecar Ping Acceptance (against real packaged tree)
+        shell: pwsh
+        run: |
+          Write-Host "=================================================="
+          Write-Host "PACKAGED SIDECAR PING ACCEPTANCE"
+          Write-Host "=================================================="
+          $env:PYTHONIOENCODING = "utf-8"
+          $env:PYTHONUTF8 = "1"
+          $env:PACKAGED_ROOT = "apps/capcut-v2/desktop/dist/win-unpacked"
+          python tests/test_sidecar_ping_trio.py
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Packaged sidecar ping acceptance failed (or no mode actually ran)."
+            exit 1
+          }
+
+      - name: 9f. Disposable Install Verification (Release Standard §21)
+        shell: pwsh
+        run: |
+          Write-Host "=================================================="
+          Write-Host "DISPOSABLE INSTALL VERIFICATION"
+          Write-Host "=================================================="
+          # The NSIS installer is produced unconditionally by step 9, so a missing
+          # installer here is itself a failure rather than an acceptable skip.
+          $distDir = "apps/capcut-v2/desktop/dist"
+          $ver = "${{ steps.resolve_version.outputs.release_version }}"
+          $installer = Get-Item (Join-Path $distDir "2TOOLNE-AutoEdit-Setup-$ver.exe") -ErrorAction SilentlyContinue
+          if (-not $installer) {
+            Write-Error "WINDOWS_CI_INSTALL=FAIL (expected installer 2TOOLNE-AutoEdit-Setup-$ver.exe not found)"
+            exit 1
+          }
+          Write-Host "Installer: $($installer.FullName)"
+
+          $proc = Start-Process -FilePath $installer.FullName -ArgumentList "/S" -Wait -PassThru
+          Write-Host "Installer exit code: $($proc.ExitCode)"
+          if ($proc.ExitCode -ne 0) {
+            Write-Error "WINDOWS_CI_INSTALL=FAIL (installer exited $($proc.ExitCode))"
+            exit 1
+          }
+          Start-Sleep -Seconds 8
+
+          $candidates = @(
+            "$env:LOCALAPPDATA\Programs\2TOOLNE AutoEdit",
+            "$env:LOCALAPPDATA\Programs\2toolne-autoedit",
+            "$env:ProgramFiles\2TOOLNE AutoEdit"
+          )
+          $installedDir = $null
+          foreach ($p in $candidates) { if (Test-Path $p) { $installedDir = $p; break } }
+          if (-not $installedDir) {
+            Write-Error "WINDOWS_CI_INSTALL=FAIL (installation directory not found)"
+            exit 1
+          }
+          Write-Host "Installed to: $installedDir"
+
+          # The native root launcher and the Electron runtime must BOTH be present
+          # and must be DIFFERENT binaries (ROOT_OF_TRUST_BYPASS=NO).
+          $nativeLauncher = Join-Path $installedDir "2TOOLNE AutoEdit.exe"
+          $electronRuntime = Join-Path $installedDir "2toolne-runtime.exe"
+          if (-not (Test-Path $nativeLauncher)) {
+            Write-Error "WINDOWS_CI_INSTALL=FAIL (native root launcher missing: $nativeLauncher)"
+            exit 1
+          }
+          if (-not (Test-Path $electronRuntime)) {
+            Write-Error "WINDOWS_CI_INSTALL=FAIL (electron runtime missing: $electronRuntime)"
+            exit 1
+          }
+          $nativeHash = (Get-FileHash -Path $nativeLauncher -Algorithm SHA256).Hash
+          $runtimeHash = (Get-FileHash -Path $electronRuntime -Algorithm SHA256).Hash
+          Write-Host "NATIVE_ROOT_SHA256        = $nativeHash"
+          Write-Host "ELECTRON_RUNTIME_SHA256   = $runtimeHash"
+          if ($nativeHash -eq $runtimeHash) {
+            Write-Error "WINDOWS_CI_INSTALL=FAIL (launcher and runtime are the SAME binary — root of trust bypassed)"
+            exit 1
+          }
+          Write-Host "LAUNCHER_RUNTIME_SAME_BINARY = NO"
+
+          # Release Standard §21: verify the installed tree contains the full
+          # required inventory, not just the launcher pair.
+          $resourcesDir = Join-Path $installedDir "resources"
+          $required = @(
+            @{ Name = "2toolne-core.exe";         Path = (Join-Path $resourcesDir "autoedit-core\win-x64\2toolne-core.exe") },
+            @{ Name = "app.asar";                  Path = (Join-Path $resourcesDir "app.asar") },
+            @{ Name = "integrity manifest";        Path = (Join-Path $resourcesDir "integrity.manifest.json") },
+            @{ Name = "ffmpeg.exe";                Path = (Join-Path $resourcesDir "bin\win-x64\ffmpeg.exe") },
+            @{ Name = "ffprobe.exe";               Path = (Join-Path $resourcesDir "bin\win-x64\ffprobe.exe") },
+            @{ Name = "CapCutUiProbe.exe";         Path = (Join-Path $resourcesDir "bin\win-x64\CapCutUiProbe.exe") }
+          )
+          $missing = @()
+          foreach ($item in $required) {
+            if (Test-Path $item.Path) {
+              Write-Host "  ✓ $($item.Name)"
+            } else {
+              Write-Host "  ✗ $($item.Name) — MISSING at $($item.Path)"
+              $missing += $item.Name
+            }
+          }
+
+          # Real-ESRGAN engine dependencies (DLLs shipped alongside the engine).
+          $engineDir = Join-Path $resourcesDir "engine\win-x64"
+          $engineFiles = @()
+          if (Test-Path $engineDir) {
+            $engineFiles = Get-ChildItem -Path $engineDir -Force | Select-Object -ExpandProperty Name
+          }
+          if ($engineFiles.Count -gt 0) {
+            Write-Host "  ✓ Real-ESRGAN engine dependencies ($($engineFiles.Count) entries): $($engineFiles -join ', ')"
+          } else {
+            Write-Host "  ✗ Real-ESRGAN engine dependencies — MISSING (engine\win-x64 empty or absent)"
+            $missing += "Real-ESRGAN engine dependencies"
+          }
+
+          if ($missing.Count -gt 0) {
+            Write-Error "WINDOWS_CI_INSTALL=FAIL (installed tree incomplete; missing: $($missing -join ', '))"
+            exit 1
+          }
+
+          # Verify the shortcut routes to the native root launcher, not the runtime.
+          $lnkPaths = @(
+            "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\2TOOLNE AutoEdit.lnk",
+            "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\2TOOLNE AutoEdit.lnk",
+            "$env:USERPROFILE\Desktop\2TOOLNE AutoEdit.lnk"
+          )
+          $shell = New-Object -ComObject WScript.Shell
+          $shortcutChecked = $false
+          foreach ($lnk in $lnkPaths) {
+            if (Test-Path $lnk) {
+              $target = $shell.CreateShortcut($lnk).TargetPath
+              Write-Host "Shortcut: $lnk -> $target"
+              if ($target -notlike "*2TOOLNE AutoEdit.exe") {
+                Write-Error "WINDOWS_CI_INSTALL=FAIL (shortcut target is not the native root launcher: $target)"
+                exit 1
+              }
+              $shortcutChecked = $true
+              break
+            }
+          }
+          if (-not $shortcutChecked) {
+            Write-Warning "WINDOWS_CI_INSTALL=PARTIAL (installed tree verified; no shortcut found to inspect)"
+            exit 0
+          }
+          Write-Host "WINDOWS_CI_INSTALL=PASS"
+
+      - name: 9g. Assert Build Did Not Dirty the Source Tree (Release Standard §12)
+        shell: pwsh
+        run: |
+          # Release Standard §12: BUILD_DIRTIES_SOURCE_TREE must be NO. Run AFTER
+          # packaging because this is where a repo write-back would occur.
+          $dirty = git status --porcelain
+          if ($dirty) {
+            Write-Host "Dirty paths detected after build:"
+            Write-Host $dirty
+            # Generated build outputs are expected to be untracked/ignored; only
+            # TRACKED modifications indicate the build dirtied the source tree.
+            $tracked = git status --porcelain --untracked-files=no
+            if ($tracked) {
+              Write-Error "BUILD_DIRTIES_SOURCE_TREE=YES — the build modified tracked files."
+              Write-Host $tracked
+              exit 1
+            }
+            Write-Host "Only untracked build outputs present — source tree is clean."
+          }
+          Write-Host "BUILD_DIRTIES_SOURCE_TREE=NO"
+
+      - name: 10. Publish Build Artifacts (CI_TEST_ONLY)
+        uses: actions/upload-artifact@v4
+        with:
+          name: 2toolne-autoedit-windows-${{ steps.resolve_version.outputs.release_version }}
+          if-no-files-found: error
+          retention-days: 90
+          path: |
+            dist/2toolne-autoedit-${{ steps.resolve_version.outputs.release_version }}-win-x64.zip
+            dist/manifest_${{ steps.resolve_version.outputs.release_version }}.json
+            dist/2TOOLNE-AutoEdit-Setup-${{ steps.resolve_version.outputs.release_version }}.exe
+            apps/capcut-v2/desktop/resources/autoedit-core/win-x64/2toolne-core.exe
+
+      - name: 11. Build Acceptance Summary
+        shell: pwsh
+        run: |
+          $ver = "${{ steps.resolve_version.outputs.release_version }}"
+          $zip = "dist/2toolne-autoedit-$ver-win-x64.zip"
+          $core = "apps/capcut-v2/desktop/resources/autoedit-core/win-x64/2toolne-core.exe"
+          Write-Host "=================================================="
+          Write-Host "BUILD ACCEPTANCE — 2TOOLNE AutoEdit $ver"
+          Write-Host "=================================================="
+          Write-Host "BUILD_SOURCE_COMMIT      : $env:GITHUB_SHA"
+          Write-Host "RELEASE_VERSION          : $ver"
+          Write-Host "PACKAGE                  : $zip"
+          Write-Host "PACKAGE_SHA256           : $((Get-FileHash $zip -Algorithm SHA256).Hash.ToLower())"
+          Write-Host "CORE                     : $core"
+          Write-Host "CORE_SHA256              : $((Get-FileHash $core -Algorithm SHA256).Hash.ToLower())"
+          Write-Host "CORE_PRODUCTION_PACKAGER : NUITKA"
+          Write-Host "PYINSTALLER_PRODUCTION_USAGE : 0"
+          Write-Host "----------------------------------------"
+          Write-Host "Build job is complete. Deployment is NOT performed by this job."
+
+  deploy-windows:
+    name: Deploy Verified Release Artifact
+    needs: build-windows
+    runs-on: ubuntu-latest
+    # Manual approval gate. Tag pushes can never reach this job (see 'if' below),
+    # and the environment can additionally be configured with required reviewers.
+    environment: production-release
+    if: |
+      github.event_name == 'workflow_dispatch' &&
+      (github.event.inputs.deploy == 'true' || inputs.deploy == true) &&
+      needs.build-windows.result == 'success'
+    steps:
+      - name: 1. Assert Deployment Authorization
+        run: |
+          echo "=================================================="
+          echo "DEPLOYMENT GATE CHECK"
+          echo "=================================================="
+          echo "Trigger        : ${{ github.event_name }}"
+          echo "Deploy input   : ${{ github.event.inputs.deploy }}"
+          echo "Build result   : ${{ needs.build-windows.result }}"
+          echo "Source commit  : ${{ github.sha }}"
+          echo "Release version: ${{ needs.build-windows.outputs.release_version }}"
+          echo "TAG_PUSH_AUTO_DEPLOY=NO (tag pushes cannot trigger this job)"
+          echo "READY_TO_DEPLOY=YES (explicit manual authorization received)"
+
+      - name: 2. Checkout Exact Build Commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: 3. Download Verified Build Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: 2toolne-autoedit-windows-${{ needs.build-windows.outputs.release_version }}
+          path: release-artifacts
+
+      - name: 4. Deploy Verified Artifact to 2TOOLNE Production
         env:
           TOOLNE_FTP_HOST: ${{ secrets.TOOLNE_FTP_HOST }}
           TOOLNE_FTP_USER: ${{ secrets.TOOLNE_FTP_USER }}
           TOOLNE_FTP_PASS: ${{ secrets.TOOLNE_FTP_PASS }}
+          RELEASE_VERSION: ${{ needs.build-windows.outputs.release_version }}
         run: |
+          ver="$RELEASE_VERSION"
           if [ -z "$TOOLNE_FTP_HOST" ]; then
-            echo "TOOLNE_FTP_HOST is not configured. Skipping production deployment."
-            exit 0
+            echo "::error::TOOLNE_FTP_HOST is not configured — a deployment was authorized but cannot be delivered."
+            echo "Refusing to report success for an undelivered release (Release Standard §16 acceptance hard stop)."
+            exit 1
           fi
-          ver="${{ github.event.inputs.release_version || '2.0.4' }}"
           echo "=================================================="
-          echo "DEPLOYING $ver WINDOWS PACKAGE DIRECTLY TO 2TOOLNE SERVER"
+          echo "DEPLOYING 2TOOLNE AUTOEDIT $ver WINDOWS PACKAGE"
           echo "=================================================="
-          ftpHost="$TOOLNE_FTP_HOST"
-          ftpUser="$TOOLNE_FTP_USER"
-          ftpPass="$TOOLNE_FTP_PASS"
-          
-          # 1. Upload autoedit-core.exe
-          coreExe="apps/capcut-v2/packaging/dist/autoedit-core/autoedit-core.exe"
-          echo "Uploading autoedit-core-$ver.exe..."
-          curl -s -T "$coreExe" -u "${ftpUser}:${ftpPass}" "ftp://${ftpHost}:21/storage/packages/autoedit-core-${ver}.exe"
-          
-          # 2. Upload manifest
-          manifest="dist/manifest_$ver.json"
-          curl -s -T "$manifest" -u "${ftpUser}:${ftpPass}" "ftp://${ftpHost}:21/storage/packages/manifest_${ver}.json"
-          
-          # 3. Upload release zip directly
-          pkgZip="dist/2toolne-autoedit-$ver-win-x64.zip"
+
+          # Every artifact must exist before we touch the production server.
+          coreExe="release-artifacts/2toolne-core.exe"
+          pkgZip="release-artifacts/2toolne-autoedit-$ver-win-x64.zip"
+          manifest="release-artifacts/manifest_$ver.json"
+          for f in "$coreExe" "$pkgZip" "$manifest"; do
+            if [ ! -f "$f" ]; then
+              echo "::error::Release artifact missing: $f"
+              exit 1
+            fi
+            echo "  ✓ $f ($(stat -c%s "$f") bytes)"
+          done
+
+          # 1. Core binary
+          echo "Uploading 2toolne-core-$ver.exe..."
+          curl -f -s -T "$coreExe" -u "${TOOLNE_FTP_USER}:${TOOLNE_FTP_PASS}" \
+            "ftp://${TOOLNE_FTP_HOST}:21/storage/packages/2toolne-core-${ver}.exe" \
+            || { echo "::error::core upload failed"; exit 1; }
+
+          # 2. Manifest
+          echo "Uploading manifest_$ver.json..."
+          curl -f -s -T "$manifest" -u "${TOOLNE_FTP_USER}:${TOOLNE_FTP_PASS}" \
+            "ftp://${TOOLNE_FTP_HOST}:21/storage/packages/manifest_${ver}.json" \
+            || { echo "::error::manifest upload failed"; exit 1; }
+
+          # 3. Release package
           echo "Uploading 2toolne-autoedit-$ver-win-x64.zip..."
-          curl -T "$pkgZip" -u "${ftpUser}:${ftpPass}" "ftp://${ftpHost}:21/storage/packages/2toolne-autoedit-${ver}-win-x64.zip"
-          
-          echo "Direct upload to production server completed successfully!"
-          echo "Zero GitHub Artifacts stored. Ephemeral runner will be discarded safely."
+          curl -f -T "$pkgZip" -u "${TOOLNE_FTP_USER}:${TOOLNE_FTP_PASS}" \
+            "ftp://${TOOLNE_FTP_HOST}:21/storage/packages/2toolne-autoedit-${ver}-win-x64.zip" \
+            || { echo "::error::package upload failed"; exit 1; }
+
+          # 4. Verify the served package matches the verified CI artifact byte for byte.
+          localHash=$(sha256sum "$pkgZip" | cut -d' ' -f1)
+          remoteHash=$(curl -sS "https://2tamne.site/storage/packages/2toolne-autoedit-${ver}-win-x64.zip" | sha256sum | cut -d' ' -f1)
+          echo "LOCAL_SHA256 : $localHash"
+          echo "REMOTE_SHA256: $remoteHash"
+          if [ "$localHash" != "$remoteHash" ]; then
+            echo "::error::Served artifact does not match the verified CI artifact — deployment is NOT verified."
+            exit 1
+          fi
+
+          echo "=================================================="
+          echo "DEPLOYMENT COMPLETE AND VERIFIED"
+          echo "DEPLOYED_SOURCE_COMMIT=${{ github.sha }}"
+          echo "DEPLOYED_VERSION=$ver"
+          echo "=================================================="

@@ -115,6 +115,15 @@ apps/capcut-v2/desktop/resources/bin/win-x64/ffprobe.exe
 apps/capcut-v2/desktop/resources/autoedit-core/
 apps/capcut-v2/packaging/dist/
 
+# Generated build outputs — never committed (Release Standard §12: BUILD_DIRTIES_SOURCE_TREE=NO)
+# app.asar is produced by electron-builder; the packaged copy is the only authoritative one.
+apps/capcut-v2/desktop/resources/app.asar
+# Native root launcher binaries are compiled by the Go CI step into dist/native_root/.
+# Any stale copy under src/ is a local artifact and must never be committed.
+apps/capcut-v2/desktop/src/native_root/2TOOLNE AutoEdit.exe
+apps/capcut-v2/desktop/src/native_root/2TOOLNE AutoEdit
+apps/capcut-v2/desktop/dist/
+
 # Ignore LanceDB data but keep the Parquet export
 .agent/memory-bank/lancedb/
 website/storage/ratelimit/

@@ -225,7 +225,8 @@ def build_nuitka_command(
 
     # Windows specific subsystem and compiler flags
     if target_os == "windows":
-        # Windows console mode (disable = GUI / no console window, force = CUI console window)
+        # Windows console mode: 'force' is required so the binary owns valid OS stdio handles
+        # for JSON-RPC IPC over stdin/stdout (Electron spawns this with windowsHide).
         cmd.append(f"--windows-console-mode={console_mode}")
         if force_mingw or compiler_type in ("mingw", "mingw-autodownload"):
             cmd.append("--mingw64")
@@ -511,8 +512,8 @@ def main():
     parser.add_argument(
         "--console-mode",
         choices=["disable", "force", "attach"],
-        default="disable",
-        help="Windows console subsystem mode (disable = GUI / no console window, default: disable)",
+        default="force",
+        help="Windows console subsystem mode (force = OS stdio handles for JSON-RPC IPC, default: force)",
     )
     parser.add_argument(
         "--clean",

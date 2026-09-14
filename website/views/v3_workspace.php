@@ -282,7 +282,7 @@ $primary_team = !empty($user_teams) ? $user_teams[0] : null;
                     <div style="display:flex;align-items:center;gap:10px">
                         <button type="button" class="v3-btn v3-btn-primary" onclick="switchMainTab('tab-downloads')">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-                            <span>Tải AutoEdit v2.1.1</span>
+                            <span>Tải AutoEdit v2.1.2</span>
                         </button>
                     </div>
                 </div>
@@ -370,7 +370,7 @@ $primary_team = !empty($user_teams) ? $user_teams[0] : null;
                     <div style="display:flex;gap:12px;flex-wrap:wrap">
                         <button type="button" class="v3-btn v3-btn-secondary" onclick="switchMainTab('tab-downloads')">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-                            <span>Tải AutoEdit v2.1.1</span>
+                            <span>Tải AutoEdit v2.1.2</span>
                         </button>
                         <button type="button" class="v3-btn v3-btn-secondary" onclick="switchMainTab('tab-wallet-view')">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></svg>
@@ -399,12 +399,12 @@ $primary_team = !empty($user_teams) ? $user_teams[0] : null;
                         <div style="padding:14px;border-radius:var(--v3-radius-md);background:var(--v3-surface-2);border:1px solid var(--v3-border-subtle)">
                             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
                                 <b style="font-size:14px;color:#fff">2TOOLNE AutoEdit for CapCut</b>
-                                <span class="v3-badge v3-badge-active">v2.1.1 Stable</span>
+                                <span class="v3-badge v3-badge-active">v2.1.2 Stable</span>
                             </div>
                             <p style="font-size:12.5px;color:var(--v3-text-muted);margin:0 0 12px;line-height:1.5">
-                                Native Desktop Suite tự động hóa CapCut Desktop v9.3.0.3970. Bản v2.1.1 tối ưu bảo mật Native Root of Trust với khóa Ed25519 sản xuất, loại bỏ dev fallback khi đóng gói, xác thực Staged Launcher, Filename-Only Media Grid tránh tràn RAM.
+                                Native Desktop Suite tự động hóa CapCut Desktop v9.3.0.3970. Bản v2.1.2 khắc phục triệt để lỗi màn hình đen khi nhập ảnh có tên tệp dài bất thường, duy trì bảo mật Native Root of Trust với khóa Ed25519 sản xuất, xác thực Staged Launcher và Filename-Only Media Grid tránh tràn RAM.
                             </p>
-                            <button type="button" class="v3-btn v3-btn-xs v3-btn-outline" onclick="switchMainTab('tab-downloads')">Tải Bộ Cài Đặt v2.1.1</button>
+                            <button type="button" class="v3-btn v3-btn-xs v3-btn-outline" onclick="switchMainTab('tab-downloads')">Tải Bộ Cài Đặt v2.1.2</button>
                         </div>
 
                         <div style="padding:14px;border-radius:var(--v3-radius-md);background:var(--v3-surface-2);border:1px solid var(--v3-border-subtle)">
@@ -1771,23 +1771,23 @@ node cli/2toolne.js bundle push ./duong_dan_thu_muc_bundle</div>
                     <div class="v3-card v3-card-glow">
                         <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
                             <span class="v3-badge v3-badge-brand">CHÍNH THỨC 2026</span>
-                            <span class="v3-badge v3-badge-active">v2.1.1 Stable</span>
+                            <span class="v3-badge v3-badge-active">v2.1.2 Stable</span>
                         </div>
                         <h3 style="font-size:18px;font-weight:700;color:#fff;margin:0 0 8px">2TOOLNE AutoEdit for CapCut</h3>
                         <p style="font-size:13px;color:var(--v3-text-muted);margin:0 0 16px;line-height:1.5">
                             Phần mềm Desktop độc lập điều phối và tự động hóa biên tập CapCut Desktop: Tạo Timeline, Keyframe Scale/Position mượt mà, Rãnh âm thanh &amp; Phụ đề XML tự động.
                         </p>
                         <div style="padding:12px;background:var(--v3-surface-2);border-radius:var(--v3-radius-sm);margin-bottom:16px;font-size:12px;color:var(--v3-text-muted)">
-                            <div>Hệ điều hành: <b>Windows 10/11 64-bit &bull; macOS</b> &bull; Phiên bản: <b>v2.1.1</b> &bull; Dung lượng: <b>210 MB (.exe) / 276 MB (.zip) / 266 MB (.dmg)</b></div>
+                            <div>Hệ điều hành: <b>Windows 10/11 64-bit &bull; macOS</b> &bull; Phiên bản: <b>v2.1.2</b> &bull; Dung lượng: <b>Đang cập nhật (từ artifact CI)</b></div>
                             <div style="margin-top:6px;color:#ff9e42">✨ <b>Tương thích chính xác CapCut 9.3.0.3970</b> &bull; Native Root of Trust Ed25519 &bull; Native Nuitka Onefile Engine</div>
                         </div>
                         <div style="display:flex;gap:10px;flex-wrap:wrap">
                             <button type="button" class="v3-btn v3-btn-primary" style="flex:1" onclick="requestSecureDownload('AUTOEDIT', 'windows-x64', 'installer')">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-                                <span>Tải Cài Đặt .exe (v2.1.1)</span>
+                                <span>Tải Cài Đặt .exe (v2.1.2)</span>
                             </button>
                             <button type="button" class="v3-btn v3-btn-secondary" onclick="requestSecureDownload('AUTOEDIT', 'windows-x64', 'portable')">
-                                📦 Bản Portable .zip (v2.1.1)
+                                📦 Bản Portable .zip (v2.1.2)
                             </button>
                             <button type="button" class="v3-btn v3-btn-secondary" onclick="requestSecureDownload('AUTOEDIT', 'macos')">
                                 🍏 macOS (.dmg)
