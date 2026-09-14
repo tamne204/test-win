@@ -73,8 +73,10 @@ extraResources:
       - "!**/*.pyc"
       - "!**/*.pyo"
       - "!**/__pycache__/**"
-  - from: "resources/integrity.manifest.json"
-    to: "integrity.manifest.json"
+  # NOTE: integrity.manifest.json is intentionally NOT staged here. It is a build
+  # artifact generated per-release by scripts/after_pack_integrity.js, which writes
+  # it directly into <appOutDir>/resources/ (Release Standard §12). Staging it from
+  # the source tree would ship a stale, forgeable manifest.
   - from: "assets"
     to: "assets"
     filter:
