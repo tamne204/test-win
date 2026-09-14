@@ -177,7 +177,6 @@ def _electron_style_options(exe_path):
     opts = _base_stdio_options()
     opts["env"] = env
     if sys.platform == "win32":
-        opts["windowsHide"] = True
         # Electron spawns without a shell; the binary must be directly executable.
         opts["shell"] = False
         opts["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
