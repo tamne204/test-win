@@ -311,6 +311,7 @@ if (-not (Test-Path "$targetDir/2toolne-core.exe")) {
     Write-Error "Nuitka core not staged at $targetDir."
     exit 1
 }
+Copy-Item "$targetDir/2toolne-core.exe" "$targetDir/autoedit-core.exe" -Force -ErrorAction SilentlyContinue
 
 Push-Location apps/capcut-v2/desktop
 npm run build:win:nsis

@@ -118,7 +118,12 @@ console.log('\n--- 1. BUNDLED CORE & MEDIA BINARIES (win-x64) ---');
 verifyPeBinary(path.join(RESOURCES_BIN, 'ffmpeg.exe'), 'ffmpeg.exe (resources)');
 verifyPeBinary(path.join(RESOURCES_BIN, 'ffprobe.exe'), 'ffprobe.exe (resources)');
 verifyPeBinary(path.join(RESOURCES_BIN, 'CapCutUiProbe.exe'), 'CapCutUiProbe.exe (resources)');
-verifyPeBinary(path.join(RESOURCES_CORE, 'autoedit-core.exe'), 'autoedit-core.exe (resources)');
+const coreCandidates = [
+  path.join(RESOURCES_CORE, '2toolne-core.exe'),
+  path.join(RESOURCES_CORE, 'autoedit-core.exe'),
+];
+const coreExe = coreCandidates.find(c => fs.existsSync(c)) || coreCandidates[0];
+verifyPeBinary(coreExe, `${path.basename(coreExe)} (resources)`);
 auditDirectoryForCrossOsArtifacts(RESOURCES_CORE, 'resources/autoedit-core');
 
 console.log('\n--- 2. REAL AI UPSCALE ENGINE & MODEL WEIGHTS (win-x64) ---');
