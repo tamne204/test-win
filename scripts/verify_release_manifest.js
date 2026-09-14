@@ -49,10 +49,17 @@ function parseArgs(argv) {
  * Mirrors the resolution logic used at manifest generation time.
  */
 function resolveProtectedFile(resourcesDir, relPath) {
+  const normalizedRel = relPath.replace(/\\/g, '/');
   const candidates = [
-    path.join(resourcesDir, relPath),
-    path.join(resourcesDir, 'app', relPath),
-    path.join(resourcesDir, 'resources', relPath),
+    path.join(resourcesDir, normalizedRel),
+    path.join(resourcesDir, 'app', normalizedRel),
+    path.join(resourcesDir, 'resources', normalizedRel),
+    // Packaged root directory (parent of resources) — e.g. 2toolne-runtime.exe on Windows
+    path.join(resourcesDir, '..', normalizedRel),
+    path.join(path.dirname(resourcesDir), normalizedRel),
+    // macOS app bundle Contents/MacOS/
+    path.join(resourcesDir, '..', 'MacOS', normalizedRel),
+    path.join(path.dirname(resourcesDir), 'MacOS', normalizedRel),
   ];
   for (const c of candidates) {
     if (fs.existsSync(c)) return c;

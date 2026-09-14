@@ -488,6 +488,8 @@ if ($installer) {
                 Write-Error "WINDOWS_CI_INSTALL=FAIL (launcher and runtime are the same binary)"
                 exit 1
             }
+        } else {
+            Write-Host "WINDOWS_CI_INSTALL=PASS (installed directory verified, unpacked binaries verified)"
         }
     } else {
         Write-Host "WINDOWS_CI_INSTALL=PASS (unpacked verification completed; silent install directory skipped in container)"

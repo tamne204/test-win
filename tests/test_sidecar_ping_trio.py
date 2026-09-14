@@ -41,8 +41,12 @@ def _candidates_direct():
         os.environ.get("DIRECT_CORE_EXE"),
         os.path.join(REPO_ROOT, "apps", "capcut-v2", "desktop", "resources",
                      "autoedit-core", "win-x64", "2toolne-core.exe"),
+        os.path.join(REPO_ROOT, "apps", "capcut-v2", "desktop", "resources",
+                     "autoedit-core", "win-x64", "autoedit-core.exe"),
         os.path.join(REPO_ROOT, "apps", "capcut-v2", "packaging", "dist",
                      "autoedit-core", "2toolne-core.exe"),
+        os.path.join(REPO_ROOT, "apps", "capcut-v2", "packaging", "dist",
+                     "autoedit-core", "autoedit-core.exe"),
     ]
 
 
@@ -57,7 +61,9 @@ def _candidates_packaged():
         if not root:
             continue
         out.append(os.path.join(root, "resources", "autoedit-core", "win-x64", "2toolne-core.exe"))
+        out.append(os.path.join(root, "resources", "autoedit-core", "win-x64", "autoedit-core.exe"))
         out.append(os.path.join(root, "resources", "autoedit-core", "2toolne-core.exe"))
+        out.append(os.path.join(root, "resources", "autoedit-core", "autoedit-core.exe"))
     return out
 
 
