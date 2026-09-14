@@ -1,0 +1,62 @@
+name: Windows Release Acceptance Dispatcher
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_ref:
+        description: 'Git ref to checkout and test (branch or tag)'
+        required: true
+        default: 'release/v2.1.2'
+      expected_commit:
+        description: 'Optional expected commit SHA to assert'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  windows-acceptance:
+    name: Windows Release Acceptance
+    runs-on: windows-latest
+
+    steps:
+      - name: 1. Checkout Target Ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target_ref }}
+
+      - name: 2. Verify Target Ref Commit
+        shell: pwsh
+        run: |
+          $checkedOut = (git rev-parse HEAD).Trim()
+          $checkedOutBranch = (git rev-parse --abbrev-ref HEAD).Trim()
+          Write-Host "DISPATCHER_SOURCE_BRANCH=main"
+          Write-Host "CHECKED_OUT_TARGET_BRANCH=$checkedOutBranch"
+          Write-Host "CHECKED_OUT_TARGET_COMMIT=$checkedOut"
+          
+          $expected = "${{ inputs.expected_commit }}".Trim()
+          if ($expected -ne "" -and $checkedOut -ne $expected) {
+            Write-Error "TARGET COMMIT MISMATCH: Expected $expected, got $checkedOut"
+            exit 1
+          }
+
+      - name: 3. Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 4. Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 5. Setup Go 1.21
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: 6. Execute Windows Release Acceptance
+        shell: pwsh
+        run: |
+          pwsh ./scripts/ci/windows_release_acceptance.ps1
