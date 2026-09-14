@@ -7,7 +7,7 @@ from __future__ import annotations
 
 PRODUCT_ID = "2toolne.capcut.v2"
 APP_NAME = "2toolne AutoEdit for CapCut"
-CAPCUT_VERSION = "2.1.1"
+CAPCUT_VERSION = "2.1.2"
 RELEASE_STREAM = "capcut-v2"
 
 

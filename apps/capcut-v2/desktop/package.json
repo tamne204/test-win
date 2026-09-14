@@ -1,6 +1,6 @@
 {
   "name": "2toolne-autoedit",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "2toolne AutoEdit for CapCut (Desktop Edition)",
   "main": "src/main/index.js",
   "scripts": {

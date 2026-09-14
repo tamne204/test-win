@@ -1128,6 +1128,18 @@ async function handleImportPaths(paths) {
 // -----------------------------------------------------------------------------
 // Sequential Image (001-xxx) Gap Detection & Stretch Resolution
 // -----------------------------------------------------------------------------
+
+// Maximum plausible span for a sequential image index series (max - min + 1).
+//
+// extractFileIndex() matches ANY trailing digit run, so real-world filenames such as
+// "mmexport1699999999999.jpg" (messenger epoch-ms) or "IMG_20240115_143022.jpg"
+// (camera timestamp) yield astronomically large indices that are NOT part of a
+// sequential 001..N series. Left unvalidated, they drive an effectively unbounded
+// synchronous loop on the renderer main thread, which starves the event loop before
+// renderMediaGrid() can paint its first slice -- the user sees a completely black
+// window. Any index span beyond this cap is treated as "not a sequential series".
+const MEDIA_INDEX_MAX_SPAN = 5000;
+
 function extractFileIndex(filePath) {
   if (!filePath) return null;
   const name = filePath.split(/[/\\]/).pop();
@@ -1151,6 +1163,14 @@ function detectMissingIndices(mediaList) {
   mapped.sort((a, b) => a.num - b.num);
   const min = mapped[0].num;
   const max = mapped[mapped.length - 1].num;
+
+  // Reject implausible index spans BEFORE any loop runs. Filenames commonly carry
+  // large trailing digit runs (epoch-ms, camera timestamps, download counters) that
+  // are not sequential indices; treating them as such previously drove an unbounded
+  // synchronous loop on the main thread and hung the renderer.
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max < min) return null;
+  if (max - min + 1 > MEDIA_INDEX_MAX_SPAN) return null;
+
   const present = new Set(mapped.map((m) => m.num));
   const missing = [];
 
@@ -1182,6 +1202,11 @@ function applyMissingResolution(strategy) {
   if (!analysis || analysis.missing.length === 0) return;
 
   const { min, max, mapped } = analysis;
+  // Defence in depth: state.lastMissingAnalysis may arrive from a stale or restored
+  // snapshot that never passed through detectMissingIndices(). Never materialise a
+  // path array sized by an implausible span.
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max < min) return;
+  if (max - min + 1 > MEDIA_INDEX_MAX_SPAN) return;
   const lookup = new Map();
   // Store unique by number
   mapped.forEach((m) => {
@@ -1786,7 +1811,13 @@ function assembleCurrentProjectPayload() {
   // If there are unresolved missing image numbers (001-xxx), auto-stretch previous to ensure gap-free timeline
   let imagesToUse = [...state.mediaList];
   const analysis = detectMissingIndices(imagesToUse);
-  if (analysis && analysis.missing.length > 0) {
+  const spanWithinCap =
+    !!analysis &&
+    Number.isFinite(analysis.min) &&
+    Number.isFinite(analysis.max) &&
+    analysis.max >= analysis.min &&
+    analysis.max - analysis.min + 1 <= MEDIA_INDEX_MAX_SPAN;
+  if (analysis && analysis.missing.length > 0 && spanWithinCap) {
     const { min, max, mapped } = analysis;
     const lookup = new Map();
     mapped.forEach((m) => {
