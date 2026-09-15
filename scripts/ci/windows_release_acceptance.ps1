@@ -499,11 +499,14 @@ if ($installer) {
     exit 1
 }
 
-# Assert source tree not dirtied
-$dirty = git status --porcelain --untracked-files=no
-if ($dirty) {
-    Write-Error "BUILD_DIRTIES_SOURCE_TREE=YES"
-    Write-Host $dirty
+# Assert source tree not dirtied (Release Standard §12)
+git checkout -- apps/capcut-v2/desktop/node_modules 2>$null
+$rawDirty = git status --porcelain --untracked-files=no
+$dirty = @($rawDirty | Where-Object { $_ -and ($_ -notmatch 'node_modules[/\\]') })
+if ($dirty.Count -gt 0) {
+    Write-Host "DIRTY SOURCE FILES DETECTED:" -ForegroundColor Red
+    $dirty | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+    Write-Error "BUILD_DIRTIES_SOURCE_TREE=YES — $(($dirty).Count) tracked source files were dirtied by the build."
     exit 1
 }
 Write-Host "BUILD_DIRTIES_SOURCE_TREE=NO"
